@@ -1,0 +1,100 @@
+/*
+ * Papier theme: colour lives behind the glass, everything you read is grayscale.
+ * Palette tokens (--p-*) are fixed; surface tokens (--s-*) change with the mode set on
+ * the root element: data-mode="ambient|grayscale", data-glass="frosted|clear",
+ * data-motion="on|off".
+ */
+:root {
+  color-scheme: dark;
+
+  /* undertones: backdrop only */
+  --p-walnut: #46351d;
+  --p-olive: #646f4b;
+  --p-steel: #839d9a;
+  --p-sky: #7bb2d9;
+  --p-ash: #bfd2bf;
+
+  /* grayscale ramp: pages, text, controls */
+  --p-root: #141414;
+  --p-page: #191919;
+  --p-sidebar: #202020;
+  --p-hover: #2a2a2a;
+  --p-line: #2f2f2f;
+  --p-faint: #6e6e6e;
+  --p-muted: #8a8a8a;
+  --p-text: #d4d4d4;
+  --p-strong: #ededed;
+
+  /* the one accent */
+  --p-accent: var(--p-sky);
+  --p-accent-soft: rgb(123 178 217 / 0.16);
+  --p-accent-text: #a9cde8;
+
+  --p-font-display: 'Newsreader', Georgia, serif;
+  --p-font-sans: 'Geist', ui-sans-serif, system-ui, sans-serif;
+  --p-font-mono: 'Geist Mono', ui-monospace, monospace;
+
+  /* surfaces: grayscale by default */
+  --s-page: var(--p-page);
+  --s-sidebar: var(--p-sidebar);
+  --s-top: var(--p-page);
+  --s-callout: var(--p-sidebar);
+  --s-active: var(--p-hover);
+  --s-glass: none;
+  --s-top-glass: none;
+  --s-text-shadow: none;
+  --s-backdrop-filter: grayscale(1) brightness(0.72) contrast(1.05);
+}
+
+[data-mode='ambient'] {
+  --s-page: rgb(20 21 20 / 0.68);
+  --s-sidebar: rgb(12 13 12 / 0.52);
+  --s-top: rgb(10 11 10 / 0.28);
+  --s-callout: rgb(255 255 255 / 0.045);
+  --s-active: rgb(255 255 255 / 0.07);
+  --s-glass: blur(28px) saturate(115%);
+  --s-top-glass: blur(10px);
+  --s-backdrop-filter: none;
+}
+
+[data-mode='ambient'][data-glass='clear'] {
+  --s-page: rgb(16 17 16 / 0.3);
+  --s-sidebar: rgb(10 11 10 / 0.22);
+  --s-callout: rgb(10 11 10 / 0.35);
+  --s-glass: blur(4px) saturate(125%);
+  --s-text-shadow: 0 1px 2px rgb(0 0 0 / 0.55);
+}
+
+.p-glass {
+  -webkit-backdrop-filter: var(--s-glass);
+  backdrop-filter: var(--s-glass);
+  text-shadow: var(--s-text-shadow);
+  transition: background-color 500ms ease;
+}
+
+@keyframes p-drift {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(48px, -32px) scale(1.07); }
+}
+@keyframes p-sway {
+  0%, 100% { transform: rotate(-0.7deg); }
+  50% { transform: rotate(0.9deg); }
+}
+@keyframes p-rise {
+  0% { transform: translateY(0); opacity: 0; }
+  20% { opacity: 0.85; }
+  100% { transform: translateY(-160px); opacity: 0; }
+}
+
+.p-drift { animation: p-drift 38s ease-in-out infinite; will-change: transform; }
+.p-drift-slow { animation: p-drift 54s ease-in-out infinite reverse; will-change: transform; }
+.p-sway { animation: p-sway 14s ease-in-out infinite; }
+.p-sway-slow { animation: p-sway 19s ease-in-out infinite reverse; }
+.p-mote { animation: p-rise 17s linear infinite; }
+
+[data-motion='off'] :is(.p-drift, .p-drift-slow, .p-sway, .p-sway-slow, .p-mote) {
+  animation-play-state: paused;
+}
+@media (prefers-reduced-motion: reduce) {
+  :is(.p-drift, .p-drift-slow, .p-sway, .p-sway-slow, .p-mote) { animation: none; }
+}

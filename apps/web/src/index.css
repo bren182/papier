@@ -1,0 +1,47 @@
+@import 'tailwindcss';
+@import '@papier/ui/theme.css';
+
+@source '../../../packages/ui/src';
+
+@theme inline {
+  --color-root: var(--p-root);
+  --color-hover: var(--p-hover);
+  --color-line: var(--p-line);
+  --color-faint: var(--p-faint);
+  --color-muted: var(--p-muted);
+  --color-fg: var(--p-text);
+  --color-fg-strong: var(--p-strong);
+  --color-accent: var(--p-accent);
+  --color-accent-soft: var(--p-accent-soft);
+  --color-accent-text: var(--p-accent-text);
+  --color-ash: var(--p-ash);
+
+  --color-s-page: var(--s-page);
+  --color-s-sidebar: var(--s-sidebar);
+  --color-s-top: var(--s-top);
+  --color-s-callout: var(--s-callout);
+  --color-s-active: var(--s-active);
+
+  --font-display: var(--p-font-display);
+  --font-sans: var(--p-font-sans);
+  --font-mono: var(--p-font-mono);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--p-root);
+  color: var(--p-text);
+  font-family: var(--p-font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 2px solid var(--p-accent);
+  outline-offset: 2px;
+}
