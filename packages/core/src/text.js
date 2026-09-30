@@ -21,3 +21,31 @@ export function plainText(content) {
     })
     .join('');
 }
+
+/** Markers around matched terms in search snippets (plain text, never HTML). */
+export const HIT_START = '\u0002';
+export const HIT_END = '\u0003';
+
+/**
+ * A search snippet split into plain runs and matched runs, for rendering
+ * highlights without HTML.
+ * @param {string} snippet
+ * @returns {{ text: string, hit: boolean }[]}
+ */
+export function snippetParts(snippet) {
+  /** @type {{ text: string, hit: boolean }[]} */
+  const parts = [];
+  let hit = false;
+  let run = '';
+  for (const ch of snippet) {
+    if (ch === HIT_START || ch === HIT_END) {
+      if (run) parts.push({ text: run, hit });
+      run = '';
+      hit = ch === HIT_START;
+    } else {
+      run += ch;
+    }
+  }
+  if (run) parts.push({ text: run, hit });
+  return parts;
+}

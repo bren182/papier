@@ -49,7 +49,35 @@ export const BLOCK_TYPES = [
 /** @type {MenuItem[]} */
 const BLOCK_ITEMS = BLOCK_TYPES.map(({ type, attrs, ...item }) => ({ ...item, group: 'Blocks', run: turnInto(type, attrs) }));
 
+/** A new sub-page, as a block where the `/page` was typed; then open it. @type {MenuItem['run']} */
+const newSubPage = async (editor, range) => {
+  const opts = /** @type {import('./PageBlock.js').PageBlockOptions | undefined} */ (
+    editor.extensionManager.extensions.find((e) => e.name === 'pageBlock')?.options
+  );
+  if (!opts?.createPage) return;
+  editor.view.dispatch(editor.state.tr.delete(range.from, range.to));
+  const pageId = await opts.createPage();
+  if (editor.isDestroyed) return;
+
+  const { state } = editor;
+  const block = blockAt(state.doc, state.selection.from);
+  if (!block) return;
+  const tr = state.tr;
+  if (block.node.type.name === 'paragraph' && block.node.content.size === 0) {
+    tr.replaceWith(block.pos, block.pos + block.node.nodeSize, state.schema.nodes.pageBlock.create({ ...block.node.attrs, pageId }));
+  } else {
+    tr.insert(block.pos + block.node.nodeSize, state.schema.nodes.pageBlock.create({ indent: block.node.attrs.indent, pageId }));
+  }
+  editor.view.dispatch(tr);
+  opts.openPage?.(pageId);
+};
+
 /** Slash-menu extras. */
+/** @type {MenuItem[]} */
+const PAGE_ITEMS = [
+  { title: 'Page', icon: '▤', aliases: ['subpage', 'new page', 'child'], group: 'Pages', subtext: 'A sub-page inside this one', run: newSubPage },
+];
+
 /** @type {MenuItem[]} */
 const INLINE_ITEMS = [
   {
@@ -68,7 +96,7 @@ const INLINE_ITEMS = [
  */
 export function slashItems(query) {
   const q = query.toLowerCase().trim();
-  const all = [...BLOCK_ITEMS, ...INLINE_ITEMS];
+  const all = [...BLOCK_ITEMS, ...PAGE_ITEMS, ...INLINE_ITEMS];
   if (!q) return all;
   return all.filter((item) => item.title.toLowerCase().includes(q) || item.aliases?.some((a) => a.startsWith(q)));
 }

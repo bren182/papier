@@ -1,6 +1,10 @@
 import { useEffect, useImperativeHandle, useState } from 'react';
+import { QueryObserver, useQueryClient } from '@tanstack/react-query';
 import { EditorContent, useEditor } from '@tiptap/react';
-import { ApiError } from '../api/client.js';
+import { TextSelection } from '@tiptap/pm/state';
+import { api, ApiError } from '../api/client.js';
+import { pageQuery } from '../api/pages.js';
+import { useTargetBlock } from '../useSelectedPage.js';
 import { saveBlocks, usePageBlocks } from '../api/blocks.js';
 import { createBlockSaver } from './blockSaver.js';
 import { docToRows, rowsToDoc } from './convert.js';
@@ -10,26 +14,45 @@ import { SideMenu } from './SideMenu.jsx';
 
 /** @typedef {import('@papier/core').Block} Block */
 /** @typedef {{ focusStart: () => void }} PageEditorHandle */
+/** @typedef {import('@papier/core').Page} Page */
 
 /**
  * The page body. Loads the page's blocks once, then the editor owns them and
  * autosaves changes per block.
- * @param {{ pageId: string, ref?: import('react').Ref<PageEditorHandle> }} props
+ * @param {{ pageId: string, onOpenPage: (id: string) => void, ref?: import('react').Ref<PageEditorHandle> }} props
  */
-export function PageEditor({ pageId, ref }) {
+export function PageEditor({ pageId, onOpenPage, ref }) {
   const { data, error } = usePageBlocks(pageId);
   if (error) return <p className="text-[15px] leading-6 text-muted">Couldn’t load this page’s content.</p>;
   if (!data) return null;
-  return <Editor pageId={pageId} rows={data} editorRef={ref} />;
+  return <Editor pageId={pageId} rows={data} onOpenPage={onOpenPage} editorRef={ref} />;
 }
 
 /**
- * @param {{ pageId: string, rows: Block[], editorRef?: import('react').Ref<PageEditorHandle> }} props
+ * @param {{ pageId: string, rows: Block[], onOpenPage: (id: string) => void, editorRef?: import('react').Ref<PageEditorHandle> }} props
  */
-function Editor({ pageId, rows, editorRef }) {
+function Editor({ pageId, rows, onOpenPage, editorRef }) {
   const [container, setContainer] = useState(/** @type {HTMLDivElement | null} */ (null));
+  const qc = useQueryClient();
   const editor = useEditor({
-    extensions: bodyExtensions(),
+    extensions: bodyExtensions({
+      pages: {
+        // Page blocks follow their page's cached title (renames show live).
+        watchPage: (id, onChange) => {
+          const observer = new QueryObserver(qc, { ...pageQuery(id), staleTime: 30_000 });
+          /** @param {{ data?: { page: Page }, status: string }} r */
+          const report = (r) => onChange(r.data ? r.data.page : r.status === 'error' ? null : undefined);
+          report(observer.getCurrentResult());
+          return observer.subscribe(report);
+        },
+        openPage: (id) => onOpenPage(id),
+        createPage: async () => {
+          const page = /** @type {Page} */ (await api('/pages', { method: 'POST', body: { parentId: pageId, block: false } }));
+          qc.invalidateQueries({ queryKey: ['pages', 'children'] });
+          return page.id;
+        },
+      },
+    }),
     content: rowsToDoc(rows),
     immediatelyRender: true,
     shouldRerenderOnTransaction: false,
@@ -78,6 +101,30 @@ function Editor({ pageId, rows, editorRef }) {
     };
   }, [editor, pageId, rows]);
 
+  // A block the URL points at (a search hit): scroll to it, put the caret in it
+  // and flash it once, then drop it from the URL. The flash is an overlay:
+  // ProseMirror owns its nodes' DOM and would redraw away a class added there.
+  const [target, clearTarget] = useTargetBlock();
+  const [flash, setFlash] = useState(/** @type {{ key: number, top: number, left: number, width: number, height: number } | null} */ (null));
+  useEffect(() => {
+    if (!target || !container) return; // (the container arrives a render after mount)
+    clearTarget();
+    const { doc } = editor.state;
+    let pos = -1;
+    doc.forEach((node, offset) => {
+      if (pos < 0 && node.attrs.id === target) pos = offset;
+    });
+    if (pos < 0) return;
+    const dom = editor.view.nodeDOM(pos);
+    editor.view.dispatch(editor.state.tr.setSelection(TextSelection.near(doc.resolve(pos + 1))));
+    editor.view.focus();
+    if (!(dom instanceof HTMLElement)) return;
+    dom.scrollIntoView({ block: 'center' });
+    const box = dom.getBoundingClientRect();
+    const outer = container.getBoundingClientRect();
+    setFlash({ key: Date.now(), top: box.top - outer.top, left: box.left - outer.left, width: box.width, height: box.height });
+  }, [editor, container, target, clearTarget]);
+
   useImperativeHandle(editorRef, () => ({ focusStart: () => editor.commands.focus('start') }), [editor]);
 
   return (
@@ -85,6 +132,15 @@ function Editor({ pageId, rows, editorRef }) {
     // column, so the scroll container can't clip it.
     <div ref={setContainer} className="relative -ml-14 pl-14">
       <EditorContent editor={editor} />
+      {flash && (
+        <div
+          key={flash.key}
+          className="papier-flash pointer-events-none absolute -mx-1 px-1"
+          style={{ top: flash.top, left: flash.left, width: flash.width, height: flash.height, boxSizing: 'content-box' }}
+          onAnimationEnd={() => setFlash(null)}
+          aria-hidden="true"
+        />
+      )}
       <SideMenu editor={editor} container={container} />
       <FormatToolbar editor={editor} />
     </div>

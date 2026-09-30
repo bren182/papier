@@ -9,7 +9,8 @@
     "dev": "pnpm --parallel --filter @papier/server --filter @papier/web dev",
     "build": "pnpm -r build",
     "test": "vitest run",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "test:e2e": "pnpm --filter @papier/web test:e2e"
   },
   "devDependencies": {
     "@types/node": "^26.6.3",

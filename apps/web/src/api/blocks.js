@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from './client.js';
 
@@ -45,4 +46,34 @@ export function saveBlocks(pageId, batch, { keepalive } = {}) {
     if (inflight.get(pageId) === settled) inflight.delete(pageId);
   });
   return req;
+}
+
+// ── reloading an open page's content ──────────────────────────────────────
+
+/** Per-page content version: bumping it remounts that page's editor on fresh rows. */
+const versions = new Map(/** @type {[string, number][]} */ ([]));
+const listeners = new Set(/** @type {(() => void)[]} */ ([]));
+
+/**
+ * The server changed a page's blocks behind the editor's back (a sub-page moved
+ * in or out, or was trashed): drop the cached rows and remount its editor.
+ * Pending edits are flushed as the old editor unmounts; the reload waits for them.
+ * @param {import('@tanstack/react-query').QueryClient} qc
+ * @param {(string | null | undefined)[]} pageIds
+ */
+export function reloadContent(qc, pageIds) {
+  for (const id of pageIds) {
+    if (!id) continue;
+    qc.removeQueries({ queryKey: blockKeys.page(id) });
+    versions.set(id, (versions.get(id) ?? 0) + 1);
+  }
+  listeners.forEach((l) => l());
+}
+
+/** @param {string} pageId */
+export function useContentVersion(pageId) {
+  return useSyncExternalStore(
+    (l) => (listeners.add(l), () => listeners.delete(l)),
+    () => versions.get(pageId) ?? 0,
+  );
 }

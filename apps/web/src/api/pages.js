@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { plainText } from '@papier/core/text';
+import { reloadContent } from './blocks.js';
 import { api, ApiError } from './client.js';
 
 /** @typedef {import('@papier/core').Page} Page */
@@ -26,14 +27,20 @@ export function useChildPages(parentId, enabled = true) {
   });
 }
 
+/**
+ * One page plus its ancestors — shared by `usePage` and the editor's page
+ * blocks, which watch the same cache entry outside React.
+ * @param {string} id
+ */
+export const pageQuery = (id) => ({
+  queryKey: pageKeys.detail(id),
+  queryFn: () => /** @type {Promise<{ page: Page, ancestors: Crumb[] }>} */ (api(`/pages/${id}`)),
+  retry: (/** @type {number} */ count, /** @type {Error} */ err) => !(err instanceof ApiError && err.status === 404) && count < 2,
+});
+
 /** @param {string | null} id */
 export function usePage(id) {
-  return useQuery({
-    queryKey: pageKeys.detail(id ?? ''),
-    queryFn: () => /** @type {Promise<{ page: Page, ancestors: Crumb[] }>} */ (api(`/pages/${id}`)),
-    enabled: Boolean(id),
-    retry: (count, err) => !(err instanceof ApiError && err.status === 404) && count < 2,
-  });
+  return useQuery({ ...pageQuery(id ?? ''), enabled: Boolean(id) });
 }
 
 export function useCreatePage() {
@@ -74,8 +81,28 @@ export function useUpdatePage() {
 export function useArchivePage() {
   const qc = useQueryClient();
   return useMutation({
-    /** @param {string} id */
-    mutationFn: (id) => api(`/pages/${id}`, { method: 'DELETE' }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: pageKeys.all }),
+    /** @param {{ id: string, parentId: string | null }} page */
+    mutationFn: ({ id }) => api(`/pages/${id}`, { method: 'DELETE' }),
+    onSuccess: (_res, page) => {
+      qc.invalidateQueries({ queryKey: pageKeys.all });
+      reloadContent(qc, [page.parentId]); // its page block is gone
+    },
+  });
+}
+
+/** @typedef {{ id: string, from: string | null, parentId: string | null, beforeId?: string, afterId?: string }} PageMoveVars */
+
+/** Move a page (and its subtree) under another parent and/or among its siblings. */
+export function useMovePage() {
+  const qc = useQueryClient();
+  return useMutation({
+    /** @param {PageMoveVars} vars */
+    mutationFn: ({ id, parentId, beforeId, afterId }) =>
+      /** @type {Promise<Page>} */ (api(`/pages/${id}/move`, { method: 'POST', body: { parentId, beforeId, afterId } })),
+    onSuccess: (_page, { from, parentId }) => {
+      qc.invalidateQueries({ queryKey: pageKeys.all });
+      // The page block moved from one parent's content to the other's.
+      if (from !== parentId) reloadContent(qc, [from, parentId]);
+    },
   });
 }

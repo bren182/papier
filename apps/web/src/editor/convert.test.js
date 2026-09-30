@@ -113,3 +113,16 @@ describe('inline content', () => {
     expect(inlineFromPM(pm)).toEqual([{ type: 'text', text: 'ab', styles: {} }]);
   });
 });
+
+describe('page blocks', () => {
+  it('round-trip with their page id and no content', () => {
+    /** @type {Block[]} */
+    const pageRows = [
+      { id: 'p', type: 'paragraph', parentId: null, order: 'a0', props: {}, content: text('intro') },
+      { id: 'sub', type: 'page', parentId: null, order: 'a1', props: { pageId: 'child-page' }, content: [] },
+    ];
+    const doc = rowsToDoc(pageRows);
+    expect(doc.content?.[1]).toEqual({ type: 'pageBlock', attrs: { id: 'sub', indent: 0, pageId: 'child-page' } });
+    expect(byId(docToRows(doc, byId(pageRows)))).toEqual(byId(pageRows));
+  });
+});

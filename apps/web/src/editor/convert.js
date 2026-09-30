@@ -27,7 +27,11 @@ const TO_NODE = {
   quote: 'quote',
   code: 'codeBlock',
   divider: 'divider',
+  page: 'pageBlock',
 };
+
+/** Node types without inline content. */
+const ATOMS = new Set(['divider', 'pageBlock']);
 
 /** @type {Record<string, BlockTypeName>} */
 const FROM_NODE = Object.fromEntries(Object.entries(TO_NODE).map(([ours, node]) => [node, /** @type {BlockTypeName} */ (ours)]));
@@ -38,6 +42,7 @@ const PROPS = {
   heading: ['level'],
   todo: ['checked'],
   code: ['language'],
+  page: ['pageId'],
 };
 
 /** Inline styles, in the fixed order they're stored (keeps saves diff-stable). */
@@ -158,7 +163,7 @@ export function rowsToDoc(rows) {
       for (const key of PROPS[row.type] ?? []) if (row.props[key] !== undefined) attrs[key] = row.props[key];
       /** @type {PMNode} */
       const node = { type, attrs };
-      if (type !== 'divider') {
+      if (!ATOMS.has(type)) {
         const content = inlineToPM(row.content, { code: type === 'codeBlock' });
         if (content.length) node.content = content;
       }
@@ -205,7 +210,7 @@ export function docToRows(doc, prev) {
     }
 
     /** @type {Block} */
-    const row = { id, type, parentId, order: '', props, content: type === 'divider' ? [] : inlineFromPM(node.content) };
+    const row = { id, type, parentId, order: '', props, content: ATOMS.has(node.type) ? [] : inlineFromPM(node.content) };
     out.push(row);
     const list = siblings.get(parentId) ?? [];
     list.push(row);

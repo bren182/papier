@@ -7,7 +7,8 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': 'http://127.0.0.1:3000',
+      // e2e runs point this at their own throwaway server.
+      '/api': process.env.PAPIER_API_URL ?? 'http://127.0.0.1:3000',
     },
   },
 });

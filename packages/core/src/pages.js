@@ -22,7 +22,18 @@ export const Page = z.object({
 export const PageCreate = z.object({
   parentId: PageId.nullable().default(null),
   title: z.string().max(500).default(''),
+  /** Append a page block to the parent's content. False when the editor inserts its own. */
+  block: z.boolean().default(true),
 });
+
+/** Move a page: to a new parent (null = root), before or after a sibling there (default: last). */
+export const PageMove = z
+  .object({
+    parentId: PageId.nullable(),
+    beforeId: PageId.optional(),
+    afterId: PageId.optional(),
+  })
+  .refine((v) => !(v.beforeId && v.afterId), 'Give beforeId or afterId, not both');
 
 export const PageUpdate = z
   .object({

@@ -1,5 +1,6 @@
 import { lazy, Suspense, useRef } from 'react';
 import { ApiError } from '../api/client.js';
+import { useContentVersion } from '../api/blocks.js';
 import { useCreatePage, usePage } from '../api/pages.js';
 import { TitleText } from './TitleText.jsx';
 
@@ -18,6 +19,7 @@ const titleClass = 'font-display text-[40px] leading-[48px] font-semibold tracki
 export function Page({ selectedId, onSelect }) {
   const { data, isPending, error } = usePage(selectedId);
   const editorRef = useRef(/** @type {PageEditorHandle | null} */ (null));
+  const contentVersion = useContentVersion(selectedId ?? '');
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
@@ -50,7 +52,7 @@ export function Page({ selectedId, onSelect }) {
               </div>
               <div className="mt-4">
                 <Suspense fallback={null}>
-                  <PageEditor key={data.page.id} pageId={data.page.id} ref={editorRef} />
+                  <PageEditor key={`${data.page.id}:${contentVersion}`} pageId={data.page.id} onOpenPage={onSelect} ref={editorRef} />
                 </Suspense>
               </div>
             </>

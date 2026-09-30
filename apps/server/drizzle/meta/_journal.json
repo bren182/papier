@@ -22,6 +22,20 @@
       "when": 1790740621555,
       "tag": "0002_sticky_daredevil",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1790744121259,
+      "tag": "0003_search_rows",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1790744122710,
+      "tag": "0004_search_fts",
+      "breakpoints": true
     }
   ]
 }

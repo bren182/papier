@@ -191,6 +191,31 @@ body {
   margin: 0;
 }
 
+/* sub-page / page link */
+.papier-editor .pb-page {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-inline: -4px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--p-faint);
+}
+.papier-editor .pb-page:hover {
+  background: var(--s-active);
+}
+.papier-editor .pb-page-title {
+  color: var(--p-strong);
+  font-weight: 500;
+  text-decoration: underline;
+  text-decoration-color: var(--p-line);
+  text-underline-offset: 3px;
+}
+.papier-editor .pb-page-title.is-muted {
+  color: var(--p-faint);
+}
+
 /* inline */
 .papier-editor strong { color: var(--p-strong); font-weight: 600; }
 .papier-editor a {
@@ -300,4 +325,23 @@ body {
 .papier-block-drag .prosemirror-dropcursor-block,
 .papier-block-drag .prosemirror-dropcursor-inline {
   display: none;
+}
+
+/* a block opened from search: a brief accent wash */
+@keyframes papier-flash {
+  from {
+    background: var(--p-accent-soft);
+  }
+  to {
+    background: transparent;
+  }
+}
+.papier-flash {
+  border-radius: 4px;
+  animation: papier-flash 1.6s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .papier-flash {
+    animation-duration: 0.01s;
+  }
 }

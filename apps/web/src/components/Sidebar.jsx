@@ -1,9 +1,12 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { pageKeys, useArchivePage, useChildPages, useCreatePage } from '../api/pages.js';
+import { pageKeys, useArchivePage, useChildPages, useCreatePage, useMovePage } from '../api/pages.js';
+import { SearchDialog } from './SearchDialog.jsx';
 import { TitleText } from './TitleText.jsx';
 
 /** @typedef {import('@papier/core').Page} Page */
+/** @typedef {'before' | 'inside' | 'after'} DropWhere */
+/** @typedef {{ id: string, where: DropWhere }} DropTarget */
 /**
  * @typedef {{
  *   selectedId: string | null,
@@ -12,14 +15,31 @@ import { TitleText } from './TitleText.jsx';
  *   setExpanded: (id: string, open: boolean) => void,
  *   onAddChild: (parentId: string) => void,
  *   onDelete: (page: Page) => void,
+ *   onMoveTo: (page: Page) => void,
+ *   dnd: TreeDnd,
  * }} TreeContext
  */
+/**
+ * Dragging pages around the tree.
+ * @typedef {{
+ *   dragging: Page | null,
+ *   drop: DropTarget | null,
+ *   start: (page: Page) => void,
+ *   over: (page: Page, path: string[], where: DropWhere) => boolean,
+ *   leave: (page: Page) => void,
+ *   commit: (page: Page) => void,
+ *   end: () => void,
+ * }} TreeDnd
+ */
+
+/** How long hovering the middle of a collapsed page waits before opening it. */
+const EXPAND_DELAY_MS = 600;
 
 const navButton =
   'flex h-8 items-center gap-2.5 rounded-md px-2.5 text-left text-sm text-muted hover:bg-s-active hover:text-fg';
 
-/** @param {{ selectedId: string | null, onSelect: (id: string | null) => void }} props */
-export function Sidebar({ selectedId, onSelect }) {
+/** @param {{ selectedId: string | null, onSelect: (id: string | null) => void, onSearch: () => void }} props */
+export function Sidebar({ selectedId, onSelect, onSearch }) {
   const [isExpanded, setExpanded] = useExpandedSet();
   const createPage = useCreatePage();
   const archivePage = useArchivePage();
@@ -39,7 +59,7 @@ export function Sidebar({ selectedId, onSelect }) {
 
   /** @param {Page} page */
   const deletePage = (page) =>
-    archivePage.mutate(page.id, {
+    archivePage.mutate({ id: page.id, parentId: page.parentId }, {
       onSuccess: () => {
         // If the open page was this one or inside it, step out to the parent.
         /** @type {{ ancestors: { id: string }[] } | undefined} */
@@ -49,8 +69,12 @@ export function Sidebar({ selectedId, onSelect }) {
       },
     });
 
+  const dnd = useTreeDnd(setExpanded);
+  const [moving, setMoving] = useState(/** @type {Page | null} */ (null));
+  const movePage = useMovePage();
+
   /** @type {TreeContext} */
-  const ctx = { selectedId, onSelect, isExpanded, setExpanded, onAddChild: addPage, onDelete: deletePage };
+  const ctx = { selectedId, onSelect, isExpanded, setExpanded, onAddChild: addPage, onDelete: deletePage, onMoveTo: setMoving, dnd };
 
   return (
     <nav
@@ -68,7 +92,7 @@ export function Sidebar({ selectedId, onSelect }) {
         <span className="flex-1 text-sm font-semibold text-fg-strong">Papier</span>
       </button>
 
-      <button type="button" className={navButton}>
+      <button type="button" onClick={onSearch} className={navButton}>
         <SearchIcon />
         <span className="flex-1">Search</span>
         <kbd className="font-mono text-[11px] text-faint">Ctrl K</kbd>
@@ -91,7 +115,7 @@ export function Sidebar({ selectedId, onSelect }) {
       </div>
 
       <div className="-mx-2 min-h-0 flex-1 overflow-y-auto px-2">
-        <PageList parentId={null} depth={0} ctx={ctx} />
+        <PageList parentId={null} depth={0} path={[]} ctx={ctx} />
       </div>
 
       <button type="button" className={navButton}>
@@ -102,12 +126,25 @@ export function Sidebar({ selectedId, onSelect }) {
         <PlusIcon />
         <span>New page</span>
       </button>
+
+      {moving && (
+        <SearchDialog
+          label={`Move “${moving.title || 'Untitled'}” to…`}
+          rootOption
+          exclude={moving.id}
+          onClose={() => setMoving(null)}
+          onOpen={(parentId) => {
+            movePage.mutate({ id: moving.id, from: moving.parentId, parentId });
+            if (parentId) setExpanded(parentId, true);
+          }}
+        />
+      )}
     </nav>
   );
 }
 
-/** @param {{ parentId: string | null, depth: number, ctx: TreeContext }} props */
-function PageList({ parentId, depth, ctx }) {
+/** @param {{ parentId: string | null, depth: number, path: string[], ctx: TreeContext }} props */
+function PageList({ parentId, depth, path, ctx }) {
   const { data: pages, isPending, isError } = useChildPages(parentId);
   const indent = { paddingLeft: 6 + depth * 18 + 22 };
 
@@ -130,26 +167,71 @@ function PageList({ parentId, depth, ctx }) {
   return (
     <ul role={depth === 0 ? 'tree' : 'group'} aria-label={depth === 0 ? 'Pages' : undefined}>
       {pages.map((page) => (
-        <TreeItem key={page.id} page={page} depth={depth} ctx={ctx} />
+        <TreeItem key={page.id} page={page} depth={depth} path={path} ctx={ctx} />
       ))}
     </ul>
   );
 }
 
-/** @param {{ page: Page, depth: number, ctx: TreeContext }} props */
-function TreeItem({ page, depth, ctx }) {
+/**
+ * @param {{ page: Page, depth: number, path: string[], ctx: TreeContext }} props
+ *   path: ancestor ids, root first — a page can't be dropped into its own subtree.
+ */
+function TreeItem({ page, depth, path, ctx }) {
   const expanded = ctx.isExpanded(page.id);
   const active = ctx.selectedId === page.id;
   const title = page.title || 'Untitled';
+  const { dnd } = ctx;
+  const drop = dnd.drop?.id === page.id ? dnd.drop.where : null;
+
+  /** @param {import('react').DragEvent<HTMLDivElement>} e @returns {DropWhere} */
+  const whereOf = (e) => {
+    const box = e.currentTarget.getBoundingClientRect();
+    const y = (e.clientY - box.top) / box.height;
+    return y < 0.25 ? 'before' : y > 0.75 ? 'after' : 'inside';
+  };
 
   return (
     <li role="treeitem" aria-expanded={page.hasChildren ? expanded : undefined} aria-selected={active}>
       <div
-        className={`group flex h-[30px] items-center gap-0.5 rounded-md pr-1 text-sm ${
-          active ? 'bg-s-active text-fg-strong' : 'text-[#a3a3a3] hover:bg-s-active hover:text-fg'
-        }`}
+        // The whole row drags. Never preventDefault its mousedown (see CLAUDE.md).
+        draggable
+        onDragStart={(e) => {
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', title);
+          dnd.start(page);
+        }}
+        onDragOver={(e) => {
+          if (dnd.over(page, path, whereOf(e))) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+          }
+        }}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(/** @type {Node | null} */ (e.relatedTarget))) dnd.leave(page);
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          dnd.commit(page);
+        }}
+        onDragEnd={dnd.end}
+        data-page-id={page.id}
+        className={`group relative flex h-[30px] items-center gap-0.5 rounded-md pr-1 text-sm ${
+          drop === 'inside'
+            ? 'bg-accent-soft text-fg-strong'
+            : active
+              ? 'bg-s-active text-fg-strong'
+              : 'text-[#a3a3a3] hover:bg-s-active hover:text-fg'
+        } ${dnd.dragging?.id === page.id ? 'opacity-50' : ''}`}
         style={{ paddingLeft: 6 + depth * 18 }}
       >
+        {(drop === 'before' || drop === 'after') && (
+          <span
+            aria-hidden="true"
+            className={`pointer-events-none absolute right-1 h-[2px] rounded-full bg-accent ${drop === 'before' ? '-top-px' : '-bottom-px'}`}
+            style={{ left: 6 + depth * 18 }}
+          />
+        )}
         <button
           type="button"
           aria-label={expanded ? `Collapse ${title}` : `Expand ${title}`}
@@ -186,6 +268,15 @@ function TreeItem({ page, depth, ctx }) {
         <span className="flex shrink-0 opacity-0 group-focus-within:opacity-100 group-hover:opacity-100">
           <button
             type="button"
+            aria-label={`Move ${title}`}
+            title="Move to…"
+            onClick={() => ctx.onMoveTo(page)}
+            className="flex size-6 items-center justify-center rounded text-muted hover:bg-white/10 hover:text-fg"
+          >
+            <MoveIcon />
+          </button>
+          <button
+            type="button"
             aria-label={`Delete ${title}`}
             onClick={() => ctx.onDelete(page)}
             className="flex size-6 items-center justify-center rounded text-muted hover:bg-white/10 hover:text-fg"
@@ -203,9 +294,64 @@ function TreeItem({ page, depth, ctx }) {
         </span>
       </div>
 
-      {expanded && <PageList parentId={page.id} depth={depth + 1} ctx={ctx} />}
+      {expanded && <PageList parentId={page.id} depth={depth + 1} path={[...path, page.id]} ctx={ctx} />}
     </li>
   );
+}
+
+/**
+ * Tree drag state: which page is dragged, where it would land, and the move
+ * on drop. A page can't land on itself or inside its own subtree.
+ * @param {(id: string, open: boolean) => void} setExpanded
+ * @returns {TreeDnd}
+ */
+function useTreeDnd(setExpanded) {
+  const [dragging, setDragging] = useState(/** @type {Page | null} */ (null));
+  const [drop, setDrop] = useState(/** @type {DropTarget | null} */ (null));
+  const expandTimer = useRef(/** @type {ReturnType<typeof setTimeout> | undefined} */ (undefined));
+  const movePage = useMovePage();
+
+  const clearTimer = () => clearTimeout(expandTimer.current);
+
+  return {
+    dragging,
+    drop,
+    start: (page) => setDragging(page),
+    over: (page, path, where) => {
+      if (!dragging || page.id === dragging.id || path.includes(dragging.id)) return false;
+      if (drop?.id !== page.id || drop.where !== where) {
+        setDrop({ id: page.id, where });
+        clearTimer();
+        if (where === 'inside') expandTimer.current = setTimeout(() => setExpanded(page.id, true), EXPAND_DELAY_MS);
+      }
+      return true;
+    },
+    leave: (page) => {
+      if (drop?.id === page.id) {
+        setDrop(null);
+        clearTimer();
+      }
+    },
+    commit: (page) => {
+      clearTimer();
+      if (!dragging || !drop || drop.id !== page.id) return;
+      const from = dragging.parentId;
+      if (drop.where === 'inside') {
+        movePage.mutate({ id: dragging.id, from, parentId: page.id });
+        setExpanded(page.id, true);
+      } else {
+        const side = drop.where === 'before' ? { beforeId: page.id } : { afterId: page.id };
+        movePage.mutate({ id: dragging.id, from, parentId: page.parentId, ...side });
+      }
+      setDrop(null);
+      setDragging(null);
+    },
+    end: () => {
+      clearTimer();
+      setDrop(null);
+      setDragging(null);
+    },
+  };
 }
 
 const EXPANDED_KEY = 'papier.expanded';
@@ -255,6 +401,14 @@ const iconProps = (size = 16) =>
     strokeLinejoin: 'round',
     'aria-hidden': true,
   });
+
+function MoveIcon() {
+  return (
+    <svg {...iconProps(14)}>
+      <path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20" />
+    </svg>
+  );
+}
 
 function SearchIcon() {
   return (

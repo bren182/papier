@@ -5,6 +5,7 @@ import { TextSelection } from '@tiptap/pm/state';
 import { docToRows } from './convert.js';
 import { applyDrop, planDrop } from './dropPlan.js';
 import { bodyExtensions } from './extensions.js';
+import { slashItems } from './menuItems.js';
 
 /** @type {Editor | null} */
 let editor = null;
@@ -257,5 +258,50 @@ describe('tree invariants', () => {
     const e = setup(['numberedItem:0:a', 'numberedItem:0:b', 'numberedItem:1:b1', 'numberedItem:0:c', 'x', 'numberedItem:0:d']);
     const numbers = [...e.view.dom.querySelectorAll('[data-type="numberedItem"]')].map((el) => el.getAttribute('data-number'));
     expect(numbers).toEqual(['1', '2', '1', '3', '1']);
+  });
+});
+
+describe('page blocks', () => {
+  /** @param {Partial<import('./PageBlock.js').PageBlockOptions>} pages */
+  function pageEditor(pages) {
+    const content = [
+      { type: 'paragraph', attrs: { id: 'b0', indent: 0 }, content: [{ type: 'text', text: 'intro' }] },
+      { type: 'pageBlock', attrs: { id: 'b1', indent: 0, pageId: 'child' } },
+    ];
+    const e = new Editor({ element: document.createElement('div'), extensions: bodyExtensions({ pages }), content: { type: 'doc', content } });
+    editor = e;
+    return e;
+  }
+
+  it('show the live title and open the page on click', () => {
+    /** @type {((p: any) => void) | null} */ let push = null;
+    /** @type {string[]} */ const opened = [];
+    const e = pageEditor({
+      watchPage: (_id, onChange) => ((push = onChange), onChange({ title: 'Child', titleContent: null }), () => {}),
+      openPage: (id) => opened.push(id),
+    });
+    const label = () => e.view.dom.querySelector('.pb-page-title')?.textContent;
+    expect(label()).toBe('Child');
+    /** @type {any} */ (push)({ title: 'Renamed', titleContent: null });
+    expect(label()).toBe('Renamed');
+    /** @type {any} */ (push)(null);
+    expect(label()).toBe('Deleted page');
+
+    e.view.dom.querySelector('.pb-page')?.dispatchEvent(new MouseEvent('click', { bubbles: true, button: 0 }));
+    expect(opened).toEqual(['child']);
+  });
+
+  it('`/page` creates a sub-page in place of the empty line and opens it', async () => {
+    /** @type {string[]} */ const opened = [];
+    const e = pageEditor({ createPage: async () => 'new-page', openPage: (id) => opened.push(id) });
+    // A fresh line at the end holding "/page", as the slash menu sees it.
+    const end = e.state.doc.content.size;
+    e.view.dispatch(e.state.tr.insert(end, e.schema.nodes.paragraph.create({ indent: 0 }, e.schema.text('/page'))));
+    e.view.dispatch(e.state.tr.setSelection(TextSelection.create(e.state.doc, end + 6)));
+    const item = slashItems('page').find((i) => i.title === 'Page');
+    await item?.run(e, { from: end + 1, to: end + 6 });
+    expect(blocks(e).map((b) => b.split(':')[0])).toEqual(['paragraph', 'pageBlock', 'pageBlock']);
+    expect(e.state.doc.child(2).attrs.pageId).toBe('new-page');
+    expect(opened).toEqual(['new-page']);
   });
 });

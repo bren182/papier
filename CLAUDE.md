@@ -9,6 +9,8 @@ before planning a feature; tick its checkboxes when items land.
 ```bash
 pnpm dev                                   # server :3000 + web :5173 (Vite proxies /api)
 pnpm test                                  # Vitest, all packages
+pnpm test:e2e                              # Playwright (apps/web/e2e), own server + DB
+pnpm --filter @papier/web shot "/?p=<id>" out.png   # screenshot a running `pnpm dev`
 pnpm typecheck                             # tsc on server (TS) and web (JSDoc via jsconfig)
 pnpm build
 pnpm --filter @papier/server db:generate   # drizzle-kit: new SQL migration from schema.ts
@@ -44,8 +46,32 @@ TipTap v3 with our own schema, not a kit. Lazy-loaded as one chunk (`editor/inde
   one batch (`POST /api/pages/:id/blocks/batch`).
 - Dates are stored as `YYYY-MM-DD` and rendered live and relative (`dates.js`). Page
   titles with dates use `pages.title_content`; plain `title` is derived for search.
-- Headless editor tests run a real TipTap editor in jsdom (`editor.test.js`); drag
-  geometry and visuals still need a browser (Playwright harness planned).
+- Headless editor tests run a real TipTap editor in jsdom (`editor.test.js`). Anything
+  geometric (drag-and-drop, handles, menus) goes in Playwright: `apps/web/e2e/`, specs
+  seed pages via the API (`createPage` in `helpers.js`) and compare `outline(page)`.
+  e2e boots its own server (:3100, `:memory:` DB) and Vite (:5174) — no dev DB touched.
+
+## Page hierarchy (`apps/server/src/db/pageTree.ts`)
+
+Sub-pages live in their parent's content as `page` blocks (`props.pageId`; editor node
+`pageBlock`, `editor/PageBlock.js`). Invariant, enforced server-side: a child page is
+live exactly when its parent's content has a page block for it — creating a sub-page
+appends one (`block: false` when the editor inserts its own), deleting the block trashes
+the page, re-adding it (undo) restores it, `POST /api/pages/:id/move` moves the block
+between parents. A page block for a non-child is just a link. When the server changes an
+open page's blocks, the client calls `reloadContent` (`api/blocks.js`) to remount it.
+Sidebar order (`pages.order_key`) and block order are independent.
+
+## Search (`apps/server/src/db/search.ts`)
+
+The only SQLite-specific module. `search_rows` holds plain text per block (+ one row per
+page title, `block_id` null); `search_fts` is an FTS5 external-content index over it,
+kept in sync by triggers (hand-written migration `0004_search_fts.sql`). Block and title
+routes call `indexBlocks` / `indexTitle` inside their transactions; block deletes
+cascade. `backfillSearch` indexes unindexed blocks on startup. User input goes through
+`toFtsQuery` (quoted prefix terms) — never pass raw input to `MATCH`. Results: one hit
+per page, best of the top `CANDIDATES` rows; snippets only for returned rows, marked
+with `HIT_START`/`HIT_END` from `@papier/core` (render via `snippetParts`, not HTML).
 
 ## Conventions
 
@@ -69,6 +95,8 @@ TipTap v3 with our own schema, not a kit. Lazy-loaded as one chunk (`editor/inde
   `--data-binary @-` when smoke-testing.
 - Long inline scripts with quotes can break the Bash tool's heredoc parsing; write the
   script to the scratchpad and run the file instead.
+- e2e files are Node code: typechecked by `apps/web/e2e/jsconfig.json` and opted in
+  with `// @ts-check` (checkJs there would also check the `punycode` jsdom hoists).
 - `@papier/core` pulls in zod; client code in the main bundle should import
   zod-free helpers from `@papier/core/text` to keep zod out of it.
 - HTML5 drag: never unmount or `preventDefault()` the mousedown of the drag source

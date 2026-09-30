@@ -1,0 +1,14 @@
+{
+  // Node-side code (Playwright specs, scripts): Node types and resolution,
+  // kept apart so they never leak into the browser app's typecheck.
+  "extends": "../jsconfig.json",
+  "compilerOptions": {
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "types": ["node"],
+    // Opt in per file with // @ts-check: with Node types on, checkJs would also
+    // check JS packages they reach (the punycode that jsdom hoists).
+    "checkJs": false
+  },
+  "include": [".", "../playwright.config.js"]
+}

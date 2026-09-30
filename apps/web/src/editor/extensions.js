@@ -7,6 +7,7 @@ import Strike from '@tiptap/extension-strike';
 import Underline from '@tiptap/extension-underline';
 import { Dropcursor, Gapcursor, Placeholder, UndoRedo } from '@tiptap/extensions';
 import { DateNode } from './DateNode.js';
+import { PageBlock } from './PageBlock.js';
 import { BlockInputRules } from './inputRules.js';
 import { BlockKeymap } from './keymap.js';
 import { dateItems, slashItems } from './menuItems.js';
@@ -49,12 +50,16 @@ function placeholderFor(node) {
   }
 }
 
-/** Everything the page body editor is made of. */
-export function bodyExtensions() {
+/**
+ * Everything the page body editor is made of.
+ * @param {{ pages?: Partial<import('./PageBlock.js').PageBlockOptions> }} [opts]  page blocks' data (none in tests)
+ */
+export function bodyExtensions({ pages = {} } = {}) {
   return [
     PapierDocument,
     Text,
     ...BLOCK_NODES,
+    PageBlock.configure(pages),
     DateNode,
     SoftBreak,
     Bold,

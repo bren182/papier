@@ -11,3 +11,5 @@ data/
 apps/desktop/src-tauri/target/
 .DS_Store
 Thumbs.db
+test-results/
+playwright-report/

@@ -3,6 +3,8 @@ import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { BlockBatch } from '@papier/core';
 import type { Db } from '../db/index.ts';
 import { liveLineage } from '../db/lineage.ts';
+import { linkedChildren, syncChildren } from '../db/pageTree.ts';
+import { indexBlocks } from '../db/search.ts';
 import { blocks, pages } from '../db/schema.ts';
 
 const blockFields = {
@@ -38,6 +40,9 @@ export function blockRoutes(app: FastifyInstance, db: Db) {
         // Parents may arrive after their children within one batch; check FKs at commit.
         tx.run(sql`pragma defer_foreign_keys = on`);
         const now = Date.now();
+        // Sub-pages whose page block this batch removes go to the trash; re-added ones come back.
+        const touchesPages = deletes.length > 0 || upserts.some((b) => b.type === 'page');
+        const children = touchesPages ? linkedChildren(tx, pageId) : null;
 
         if (upserts.length) {
           const foreign = tx
@@ -56,6 +61,9 @@ export function blockRoutes(app: FastifyInstance, db: Db) {
             .run();
         }
 
+        indexBlocks(tx, pageId, upserts);
+
+        // Search rows go with their blocks (on delete cascade).
         if (deletes.length) {
           tx.delete(blocks).where(and(eq(blocks.pageId, pageId), inArray(blocks.id, deletes))).run();
         }
@@ -75,6 +83,7 @@ export function blockRoutes(app: FastifyInstance, db: Db) {
           }
         }
 
+        if (children) syncChildren(tx, pageId, children);
         tx.update(pages).set({ updatedAt: now }).where(eq(pages.id, pageId)).run();
       });
     } catch (err) {

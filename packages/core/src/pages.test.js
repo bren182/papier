@@ -12,7 +12,7 @@ describe('orderBetween', () => {
 
 describe('PageCreate', () => {
   it('defaults to an untitled root page', () => {
-    expect(PageCreate.parse({})).toEqual({ parentId: null, title: '' });
+    expect(PageCreate.parse({})).toEqual({ parentId: null, title: '', block: true });
   });
 });
 

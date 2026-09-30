@@ -1,4 +1,5 @@
-import { index, integer, sqliteTable, text, type AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
+import { sql } from 'drizzle-orm';
+import { index, integer, sqliteTable, text, uniqueIndex, type AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 
 export const pages = sqliteTable(
   'pages',
@@ -40,4 +41,26 @@ export const blocks = sqliteTable(
     updatedAt: integer('updated_at').notNull(),
   },
   (t) => [index('blocks_page_parent_order').on(t.pageId, t.parentId, t.orderKey)],
+);
+
+/**
+ * Search projection: the plain text of every block, plus one row per page title
+ * (`blockId` null). The FTS5 index `search_fts` (hand-written migration) mirrors
+ * `text` through triggers; see src/db/search.ts.
+ */
+export const searchRows = sqliteTable(
+  'search_rows',
+  {
+    /** Integer key: the FTS rowid, stable across VACUUM. */
+    id: integer('id').primaryKey(),
+    pageId: text('page_id')
+      .notNull()
+      .references(() => pages.id),
+    /** Deleting a block (or its ancestor) drops its row, and the FTS entry with it. */
+    blockId: text('block_id')
+      .unique()
+      .references(() => blocks.id, { onDelete: 'cascade' }),
+    text: text('text').notNull().default(''),
+  },
+  (t) => [uniqueIndex('search_rows_title').on(t.pageId).where(sql`${t.blockId} is null`)],
 );

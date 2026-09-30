@@ -60,13 +60,13 @@ Tick boxes as they land. Anything unticked in a shipped milestone moves to the n
 ### v0.1 — "it holds my notes" (MVP)
 
 - [ ] Auth: single owner account, email + password, session cookie
-- [ ] Page tree sidebar: create / rename / nest / drag-reorder / delete to trash
+- [x] Page tree sidebar: create / rename / nest / drag-reorder / delete to trash
 - [x] Block editor: paragraph, H1–H3, bullet + numbered list, todo, quote, code, divider
 - [x] Markdown-style input rules (`# `, `- `, `[] `, ` ``` `) and `/` slash menu
 - [ ] `@` date mentions in text and titles: `@today`, `@2 days ago`, `@last fri`, `@oct 5` — stored as plain `YYYY-MM-DD`, shown live and relative ("Today", "3 weeks ago") until far off, then as a date
 - [ ] Keyboard-first editing: Enter/Backspace/Tab semantics that feel like Notion
 - [x] Autosave, per-block, no save button, ever
-- [ ] Full-text search across all pages (SQLite FTS5)
+- [x] Full-text search across all pages (SQLite FTS5)
 - [ ] Dark mode ONLY
 - [ ] Runs as one `docker compose up` on a Linux VM behind HTTPS
 
