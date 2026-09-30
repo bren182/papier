@@ -29,6 +29,24 @@ Migrations in `apps/server/drizzle/` are committed and applied on server start. 
 - `packages/ui` — `theme.css` tokens and `Backdrop`. Tailwind maps tokens in
   `apps/web/src/index.css` (`bg-s-page`, `text-muted`, `text-fg-strong`, …).
 
+## Editor (`apps/web/src/editor/`)
+
+TipTap v3 with our own schema, not a kit. Lazy-loaded as one chunk (`editor/index.js`).
+
+- The ProseMirror doc is a **flat list of blocks** with `id` + `indent` attrs; nesting
+  is indentation. `convert.js` maps it to/from stored rows (a `parent_id` tree with
+  fractional `order` keys) and maps marks to the stored, editor-agnostic inline format
+  (`{type:'text',text,styles}`, `{type:'link',…}`, `{type:'date',props:{date}}`).
+- `schema.js`: nodes, plus `TreeInvariants` (clamps indents, gives every block a
+  unique id) and list numbering. `keymap.js` / `inputRules.js`: Notion-style keys.
+  `blockOps.js`: shared block operations. `dropPlan.js`: drag-and-drop gap/level/type.
+- Autosave: `blockSaver.js` diffs rows against what the server confirmed and posts
+  one batch (`POST /api/pages/:id/blocks/batch`).
+- Dates are stored as `YYYY-MM-DD` and rendered live and relative (`dates.js`). Page
+  titles with dates use `pages.title_content`; plain `title` is derived for search.
+- Headless editor tests run a real TipTap editor in jsdom (`editor.test.js`); drag
+  geometry and visuals still need a browser (Playwright harness planned).
+
 ## Conventions
 
 - Server TS: `erasableSyntaxOnly` — no `enum`/`namespace`/parameter properties; import
@@ -49,6 +67,12 @@ Migrations in `apps/server/drizzle/` are committed and applied on server start. 
   `pnpm-workspace.yaml` (esbuild, for drizzle-kit).
 - Git Bash on Windows can mangle non-ASCII in `curl -d '…'` args; use a heredoc with
   `--data-binary @-` when smoke-testing.
+- Long inline scripts with quotes can break the Bash tool's heredoc parsing; write the
+  script to the scratchpad and run the file instead.
+- `@papier/core` pulls in zod; client code in the main bundle should import
+  zod-free helpers from `@papier/core/text` to keep zod out of it.
+- HTML5 drag: never unmount or `preventDefault()` the mousedown of the drag source
+  (the block handle) — the drag silently dies and `dragend` never fires.
 
 ## Workflow
 

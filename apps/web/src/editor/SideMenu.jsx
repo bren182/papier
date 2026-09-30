@@ -28,7 +28,17 @@ export function SideMenu({ editor, container }) {
   const [hover, setHover] = useState(/** @type {Hover | null} */ (null));
   const [menu, setMenu] = useState(/** @type {Hover | null} */ (null));
   const [drop, setDrop] = useState(/** @type {Drop | null} */ (null));
+  const [dragging, setDragging] = useState(false);
   const drag = useRef(/** @type {Drag | null} */ (null));
+
+  /** End of a block drag, however it ended (drop, cancel, Esc). */
+  function finishDrag() {
+    drag.current = null;
+    setDrop(null);
+    setDragging(false);
+    setHover(null);
+    container?.classList.remove('papier-block-drag');
+  }
 
   // Track the block under the pointer.
   useEffect(() => {
@@ -37,11 +47,14 @@ export function SideMenu({ editor, container }) {
 
     /** @param {MouseEvent} e */
     const onMove = (e) => {
+      // No buttons down but a drag still recorded: it was cancelled somewhere
+      // we didn't hear about (e.g. Esc outside the window). Recover.
+      if (drag.current && e.buttons === 0) finishDrag();
       if (menu || drag.current) return;
       const found = locate(view, container, e.clientX, e.clientY);
       setHover((h) => (found && h && found.index === h.index && found.top === h.top ? h : found));
     };
-    const onLeave = () => !menu && setHover(null);
+    const onLeave = () => !menu && !drag.current && setHover(null);
     const onKey = () => !menu && setHover(null); // typing hides the handle, like Notion
 
     container.addEventListener('mousemove', onMove);
@@ -59,11 +72,6 @@ export function SideMenu({ editor, container }) {
   useEffect(() => {
     if (!container) return;
     const view = editor.view;
-    const end = () => {
-      drag.current = null;
-      setDrop(null);
-      container.classList.remove('papier-block-drag');
-    };
 
     /** @param {DragEvent} e */
     const onOver = (e) => {
@@ -90,7 +98,7 @@ export function SideMenu({ editor, container }) {
       const tr = plan && applyDrop(view.state, d, plan);
       if (tr) view.dispatch(tr.scrollIntoView());
       view.focus();
-      end();
+      finishDrag();
     };
 
     container.addEventListener('dragover', onOver);
@@ -132,7 +140,9 @@ export function SideMenu({ editor, container }) {
     e.dataTransfer.setData('text/plain', state.doc.textBetween(from, posOfIndex(state.doc, end + 1), '\n'));
     const dom = view.nodeDOM(from);
     if (dom instanceof HTMLElement) e.dataTransfer.setDragImage(dom, 0, 0);
-    setHover(null);
+    // Hide the handle, but keep it mounted: it's the drag source, and removing
+    // it from the page cancels the drag (and its dragend never fires).
+    setDragging(true);
   };
 
   return (
@@ -140,7 +150,7 @@ export function SideMenu({ editor, container }) {
       {drop && <DropLine drop={drop} />}
       {at && (
       <div
-        className="absolute z-20 flex items-center text-faint"
+        className={`absolute z-20 flex items-center text-faint ${dragging ? 'opacity-0' : ''}`}
         style={{ top: at.top, left: at.left, width: HANDLE_W }}
       >
         <button
@@ -170,11 +180,7 @@ export function SideMenu({ editor, container }) {
             }
           }}
           onDragStart={onDragStart}
-          onDragEnd={() => {
-            drag.current = null;
-            setDrop(null);
-            container?.classList.remove('papier-block-drag');
-          }}
+          onDragEnd={finishDrag}
           onClick={() => setMenu(menu ? null : at)}
           className="flex h-6 w-6 cursor-grab items-center justify-center rounded hover:bg-hover hover:text-fg active:cursor-grabbing"
         >
