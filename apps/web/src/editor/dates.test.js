@@ -18,6 +18,21 @@ describe('parseDateQuery', () => {
     expect(parse('in 2 weeks')).toBe('2026-10-14');
   });
 
+  it('understands "ago" phrases, with digits or words', () => {
+    expect(parse('2 days ago')).toBe('2026-09-28');
+    expect(parse('two days ago')).toBe('2026-09-28');
+    expect(parse('a week ago')).toBe('2026-09-23');
+    expect(parse('three weeks ago')).toBe('2026-09-09');
+    expect(parse('in two days')).toBe('2026-10-02');
+    expect(parse('last week')).toBe('2026-09-23');
+    expect(parse('lots of days ago')).toBeNull();
+  });
+
+  it('resolves "last <weekday>" to the previous one, never today', () => {
+    expect(parse('last fri')).toBe('2026-09-25');
+    expect(parse('last wednesday')).toBe('2026-09-23');
+  });
+
   it('resolves weekdays to the upcoming one, never today', () => {
     expect(parse('fri')).toBe('2026-10-02');
     expect(parse('next friday')).toBe('2026-10-02');
@@ -42,15 +57,25 @@ describe('parseDateQuery', () => {
 });
 
 describe('formatDateMention', () => {
-  it('is relative near today', () => {
-    expect(formatDateMention('2026-09-30', now)).toBe('Today');
-    expect(formatDateMention('2026-10-01', now)).toBe('Tomorrow');
-    expect(formatDateMention('2026-09-29', now)).toBe('Yesterday');
+  const label = (/** @type {string} */ iso) => formatDateMention(iso, now);
+
+  it('says Today / Tomorrow / Yesterday', () => {
+    expect(label('2026-09-30')).toBe('Today');
+    expect(label('2026-10-01')).toBe('Tomorrow');
+    expect(label('2026-09-29')).toBe('Yesterday');
   });
 
-  it('adds the year only when it differs', () => {
-    expect(formatDateMention('2026-12-24', now)).not.toMatch(/2026/);
-    expect(formatDateMention('2027-01-02', now)).toMatch(/2027/);
+  it('counts days, then weeks', () => {
+    expect(label('2026-09-28')).toBe('2 days ago');
+    expect(label('2026-10-06')).toBe('In 6 days');
+    expect(label('2026-09-23')).toBe('1 week ago');
+    expect(label('2026-10-14')).toBe('In 2 weeks');
+    expect(label('2026-09-03')).toBe('3 weeks ago'); // 27 days
+  });
+
+  it('falls back to a date when far off, with the year only when it differs', () => {
+    expect(label('2026-09-02')).not.toMatch(/ago|2026/);
+    expect(label('2027-01-02')).toMatch(/2027/);
   });
 });
 
@@ -63,6 +88,10 @@ describe('dateSuggestions', () => {
     const items = dateSuggestions('tod', now);
     expect(items).toHaveLength(1);
     expect(items[0]).toMatchObject({ title: 'Today', date: '2026-09-30' });
+  });
+
+  it('titles a parsed date with the label it will show', () => {
+    expect(dateSuggestions('two days ago', now)[0]).toMatchObject({ title: '2 days ago', date: '2026-09-28' });
   });
 
   it('offers nothing for an unparseable query', () => {

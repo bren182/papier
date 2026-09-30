@@ -1,18 +1,23 @@
-import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useRef } from 'react';
 import { ApiError } from '../api/client.js';
-import { useCreatePage, usePage, useUpdatePage } from '../api/pages.js';
+import { useCreatePage, usePage } from '../api/pages.js';
+import { TitleText } from './TitleText.jsx';
 
 /** @typedef {import('@papier/core').Page} PageData */
+/** @typedef {import('../editor/PageEditor.jsx').PageEditorHandle} PageEditorHandle */
 
-const SAVE_DELAY_MS = 400;
+// The editors (TipTap/ProseMirror) are one lazy chunk; the shell and sidebar
+// paint without them.
+const loadEditors = () => import('../editor/index.js');
+const TitleEditor = lazy(() => loadEditors().then((m) => ({ default: m.TitleEditor })));
+const PageEditor = lazy(() => loadEditors().then((m) => ({ default: m.PageEditor })));
 
-// BlockNote is most of the bundle; the shell and sidebar paint without it.
-const PageEditor = lazy(() => import('../editor/PageEditor.jsx').then((m) => ({ default: m.PageEditor })));
+const titleClass = 'font-display text-[40px] leading-[48px] font-semibold tracking-[-0.01em] text-fg-strong';
 
 /** @param {{ selectedId: string | null, onSelect: (id: string | null) => void }} props */
 export function Page({ selectedId, onSelect }) {
   const { data, isPending, error } = usePage(selectedId);
-  const editorRef = useRef(/** @type {import('../editor/PageEditor.jsx').PageEditorHandle | null} */ (null));
+  const editorRef = useRef(/** @type {PageEditorHandle | null} */ (null));
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
@@ -20,7 +25,8 @@ export function Page({ selectedId, onSelect }) {
       <div className="h-[170px]" />
 
       <div className="p-glass min-h-[calc(100%-170px)] border-t border-white/5 bg-s-page pb-24">
-        <article className="mx-auto flex w-full max-w-[720px] flex-col px-6 pt-10">
+        {/* px-14: room for the block handles, inside the column */}
+        <article className="mx-auto flex w-full max-w-[784px] flex-col px-14 pt-10">
           {!selectedId ? (
             <EmptyState onSelect={onSelect} />
           ) : error ? (
@@ -31,8 +37,18 @@ export function Page({ selectedId, onSelect }) {
             </Message>
           ) : isPending ? null : (
             <>
-              <TitleEditor key={data.page.id} page={data.page} onEnter={() => editorRef.current?.focusStart()} />
-              <div className="-mx-[54px] mt-4">
+              <div className={titleClass}>
+                <Suspense
+                  fallback={
+                    <h1 className={data.page.title ? '' : 'text-[#3d3d3d]'}>
+                      <TitleText title={data.page.title} titleContent={data.page.titleContent} />
+                    </h1>
+                  }
+                >
+                  <TitleEditor key={data.page.id} page={data.page} onEnter={() => editorRef.current?.focusStart()} />
+                </Suspense>
+              </div>
+              <div className="mt-4">
                 <Suspense fallback={null}>
                   <PageEditor key={data.page.id} pageId={data.page.id} ref={editorRef} />
                 </Suspense>
@@ -42,69 +58,6 @@ export function Page({ selectedId, onSelect }) {
         </article>
       </div>
     </div>
-  );
-}
-
-/**
- * Page title, saved as you type (debounced). The sidebar and breadcrumbs update
- * immediately through the optimistic cache write in useUpdatePage.
- * @param {{ page: PageData, onEnter: () => void }} props
- */
-function TitleEditor({ page, onEnter }) {
-  const [title, setTitle] = useState(page.title);
-  const updatePage = useUpdatePage();
-  const ref = useRef(/** @type {HTMLTextAreaElement | null} */ (null));
-  const timer = useRef(/** @type {ReturnType<typeof setTimeout> | undefined} */ (undefined));
-  const pending = useRef(/** @type {string | null} */ (null));
-
-  const flush = () => {
-    clearTimeout(timer.current);
-    if (pending.current === null) return;
-    updatePage.mutate({ id: page.id, patch: { title: pending.current } });
-    pending.current = null;
-  };
-  const flushRef = useRef(flush);
-  flushRef.current = flush;
-
-  // Grow with the text instead of scrolling.
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    el.style.height = 'auto';
-    el.style.height = `${el.scrollHeight}px`;
-  }, [title]);
-
-  // Save anything still pending when switching pages.
-  useEffect(() => () => flushRef.current(), []);
-
-  /** @param {string} next */
-  const onChange = (next) => {
-    const clean = next.replace(/\n/g, ' ');
-    setTitle(clean);
-    pending.current = clean;
-    clearTimeout(timer.current);
-    timer.current = setTimeout(flush, SAVE_DELAY_MS);
-  };
-
-  return (
-    <textarea
-      ref={ref}
-      rows={1}
-      value={title}
-      placeholder="Untitled"
-      aria-label="Page title"
-      autoFocus={!page.title}
-      onChange={(e) => onChange(e.target.value)}
-      onBlur={flush}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          flush();
-          onEnter();
-        }
-      }}
-      className="w-full resize-none overflow-hidden bg-transparent font-display text-[40px] leading-[48px] font-semibold tracking-[-0.01em] text-fg-strong outline-none placeholder:text-[#3d3d3d] focus-visible:outline-none"
-    />
   );
 }
 

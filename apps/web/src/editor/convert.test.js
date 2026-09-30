@@ -1,67 +1,115 @@
 import { describe, expect, it } from 'vitest';
-import { fromEditorDoc, toEditorDoc } from './convert.js';
+import { docToRows, inlineFromPM, inlineToPM, rowsToDoc } from './convert.js';
 
 /** @typedef {import('@papier/core').Block} Block */
-/** @typedef {import('./convert.js').EditorBlock} EditorBlock */
 
-const text = (/** @type {string} */ t) => [{ type: 'text', text: t, styles: {} }];
+const text = (/** @type {string} */ t, styles = {}) => [{ type: 'text', text: t, styles }];
 
 /** @type {Block[]} */
 const rows = [
   { id: 'b', type: 'todo', parentId: null, order: 'a1', props: { checked: true }, content: text('second') },
-  { id: 'a', type: 'heading', parentId: null, order: 'a0', props: { level: 2 }, content: text('first') },
-  { id: 'c', type: 'code', parentId: 'a', order: 'a0', props: { language: 'js' }, content: text('x()') },
+  { id: 'a', type: 'heading', parentId: null, order: 'a0', props: { level: 2 }, content: text('first', { bold: true }) },
+  { id: 'c', type: 'code', parentId: 'a', order: 'a0', props: { language: 'js' }, content: text('x()\ny()') },
+  { id: 'e', type: 'paragraph', parentId: 'c', order: 'a0', props: {}, content: text('deep') },
   { id: 'd', type: 'divider', parentId: null, order: 'a2', props: {}, content: [] },
 ];
 const byId = (/** @type {Block[]} */ list) => new Map(list.map((r) => [r.id, r]));
 
-/** Top-level blocks a, b, d and a's child c. */
-function parts() {
-  const [a, b, d] = /** @type {[EditorBlock, EditorBlock, EditorBlock]} */ (toEditorDoc(rows));
-  const c = /** @type {EditorBlock} */ (a.children?.[0]);
-  return { a, b, c, d };
-}
-
-describe('toEditorDoc', () => {
-  it('nests and orders blocks with BlockNote type names', () => {
-    const doc = toEditorDoc(rows);
-    expect(doc.map((b) => [b.id, b.type])).toEqual([
-      ['a', 'heading'],
-      ['b', 'checkListItem'],
-      ['d', 'divider'],
+describe('rowsToDoc', () => {
+  it('flattens the tree depth-first with indents', () => {
+    const doc = rowsToDoc(rows);
+    expect(doc.content?.map((n) => [n.attrs?.id, n.type, n.attrs?.indent])).toEqual([
+      ['a', 'heading', 0],
+      ['c', 'codeBlock', 1],
+      ['e', 'paragraph', 2],
+      ['b', 'todo', 0],
+      ['d', 'divider', 0],
     ]);
-    expect(doc[0]?.children?.[0]).toMatchObject({ id: 'c', type: 'codeBlock', props: { language: 'js' } });
-    expect(doc[2]).not.toHaveProperty('content');
+    expect(doc.content?.[1]?.content).toEqual([{ type: 'text', text: 'x()\ny()' }]);
+  });
+
+  it('starts an empty page with one paragraph', () => {
+    expect(rowsToDoc([]).content).toEqual([{ type: 'paragraph', attrs: { id: null, indent: 0 } }]);
   });
 });
 
-describe('fromEditorDoc', () => {
+describe('docToRows', () => {
   it('round-trips stored rows unchanged', () => {
-    const back = fromEditorDoc(toEditorDoc(rows), byId(rows));
-    expect(byId(back)).toEqual(byId(rows));
+    expect(byId(docToRows(rowsToDoc(rows), byId(rows)))).toEqual(byId(rows));
   });
 
-  it('drops editor-only props like colours', () => {
-    const [row] = fromEditorDoc(
-      [{ id: 'x', type: 'heading', props: { level: 3, textColor: 'red', textAlignment: 'left' }, content: [], children: [] }],
-      new Map(),
-    );
-    expect(row?.props).toEqual({ level: 3 });
+  it('rebuilds parents from indentation', () => {
+    const doc = {
+      type: 'doc',
+      content: [
+        { type: 'paragraph', attrs: { id: 'p', indent: 0 } },
+        { type: 'bulletItem', attrs: { id: 'x', indent: 1 } },
+        { type: 'bulletItem', attrs: { id: 'y', indent: 2 } },
+        { type: 'bulletItem', attrs: { id: 'z', indent: 1 } },
+        { type: 'paragraph', attrs: { id: 'q', indent: 5 } }, // clamped: child of z
+      ],
+    };
+    const flat = byId(docToRows(doc, new Map()));
+    expect(['p', 'x', 'y', 'z', 'q'].map((id) => flat.get(id)?.parentId)).toEqual([null, 'p', 'x', 'p', 'z']);
+    const [x, z] = [flat.get('x')?.order, flat.get('z')?.order];
+    expect(/** @type {string} */ (x) < /** @type {string} */ (z)).toBe(true);
   });
 
   it('re-keys only the moved block', () => {
-    const { a, b, d } = parts();
-    const moved = byId(fromEditorDoc([d, a, b], byId(rows)));
+    const doc = rowsToDoc(rows);
+    const [a, c, e, b, d] = /** @type {any[]} */ (doc.content);
+    const moved = byId(docToRows({ type: 'doc', content: [d, a, c, e, b] }, byId(rows)));
     expect(moved.get('a')?.order).toBe('a0');
     expect(moved.get('b')?.order).toBe('a1');
     expect(/** @type {string} */ (moved.get('d')?.order) < 'a0').toBe(true);
   });
 
-  it('gives an un-nested block a fresh key under its new parent', () => {
-    const { a, b, c, d } = parts();
-    const flat = byId(fromEditorDoc([{ ...a, children: [] }, c, b, d], byId(rows)));
-    expect(flat.get('c')).toMatchObject({ parentId: null });
-    const keys = ['a', 'c', 'b', 'd'].map((id) => /** @type {string} */ (flat.get(id)?.order));
-    expect([...keys].sort()).toEqual(keys);
+  it('skips blocks the editor has not stamped with an id yet', () => {
+    expect(docToRows({ type: 'doc', content: [{ type: 'paragraph', attrs: { id: null, indent: 0 } }] }, new Map())).toEqual([]);
+  });
+});
+
+describe('inline content', () => {
+  it('maps styles to marks and back', () => {
+    const stored = [
+      { type: 'text', text: 'plain ', styles: {} },
+      { type: 'text', text: 'both', styles: { bold: true, italic: true } },
+    ];
+    const pm = inlineToPM(stored);
+    expect(pm[1]).toEqual({ type: 'text', text: 'both', marks: [{ type: 'bold' }, { type: 'italic' }] });
+    expect(inlineFromPM(pm)).toEqual(stored);
+  });
+
+  it('turns links into link marks and regroups them', () => {
+    const stored = [
+      { type: 'text', text: 'see ', styles: {} },
+      {
+        type: 'link',
+        href: 'https://x.dev',
+        content: [
+          { type: 'text', text: 'the ', styles: {} },
+          { type: 'text', text: 'docs', styles: { bold: true } },
+        ],
+      },
+    ];
+    expect(inlineFromPM(inlineToPM(stored))).toEqual(stored);
+  });
+
+  it('keeps date mentions and hard breaks', () => {
+    const stored = [
+      { type: 'text', text: 'due\nby ', styles: {} },
+      { type: 'date', props: { date: '2026-10-05' } },
+    ];
+    const pm = inlineToPM(stored);
+    expect(pm.map((n) => n.type)).toEqual(['text', 'hardBreak', 'text', 'date']);
+    expect(inlineFromPM(pm)).toEqual(stored);
+  });
+
+  it('merges adjacent runs with equal styles', () => {
+    const pm = [
+      { type: 'text', text: 'a' },
+      { type: 'text', text: 'b' },
+    ];
+    expect(inlineFromPM(pm)).toEqual([{ type: 'text', text: 'ab', styles: {} }]);
   });
 });

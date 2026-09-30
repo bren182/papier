@@ -1,8 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { plainText } from '@papier/core/text';
 import { api, ApiError } from './client.js';
 
 /** @typedef {import('@papier/core').Page} Page */
-/** @typedef {{ id: string, title: string, icon: string | null }} Crumb */
+/** @typedef {{ id: string, title: string, titleContent: import('@papier/core').InlineContent | null, icon: string | null }} Crumb */
+/** @typedef {{ title?: string, titleContent?: import('@papier/core').InlineContent, icon?: string | null }} PagePatch */
 
 export const pageKeys = {
   all: ['pages'],
@@ -47,10 +49,17 @@ export function useCreatePage() {
 export function useUpdatePage() {
   const qc = useQueryClient();
   return useMutation({
-    /** @param {{ id: string, patch: { title?: string, icon?: string | null } }} vars */
+    /** @param {{ id: string, patch: PagePatch }} vars */
     mutationFn: ({ id, patch }) => /** @type {Promise<Page>} */ (api(`/pages/${id}`, { method: 'PATCH', body: patch })),
     // Optimistic: the sidebar and breadcrumbs follow the title as you type.
-    onMutate: ({ id, patch }) => {
+    onMutate: ({ id, patch: input }) => {
+      // Mirror the server: a rich title derives the plain one; a plain one drops the rich one.
+      const patch =
+        input.titleContent !== undefined
+          ? { ...input, title: plainText(input.titleContent) }
+          : input.title !== undefined
+            ? { ...input, titleContent: null }
+            : input;
       qc.setQueriesData({ queryKey: ['pages', 'children'] }, (/** @type {Page[] | undefined} */ list) =>
         list?.map((p) => (p.id === id ? { ...p, ...patch } : p)),
       );

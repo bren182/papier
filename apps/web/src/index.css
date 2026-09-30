@@ -46,59 +46,252 @@ body {
   outline-offset: 2px;
 }
 
-/* Block editor (BlockNote) on Papier tokens. Theme colours are set in PageEditor.jsx. */
-.papier-editor .bn-editor {
+/* ── Editor ─────────────────────────────────────────────────────────────
+ * Blocks are flat <div class="pb" data-type data-indent> nodes (see
+ * editor/schema.js). --indent comes from the node; --lead is the marker column
+ * (bullet, number, checkbox, quote bar) each type reserves before its text.
+ */
+.papier-editor {
+  outline: none;
   font-size: 16px;
-  line-height: 1.6;
+  line-height: 1.625;
+  color: var(--p-text);
   text-shadow: var(--s-text-shadow);
+  caret-color: var(--p-strong);
 }
-.papier-editor .bn-inline-content:has(> .ProseMirror-trailingBreak:only-child)::before {
+.papier-editor .pb {
+  --lead: 0rem;
+  --step: 1.5rem;
+  position: relative;
+  padding: 2px 0 2px calc(var(--indent, 0) * var(--step) + var(--lead));
+  min-height: 1.625em;
+}
+.papier-editor .pb-c {
+  margin: 0;
+  min-height: 1.625em;
+  font: inherit;
+}
+
+/* markers */
+.papier-editor .pb:is([data-type='bulletItem'], [data-type='numberedItem'], [data-type='todo']) {
+  --lead: 1.625rem;
+}
+.papier-editor .pb:is([data-type='bulletItem'], [data-type='numberedItem'])::before {
+  position: absolute;
+  left: calc(var(--indent, 0) * var(--step));
+  width: var(--lead);
+  text-align: center;
+  color: var(--p-muted);
+  pointer-events: none;
+}
+.papier-editor .pb[data-type='bulletItem']::before {
+  content: '•';
+  font-size: 1.25em;
+  line-height: 1.3;
+}
+.papier-editor .pb[data-type='bulletItem']:is([data-indent='1'], [data-indent='4'], [data-indent='7'])::before {
+  content: '◦';
+}
+.papier-editor .pb[data-type='bulletItem']:is([data-indent='2'], [data-indent='5'], [data-indent='8'])::before {
+  content: '▪';
+  font-size: 0.9em;
+  line-height: 1.8;
+}
+.papier-editor .pb[data-type='numberedItem']::before {
+  content: attr(data-number) '.';
+  font-variant-numeric: tabular-nums;
+}
+.papier-editor .pb-check {
+  position: absolute;
+  left: calc(var(--indent, 0) * var(--step) + 0.3rem);
+  top: calc(2px + (1.625em - 1rem) / 2);
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  appearance: none;
+  border: 1.5px solid var(--p-muted);
+  border-radius: 3px;
+  cursor: pointer;
+  display: grid;
+  place-content: center;
+}
+.papier-editor .pb-check:checked {
+  background: var(--p-accent);
+  border-color: var(--p-accent);
+}
+.papier-editor .pb-check:checked::after {
+  content: '';
+  width: 0.55rem;
+  height: 0.3rem;
+  border: solid var(--p-root);
+  border-width: 0 0 2px 2px;
+  transform: translateY(-1px) rotate(-45deg);
+}
+.papier-editor .pb[data-type='todo'][data-checked='true'] .pb-c {
   color: var(--p-faint);
+  text-decoration: line-through;
+  text-decoration-color: var(--p-faint);
 }
-.papier-editor [data-content-type='heading'] {
+
+/* headings: size lives on the block so the placeholder matches */
+.papier-editor .pb[data-type='heading'] {
   color: var(--p-strong);
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
 }
-.papier-editor .bn-inline-content a {
-  color: var(--p-accent-text);
-  text-decoration-color: rgb(123 178 217 / 0.4);
+.papier-editor .pb[data-type='heading'][data-level='1'] { font-size: 1.875em; margin-top: 1.1em; }
+.papier-editor .pb[data-type='heading'][data-level='2'] { font-size: 1.5em; margin-top: 0.9em; }
+.papier-editor .pb[data-type='heading'][data-level='3'] { font-size: 1.25em; margin-top: 0.7em; }
+.papier-editor .pb[data-type='heading']:first-child { margin-top: 0; }
+.papier-editor .pb[data-type='heading'] .pb-c { min-height: 1.3em; }
+
+/* quote: a bar in the lead column */
+.papier-editor .pb[data-type='quote'] {
+  --lead: 1.1rem;
 }
-.papier-editor .bn-inline-content code {
+.papier-editor .pb[data-type='quote']::before {
+  content: '';
+  position: absolute;
+  left: calc(var(--indent, 0) * var(--step));
+  top: 4px;
+  bottom: 4px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--p-faint);
+}
+.papier-editor .pb[data-type='quote'] .pb-c {
+  font-size: 1.05em;
+}
+
+/* code */
+.papier-editor .pb[data-type='codeBlock'] {
+  padding-block: 6px;
+}
+.papier-editor .pb[data-type='codeBlock'] pre {
+  background: var(--s-callout);
+  border: 1px solid var(--p-line);
+  border-radius: 6px;
+  padding: 12px 16px;
   font-family: var(--p-font-mono);
-  font-size: 0.88em;
+  font-size: 13.5px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  tab-size: 2;
+}
+
+/* divider */
+.papier-editor .pb[data-type='divider'] {
+  padding-block: 10px;
+  min-height: 0;
+}
+.papier-editor .pb[data-type='divider'] hr {
+  border: 0;
+  border-top: 1px solid var(--p-line);
+  margin: 0;
+}
+
+/* inline */
+.papier-editor strong { color: var(--p-strong); font-weight: 600; }
+.papier-editor a {
+  color: var(--p-accent-text);
+  text-decoration: underline;
+  text-decoration-color: rgb(123 178 217 / 0.4);
+  text-underline-offset: 2px;
+  cursor: text;
+}
+.papier-editor .pb-c code {
+  font-family: var(--p-font-mono);
+  font-size: 0.86em;
   background: var(--s-active);
+  border: 1px solid var(--p-line);
   border-radius: 4px;
   padding: 0.1em 0.3em;
 }
-.papier-editor [data-content-type='codeBlock'] {
-  font-family: var(--p-font-mono);
-  background: var(--s-callout);
-  color: var(--p-text);
+.papier-editor ::selection,
+.papier-title ::selection {
+  background: rgb(123 178 217 / 0.28);
 }
-.papier-editor [data-content-type='quote'] blockquote {
-  border-left-color: var(--p-line);
-  color: var(--p-text);
-}
-.papier-editor [data-content-type='checkListItem'] input[type='checkbox'] {
-  accent-color: var(--p-accent);
-}
-.papier-editor [data-content-type='checkListItem'][data-checked='true'] .bn-inline-content {
-  color: var(--p-faint);
-}
-.papier-editor [data-content-type='divider'] hr {
-  border-color: var(--p-line);
-}
-.papier-editor ::selection {
+
+/* selected atoms (divider, date) */
+.papier-editor .ProseMirror-selectednode,
+.papier-title .ProseMirror-selectednode {
+  outline: none;
+  border-radius: 4px;
+  box-shadow: 0 0 0 2px var(--p-accent-soft);
   background: var(--p-accent-soft);
 }
-.papier-editor .papier-date {
+
+/* placeholder: after the text column so it never fights the ::before markers */
+.papier-editor .pb.is-empty::after {
+  content: attr(data-placeholder);
+  position: absolute;
+  top: 2px;
+  left: calc(var(--indent, 0) * var(--step) + var(--lead));
+  color: var(--p-faint);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* suggestion "/" and "@" queries while typing */
+.papier-editor .suggestion,
+.papier-title .suggestion {
+  color: var(--p-muted);
+}
+
+/* dates: live, relative, calm */
+.papier-date {
   color: var(--p-muted);
   border-radius: 4px;
   padding: 0 0.15em;
   white-space: nowrap;
+  cursor: default;
 }
-.papier-editor .papier-date span {
+.papier-date-at {
   color: var(--p-faint);
 }
-.papier-editor .papier-date:hover {
+.papier-date:hover {
   background: var(--s-active);
+  color: var(--p-text);
+}
+
+/* title editor */
+.papier-title {
+  outline: none;
+  caret-color: var(--p-strong);
+}
+.papier-title h1 {
+  margin: 0;
+  font: inherit;
+}
+.papier-title .is-empty::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  color: #3d3d3d;
+  pointer-events: none;
+}
+.papier-title .papier-date {
+  color: inherit;
+  font-weight: inherit;
+}
+.papier-title .papier-date-at {
+  color: var(--p-faint);
+}
+
+/* popovers: menus, toolbar */
+.papier-popover {
+  background: var(--p-sidebar);
+  border: 1px solid var(--p-line);
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.5), 0 2px 6px rgb(0 0 0 / 0.3);
+  color: var(--p-text);
+}
+.papier-popover-host {
+  z-index: 40;
+}
+
+/* drop cursor between blocks */
+.ProseMirror .prosemirror-dropcursor-block {
+  border-radius: 1px;
 }

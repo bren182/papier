@@ -54,6 +54,27 @@ describe('pages API', () => {
     expect(res.json().title).toBe('New');
   });
 
+  it('stores a rich title and derives the plain one', async () => {
+    const page = await create();
+    const titleContent = [
+      { type: 'text', text: 'Standup ' },
+      { type: 'date', props: { date: '2026-09-30' } },
+    ];
+    const res = await app.inject({ method: 'PATCH', url: `/api/pages/${page.id}`, payload: { titleContent } });
+    expect(res.json()).toMatchObject({ title: 'Standup 2026-09-30', titleContent });
+
+    const child = await create({ parentId: page.id });
+    const detail = await app.inject({ method: 'GET', url: `/api/pages/${child.id}` });
+    expect(detail.json().ancestors[0]).toMatchObject({ title: 'Standup 2026-09-30', titleContent });
+  });
+
+  it('drops the rich title when renamed with plain text', async () => {
+    const page = await create();
+    await app.inject({ method: 'PATCH', url: `/api/pages/${page.id}`, payload: { titleContent: [{ type: 'text', text: 'A' }] } });
+    const res = await app.inject({ method: 'PATCH', url: `/api/pages/${page.id}`, payload: { title: 'B' } });
+    expect(res.json()).toMatchObject({ title: 'B', titleContent: null });
+  });
+
   it('rejects invalid input with 400', async () => {
     const page = await create();
     const res = await app.inject({ method: 'PATCH', url: `/api/pages/${page.id}`, payload: {} });

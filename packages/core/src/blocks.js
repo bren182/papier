@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+export { plainText } from './text.js';
+
 /**
  * Block types available in v0.1. Later milestones extend this list. These are
  * Papier's own names — the editor maps to/from them, so stored data never
@@ -49,23 +51,6 @@ export const BlockBatch = z.object({
   upserts: z.array(Block).max(1000).default([]),
   deletes: z.array(BlockId).max(1000).default([]),
 });
-
-/**
- * Plain text of inline content (search, titles, previews).
- * @param {z.infer<typeof InlineContent>} content
- * @returns {string}
- */
-export function plainText(content) {
-  return content
-    .map((node) => {
-      if (typeof node.text === 'string') return node.text;
-      // Inline date mention: { type: 'date', props: { date: 'YYYY-MM-DD' } }
-      if (node.type === 'date') return /** @type {{ date?: string } | undefined} */ (node.props)?.date ?? '';
-      if (Array.isArray(node.content)) return plainText(/** @type {z.infer<typeof InlineContent>} */ (node.content));
-      return '';
-    })
-    .join('');
-}
 
 /** @typedef {z.infer<typeof BlockType>} BlockTypeName */
 /** @typedef {z.infer<typeof InlineContent>} InlineContent */

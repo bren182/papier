@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { usePage } from '../api/pages.js';
+import { TitleText } from './TitleText.jsx';
 
 /** @typedef {import('../usePrefs.js').Prefs} Prefs */
 
@@ -37,7 +38,7 @@ export function Topbar({ selectedId, onSelect, prefs, onChange }) {
                   aria-current={last ? 'page' : undefined}
                   className={`max-w-[220px] truncate rounded px-1.5 py-0.5 hover:bg-s-active ${last ? 'text-fg' : 'text-muted'}`}
                 >
-                  {crumb.title || 'Untitled'}
+                  <TitleText title={crumb.title} titleContent={crumb.titleContent} />
                 </button>
               </span>
             );

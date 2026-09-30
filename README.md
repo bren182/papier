@@ -63,7 +63,7 @@ Tick boxes as they land. Anything unticked in a shipped milestone moves to the n
 - [ ] Page tree sidebar: create / rename / nest / drag-reorder / delete to trash
 - [x] Block editor: paragraph, H1–H3, bullet + numbered list, todo, quote, code, divider
 - [x] Markdown-style input rules (`# `, `- `, `[] `, ` ``` `) and `/` slash menu
-- [ ] `@` date mentions: `@today`, `@tomorrow`, `@fri`, `@oct 5`, `@in 3 days` — stored as plain `YYYY-MM-DD`, shown relative (Today / Tomorrow)
+- [ ] `@` date mentions in text and titles: `@today`, `@2 days ago`, `@last fri`, `@oct 5` — stored as plain `YYYY-MM-DD`, shown live and relative ("Today", "3 weeks ago") until far off, then as a date
 - [ ] Keyboard-first editing: Enter/Backspace/Tab semantics that feel like Notion
 - [x] Autosave, per-block, no save button, ever
 - [ ] Full-text search across all pages (SQLite FTS5)
@@ -351,7 +351,7 @@ Dev machine is Windows, so Linux/macOS builds only ever get verified by CI + a V
 | # | Question | Leaning |
 | --- | --- | --- |
 | 1 | Yjs-as-truth or SQL-as-truth for block content? | Yjs, SQL as projection |
-| 2 | TipTap from scratch, or BlockNote for a head start? | **Decided: BlockNote** (v0.1). Stored blocks use Papier's own types/props (`apps/web/src/editor/convert.js` maps them), so ejecting later doesn't touch data. |
+| 2 | TipTap from scratch, or BlockNote for a head start? | **Decided: TipTap v3, our own schema** (tried BlockNote first; swapped for control over styling and menus). The editor doc is a *flat* list of blocks with an `indent` attr — any block can have children, and storage turns indentation back into the `parent_id` tree (`apps/web/src/editor/convert.js`). Stored data is editor-agnostic. |
 | 3 | Tauri or Electron? | Tauri 2 |
 | 4 | SQLite or Postgres? | SQLite, keep the swap possible |
 | 5 | Multiplayer in v1 at all, or solo-first and add it later? | 📝 |

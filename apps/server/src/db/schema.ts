@@ -6,6 +6,8 @@ export const pages = sqliteTable(
     id: text('id').primaryKey(),
     parentId: text('parent_id').references((): AnySQLiteColumn => pages.id),
     title: text('title').notNull().default(''),
+    /** JSON inline content (text + date mentions); null = plain `title`. */
+    titleContent: text('title_content', { mode: 'json' }).$type<Array<Record<string, unknown>>>(),
     icon: text('icon'),
     /** Fractional index among siblings; see orderBetween in @papier/core. */
     orderKey: text('order_key').notNull(),

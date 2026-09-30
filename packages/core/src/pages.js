@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { generateKeyBetween, generateNKeysBetween } from 'fractional-indexing';
+import { InlineContent } from './blocks.js';
 
 export const PageId = z.string().min(1).max(64);
 
@@ -7,7 +8,10 @@ export const PageId = z.string().min(1).max(64);
 export const Page = z.object({
   id: PageId,
   parentId: PageId.nullable(),
+  /** Plain text (dates as ISO) — for search, sorting and fallbacks. */
   title: z.string(),
+  /** Rich title (text + live date mentions); null for plain-text titles. */
+  titleContent: InlineContent.nullable(),
   icon: z.string().nullable(),
   order: z.string(),
   hasChildren: z.boolean(),
@@ -23,6 +27,8 @@ export const PageCreate = z.object({
 export const PageUpdate = z
   .object({
     title: z.string().max(500),
+    /** When given, the server derives `title` from it. A title-only patch clears it. */
+    titleContent: InlineContent.max(200),
     icon: z.string().max(64).nullable(),
   })
   .partial()

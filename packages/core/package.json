@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.js"
+    ".": "./src/index.js",
+    "./text": "./src/text.js"
   },
   "dependencies": {
     "fractional-indexing": "^4.0.0",

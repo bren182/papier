@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { pageKeys, useArchivePage, useChildPages, useCreatePage } from '../api/pages.js';
+import { TitleText } from './TitleText.jsx';
 
 /** @typedef {import('@papier/core').Page} Page */
 /**
@@ -177,7 +178,9 @@ function TreeItem({ page, depth, ctx }) {
           className="flex h-full min-w-0 flex-1 items-center gap-1.5 text-left"
         >
           <PageIcon />
-          <span className={`truncate ${page.title ? '' : 'text-faint'}`}>{title}</span>
+          <span className={`truncate ${page.title ? '' : 'text-faint'}`}>
+            <TitleText title={page.title} titleContent={page.titleContent} />
+          </span>
         </button>
 
         <span className="flex shrink-0 opacity-0 group-focus-within:opacity-100 group-hover:opacity-100">

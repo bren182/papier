@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm';
-import { orderBetween, PageCreate, PageUpdate } from '@papier/core';
+import { orderBetween, PageCreate, PageUpdate, plainText } from '@papier/core';
 import type { Db } from '../db/index.ts';
 import { liveLineage } from '../db/lineage.ts';
 import { pages } from '../db/schema.ts';
@@ -10,6 +10,7 @@ const pageFields = {
   id: pages.id,
   parentId: pages.parentId,
   title: pages.title,
+  titleContent: pages.titleContent,
   icon: pages.icon,
   order: pages.orderKey,
   // Qualified by hand: drizzle renders ${pages.id} unqualified in single-table
@@ -80,10 +81,17 @@ export function pageRoutes(app: FastifyInstance, db: Db) {
   });
 
   app.patch<{ Params: { id: string } }>('/api/pages/:id', async (req, reply) => {
-    const patch = PageUpdate.parse(req.body ?? {});
+    const { titleContent, ...patch } = PageUpdate.parse(req.body ?? {});
+    // One source of truth: a rich title derives the plain one; a plain title drops the rich one.
+    const title =
+      titleContent !== undefined
+        ? { titleContent, title: plainText(titleContent).slice(0, 500) }
+        : patch.title !== undefined
+          ? { titleContent: null }
+          : {};
     const updated = db
       .update(pages)
-      .set({ ...patch, updatedAt: Date.now() })
+      .set({ ...patch, ...title, updatedAt: Date.now() })
       .where(and(eq(pages.id, req.params.id), isNull(pages.archivedAt)))
       .returning({ id: pages.id })
       .get();
