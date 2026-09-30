@@ -1,4 +1,4 @@
-import { useEffect, useImperativeHandle, useState } from 'react';
+import { useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { QueryObserver, useQueryClient } from '@tanstack/react-query';
 import { EditorContent, useEditor } from '@tiptap/react';
 import { TextSelection } from '@tiptap/pm/state';
@@ -12,6 +12,8 @@ import { bodyExtensions } from './extensions.js';
 import { FormatToolbar } from './FormatToolbar.jsx';
 import { SideMenu } from './SideMenu.jsx';
 import { InlineDatabase } from '../components/database/InlineDatabase.jsx';
+import { ButtonBlockSettings } from '../components/database/ButtonBlockSettings.jsx';
+import { useRunButton } from '../api/actions.js';
 
 /** @typedef {import('@papier/core').Block} Block */
 /** @typedef {{ focusStart: () => void }} PageEditorHandle */
@@ -38,6 +40,11 @@ export function PageEditor({ pageId, onOpenPage, onEmptyChange, template = false
 function Editor({ pageId, rows, onOpenPage, onEmptyChange, template, editorRef }) {
   const [container, setContainer] = useState(/** @type {HTMLDivElement | null} */ (null));
   const qc = useQueryClient();
+  // Button blocks run by id, so their latest settings must be saved first.
+  const saverRef = useRef(/** @type {ReturnType<typeof createBlockSaver> | null} */ (null));
+  const { runBlock } = useRunButton();
+  const runBlockRef = useRef(runBlock);
+  runBlockRef.current = runBlock;
   const editor = useEditor({
     extensions: bodyExtensions({
       template,
@@ -59,6 +66,13 @@ function Editor({ pageId, rows, onOpenPage, onEmptyChange, template, editorRef }
         saveContent: (id, rows) => saveBlocks(id, { upserts: rows, deletes: [] }),
       },
       databases: { View: InlineDatabase, openPage: (id) => onOpenPage(id) },
+      buttons: {
+        Settings: ButtonBlockSettings,
+        onRun: async (id) => {
+          await saverRef.current?.flush();
+          return runBlockRef.current(id);
+        },
+      },
     }),
     content: rowsToDoc(rows),
     immediatelyRender: true,
@@ -96,6 +110,7 @@ function Editor({ pageId, rows, onOpenPage, onEmptyChange, template, editorRef }
       retry: (err) => !(err instanceof ApiError && err.status < 500),
     });
 
+    saverRef.current = saver;
     const onUpdate = () => saver.schedule();
     const onHide = () => saver.flushOnExit();
     editor.on('update', onUpdate);
@@ -105,6 +120,7 @@ function Editor({ pageId, rows, onOpenPage, onEmptyChange, template, editorRef }
       window.removeEventListener('pagehide', onHide);
       saver.flush();
       saver.dispose();
+      if (saverRef.current === saver) saverRef.current = null;
     };
   }, [editor, pageId, rows]);
 

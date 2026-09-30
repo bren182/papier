@@ -10,6 +10,27 @@ export const TYPE_LABELS = /** @type {Record<string, string>} */ ({
   url: 'URL',
   created_time: 'Created time',
   edited_time: 'Edited time',
+  relation: 'Relation',
+  rollup: 'Rollup',
+  button: 'Button',
+});
+
+export const ROLLUP_LABELS = /** @type {Record<string, string>} */ ({
+  show_original: 'Show original',
+  count: 'Count all',
+  count_values: 'Count values',
+  count_unique: 'Count unique values',
+  count_empty: 'Count empty',
+  percent_empty: 'Percent empty',
+  sum: 'Sum',
+  avg: 'Average',
+  min: 'Min',
+  max: 'Max',
+  range: 'Range',
+  earliest: 'Earliest date',
+  latest: 'Latest date',
+  checked: 'Checked',
+  percent_checked: 'Percent checked',
 });
 
 export const OP_LABELS = /** @type {Record<string, string>} */ ({
@@ -80,6 +101,14 @@ const PATHS = /** @type {Record<string, import('react').ReactNode>} */ ({
     <>
       <circle cx="12" cy="12" r="9" />
       <path d="M12 7v5l3 2" />
+    </>
+  ),
+  relation: <path d="M7 17L17 7M9 7h8v8" />,
+  rollup: <path d="M17 5H7l6 7-6 7h10" />,
+  button: (
+    <>
+      <rect x="3.5" y="7" width="17" height="10" rx="3" />
+      <path d="M9 12h6" />
     </>
   ),
 });

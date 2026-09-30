@@ -20,12 +20,14 @@ const turnInto = (typeName, attrs = {}) => (editor, range) => {
   const block = blockAt(tr.doc, range.from);
   if (!block) return;
   const type = /** @type {any} */ (state.schema.nodes[typeName]);
+  // Atoms (a divider, a button) get an empty line after them to keep typing in.
+  const atom = typeName === 'divider' || typeName === 'buttonBlock';
   if (block.node.content.size === 0 || block.node.type.name === 'divider') {
     setBlockType(tr, block.pos, type, attrs);
-    if (typeName === 'divider') insertBlockAfter(tr, block.pos, 'paragraph');
+    if (atom) insertBlockAfter(tr, block.pos, 'paragraph');
   } else {
     const at = insertBlockAfter(tr, block.pos, typeName, attrs);
-    if (typeName === 'divider') insertBlockAfter(tr, at, 'paragraph');
+    if (atom) insertBlockAfter(tr, at, 'paragraph');
   }
   editor.view.dispatch(tr.scrollIntoView());
   editor.view.focus();
@@ -160,6 +162,7 @@ const PAGE_ITEMS = [
   { title: 'Page', icon: '▤', aliases: ['subpage', 'new page', 'child'], group: 'Pages', subtext: 'A sub-page inside this one', run: newSubPage },
   { title: 'Database', icon: '▦', aliases: ['table', 'inline database', 'board', 'kanban'], group: 'Pages', subtext: 'A table or board, right here', run: newInlineDatabase },
   { title: 'Database page', icon: '▦', aliases: ['full page database', 'table page'], group: 'Pages', subtext: 'A database as a sub-page', run: newDatabasePage },
+  { title: 'Button', icon: '⏵', aliases: ['action', 'automation', 'log'], group: 'Pages', subtext: 'Adds rows to a database in one click', run: turnInto('buttonBlock') },
 ];
 
 /** @type {MenuItem[]} */

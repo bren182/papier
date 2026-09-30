@@ -10,11 +10,12 @@ export function searchRoutes(app: FastifyInstance, db: Db) {
     const { q, limit, offset } = SearchQuery.parse(req.query ?? {});
     const { items, nextOffset } = searchPages(db, q, { limit, offset });
     return {
-      items: items.map(({ pageId, title, titleContent, icon, blockId, snippet }) => ({
+      items: items.map(({ pageId, title, titleContent, icon, blockId, field, snippet }) => ({
         page: { id: pageId, title, titleContent, icon },
         // Every hit is live, so its lineage is too; drop the page itself.
         ancestors: (liveLineage(db, pageId) ?? []).slice(0, -1),
         blockId,
+        field,
         snippet,
       })),
       nextOffset,

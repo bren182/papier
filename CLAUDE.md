@@ -81,6 +81,39 @@ lazy chunk; menus use `database/Popover.jsx` (portalled). An empty page can beco
 in place (`POST /api/pages/:id/convert`, the "Or start as a database" strip in `Page.jsx`). Drags inside a view set
 `DB_DRAG_TYPE` so the inline node view keeps them from ProseMirror.
 
+**Relations and rollups** (`db/relations.ts`, the one place that knows the link shape).
+Links live in `property_links`, never `page_props`, and each is stored **once**, under the owning
+property (`page_id` → `target_id`). A two-way relation's twin in the target database has
+`config.reverseOf` and reads the same rows backwards; the owner has `reverseId`
+(`linkSide`). Two-way is the default: `twoWay` (input only) adds or drops the twin.
+Deleting the owner hands its links to the twin (`handOverLinks`). Pages are never
+hard-deleted, so links to trashed or template rows stay, and every read filters them
+(`LIVE_TARGET`). Writes go through `writeLinks`, which replaces only the live links.
+Rollups are `COMPUTED_TYPES`: a correlated subquery per rollup (`Relations.rollup`) is used by
+filters, sorts and values alike. Percent results are 0–1, filtered as 0–100. Query and row
+responses carry `refs` (titles of linked rows); the client caches them in `refOf`.
+`duplicatePage` remaps relations inside a copy. A copied relation whose twin stays behind
+becomes one-way. **Property search:** `writeValue` also indexes text, url and option names into
+`search_rows` (`prop_id` set). `reindexProp` runs after type or option changes.
+
+## Buttons and automations (`apps/server/src/db/actions.ts`)
+
+**Actions are data:** a JSON list of `set`, `set_today`, `shift_date`, `check`, `add_number`, `link` and
+`add_row`. The types are in `@papier/core/actions` (zod-free), and `Action`/`Actions` are in `databases.js`.
+`runActions(tx, { rowId, today, source }, actions)` is the one engine: row actions change "this row",
+and `add_row` creates a row anywhere, with `'@today'`/`'@this'` tokens. Runs are all or nothing (the
+first bad action throws `InvalidValue`, which rolls back). A run returns `before` (for undo),
+`changes` and `created`. `POST /api/actions/undo` puts the values back and trashes the rows a run created.
+
+A **button property** (`type: 'button'`, config `{ label, actions }`, in `COMPUTED_TYPES`)
+runs on its row: `POST /api/pages/:rowId/buttons/:propId`. A **button block** (`button`, props
+`{ label, actions }`, editor `ButtonBlock.jsx`) runs row-less (`POST /api/blocks/:id/run`); the
+editor flushes its saver first. The client uses `useRunButton` (`api/actions.js`), which shows a toast
+(`toast.js` + `Toaster.jsx`) with Undo. `ActionsEditor.jsx` edits any action list.
+`duplicatePage` remaps ids inside actions (`remapActions`). Shared row writes (`placeKey`,
+`writeValues`, `createRow`) live in `db/rows.ts`; the view query builder lives in `db/query.ts`
+(`filterSql`, `sortSql`, `matchingRows`). Date filters accept `'@today'`.
+
 ## Templates (`apps/server/src/db/duplicate.ts`)
 
 A template is a page with `is_template`: a root page (the library, `GET /api/templates`)
@@ -99,7 +132,8 @@ when a binding changes.
 ## Search (`apps/server/src/db/search.ts`)
 
 The only SQLite-specific module. `search_rows` holds plain text per block (+ one row per
-page title, `block_id` null); `search_fts` is an FTS5 external-content index over it,
+page title, `block_id` and `prop_id` null, + one per searchable row value, `prop_id` set; hits
+name it as `field`); `search_fts` is an FTS5 external-content index over it,
 kept in sync by triggers (hand-written migration `0004_search_fts.sql`). Block and title
 routes call `indexBlocks` / `indexTitle` inside their transactions; block deletes
 cascade. `backfillSearch` indexes unindexed blocks on startup. User input goes through

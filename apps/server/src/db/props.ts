@@ -2,6 +2,7 @@ import { and, asc, eq } from 'drizzle-orm';
 import { sortKeys, type PropertyDef, type PropValue } from '@papier/core';
 import type { Db } from './index.ts';
 import { dbProperties, dbViews, pageProps } from './schema.ts';
+import { indexValue } from './search.ts';
 
 /** Database schema reads and value writes, shared by the routes and duplicate.ts. */
 
@@ -20,10 +21,11 @@ export function views(db: Conn, databaseId: string) {
   return db.select(viewFields).from(dbViews).where(eq(dbViews.databaseId, databaseId)).orderBy(asc(dbViews.orderKey)).all();
 }
 
-/** Write one row value (null deletes it); the sort columns always follow the value. */
+/** Write one row value (null deletes it); the sort columns and search row always follow the value. */
 export function writeValue(db: Conn, pageId: string, prop: PropertyDef, value: PropValue) {
   if (value === null) {
     db.delete(pageProps).where(and(eq(pageProps.pageId, pageId), eq(pageProps.propId, prop.id))).run();
+    indexValue(db, pageId, prop, null);
     return;
   }
   const { sortText, sortNum } = sortKeys(prop, value);
@@ -31,4 +33,5 @@ export function writeValue(db: Conn, pageId: string, prop: PropertyDef, value: P
     .values({ pageId, propId: prop.id, value, sortText, sortNum })
     .onConflictDoUpdate({ target: [pageProps.pageId, pageProps.propId], set: { value, sortText, sortNum } })
     .run();
+  indexValue(db, pageId, prop, value);
 }

@@ -74,7 +74,7 @@ export function Page({ selectedId, onSelect, onTemplates }) {
               {data.database && (
                 <div className="mt-4">
                   <Suspense fallback={null}>
-                    <RowProperties page={data.page} databaseId={data.database.id} values={data.props ?? {}} template={data.page.isTemplate} />
+                    <RowProperties page={data.page} databaseId={data.database.id} values={data.props ?? {}} refs={data.refs} template={data.page.isTemplate} />
                   </Suspense>
                 </div>
               )}

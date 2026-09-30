@@ -136,3 +136,14 @@ describe('database blocks', () => {
     expect(byId(docToRows(doc, byId(dbRows)))).toEqual(byId(dbRows));
   });
 });
+
+describe('button blocks', () => {
+  it('round-trip with their label and actions', () => {
+    const actions = [{ type: 'add_row', databaseId: 'log', values: { when: '@today' } }];
+    /** @type {Block[]} */
+    const buttonRows = [{ id: 'btn', type: 'button', parentId: null, order: 'a0', props: { label: 'Log it', actions }, content: [] }];
+    const doc = rowsToDoc(buttonRows);
+    expect(doc.content?.[0]).toEqual({ type: 'buttonBlock', attrs: { id: 'btn', indent: 0, label: 'Log it', actions } });
+    expect(byId(docToRows(doc, byId(buttonRows)))).toEqual(byId(buttonRows));
+  });
+});

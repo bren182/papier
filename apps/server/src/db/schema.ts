@@ -67,9 +67,14 @@ export const searchRows = sqliteTable(
     blockId: text('block_id')
       .unique()
       .references(() => blocks.id, { onDelete: 'cascade' }),
+    /** A row's property value (text, url, select names); dropped with the property. */
+    propId: text('prop_id').references((): AnySQLiteColumn => dbProperties.id, { onDelete: 'cascade' }),
     text: text('text').notNull().default(''),
   },
-  (t) => [uniqueIndex('search_rows_title').on(t.pageId).where(sql`${t.blockId} is null`)],
+  (t) => [
+    uniqueIndex('search_rows_title').on(t.pageId).where(sql`${t.blockId} is null and ${t.propId} is null`),
+    uniqueIndex('search_rows_prop').on(t.pageId, t.propId).where(sql`${t.propId} is not null`),
+  ],
 );
 
 /** A database's typed properties (the row title is the page title, not a property). */
@@ -114,6 +119,31 @@ export const pageProps = sqliteTable(
     index('page_props_prop_text').on(t.propId, t.sortText),
     index('page_props_prop_num').on(t.propId, t.sortNum),
   ],
+);
+
+/**
+ * Relation links. Each link is stored once, under the property that owns it
+ * (the one without `reverseOf`): `pageId` → `targetId`. A two-way relation's twin
+ * reads the same rows backwards (by `targetId`). Links to trashed pages stay and
+ * are filtered on read, so restoring a page brings them back.
+ */
+export const propertyLinks = sqliteTable(
+  'property_links',
+  {
+    pageId: text('page_id')
+      .notNull()
+      .references(() => pages.id),
+    propId: text('prop_id')
+      .notNull()
+      .references(() => dbProperties.id, { onDelete: 'cascade' }),
+    targetId: text('target_id')
+      .notNull()
+      .references(() => pages.id),
+    /** Order within the owning cell. */
+    orderKey: text('order_key').notNull(),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.pageId, t.propId, t.targetId] }), index('property_links_target').on(t.propId, t.targetId)],
 );
 
 /** Saved views of a database, shared by every place that shows it. */

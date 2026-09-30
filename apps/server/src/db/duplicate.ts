@@ -1,10 +1,10 @@
 import { randomUUID } from 'node:crypto';
-import { and, asc, eq, isNull } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
 import { DYNAMIC_TODAY, plainText, validateValue, ViewConfig, type PropValue } from '@papier/core';
 import { OWNING_BLOCKS } from './pageTree.ts';
-import { properties, views, writeValue, type Tx } from './props.ts';
+import { properties, views, writeValue, type Prop, type Tx } from './props.ts';
 import { indexBlocks, indexTitle } from './search.ts';
-import { blocks, dbProperties, dbViews, pageProps, pages } from './schema.ts';
+import { blocks, dbProperties, dbViews, pageProps, pages, propertyLinks } from './schema.ts';
 
 /**
  * Deep copy of a page: its content, the sub-pages its content owns (page and
@@ -13,6 +13,11 @@ import { blocks, dbProperties, dbViews, pageProps, pages } from './schema.ts';
  *
  * Dynamic dates (DYNAMIC_TODAY) in titles, content and values resolve to
  * `today` — unless the copy is itself a template, which keeps them dynamic.
+ *
+ * Relations are fixed up once everything is copied: configs and links that
+ * point inside the copy follow it, ones that point outside stay (a row made from
+ * a template keeps its project). A copied relation whose twin stays behind
+ * becomes one-way, so the outside database doesn't gain the copy's links.
  */
 
 /** Past these, a copy is refused: it would hold the (single, small) server too long. */
@@ -28,12 +33,29 @@ type Target = {
   /** Old → new property ids, when copying into a copy of the source's database. */
   propMap?: Map<string, string>;
 };
-type Ctx = { tx: Tx; today: string; pages: number; blocks: number; now: number };
+type Ctx = {
+  tx: Tx;
+  today: string;
+  pages: number;
+  blocks: number;
+  now: number;
+  /** Old → new, across the whole copy. */
+  pageMap: Map<string, string>;
+  propMap: Map<string, string>;
+  /** Copied relation and rollup properties, by old id (configs are fixed up at the end). */
+  linked: Map<string, Prop>;
+  /** Copied button blocks (new ids): their actions are remapped at the end. */
+  buttons: string[];
+};
 type Copied = { id: string; views: Map<string, string> };
 
 export function duplicatePage(tx: Tx, sourceId: string, target: Target, today: string): string {
-  const ctx: Ctx = { tx, today, pages: 0, blocks: 0, now: Date.now() };
-  return copyPage(ctx, sourceId, target).id;
+  const ctx: Ctx = { tx, today, pages: 0, blocks: 0, now: Date.now(), pageMap: new Map(), propMap: new Map(), linked: new Map(), buttons: [] };
+  const id = copyPage(ctx, sourceId, target).id;
+  fixRelationConfigs(ctx);
+  fixButtonBlocks(ctx);
+  copyLinks(ctx);
+  return id;
 }
 
 function copyPage(ctx: Ctx, sourceId: string, target: Target): Copied {
@@ -43,6 +65,7 @@ function copyPage(ctx: Ctx, sourceId: string, target: Target): Copied {
   if (++ctx.pages > MAX_PAGES) throw new TooBig(`Too big to copy (over ${MAX_PAGES} pages)`);
 
   const id = randomUUID();
+  ctx.pageMap.set(sourceId, id);
   // Dates stay dynamic in a template and anything inside one.
   const resolve = !target.isTemplate && !(target.parentId && isTemplateTree(tx, target.parentId));
   const titleContent = src.titleContent && resolve ? resolveDates(src.titleContent, ctx.today) : src.titleContent;
@@ -90,6 +113,8 @@ function copyDatabase(ctx: Ctx, fromId: string, toId: string): Map<string, strin
   for (const p of properties(tx, fromId)) {
     const newId = randomUUID();
     propMap.set(p.id, newId);
+    ctx.propMap.set(p.id, newId);
+    if (p.type === 'relation' || p.type === 'rollup' || p.type === 'button') ctx.linked.set(p.id, p);
     tx.insert(dbProperties).values({ id: newId, databaseId: toId, name: p.name, type: p.type, config: p.config, orderKey: p.order, createdAt: ctx.now }).run();
   }
 
@@ -123,6 +148,94 @@ function copyDatabase(ctx: Ctx, fromId: string, toId: string): Map<string, strin
     tx.insert(dbViews).values({ id: newId, databaseId: toId, name: v.name, type: v.type, config, orderKey: v.order, createdAt: ctx.now }).run();
   }
   return viewMap;
+}
+
+/** Point copied relations, rollups and buttons at the copies of what they referred to, when those were copied too. */
+function fixRelationConfigs(ctx: Ctx) {
+  const map = (id: string | null | undefined) => (id ? (ctx.propMap.get(id) ?? id) : id);
+  for (const [oldId, p] of ctx.linked) {
+    const c = p.config;
+    const config =
+      p.type === 'button'
+        ? { ...c, actions: remapActions(ctx, c.actions) }
+        : p.type === 'relation'
+        ? {
+            ...c,
+            databaseId: c.databaseId ? (ctx.pageMap.get(c.databaseId) ?? c.databaseId) : c.databaseId,
+            // A twin left behind: the copy is one-way (and owns its links, see copyLinks).
+            reverseId: c.reverseId ? (ctx.propMap.get(c.reverseId) ?? null) : c.reverseId,
+            reverseOf: c.reverseOf ? (ctx.propMap.get(c.reverseOf) ?? null) : c.reverseOf,
+          }
+        : { ...c, relationId: map(c.relationId), targetPropId: map(c.targetPropId) };
+    ctx.tx.update(dbProperties).set({ config }).where(eq(dbProperties.id, ctx.propMap.get(oldId)!)).run();
+  }
+}
+
+/** Copied button blocks act on the copies of databases, properties and rows they name. */
+function fixButtonBlocks(ctx: Ctx) {
+  for (const id of ctx.buttons) {
+    const b = ctx.tx.select({ props: blocks.props }).from(blocks).where(eq(blocks.id, id)).get();
+    if (b) ctx.tx.update(blocks).set({ props: { ...b.props, actions: remapActions(ctx, b.props.actions) } }).where(eq(blocks.id, id)).run();
+  }
+}
+
+/**
+ * Actions (see @papier/core actions.js) with ids inside the copy swapped for
+ * the copies' ids: properties, databases, templates and linked rows.
+ * Anything outside the copy stays as it is.
+ */
+export function remapActions(ctx: Pick<Ctx, 'propMap' | 'pageMap'>, actions: unknown) {
+  if (!Array.isArray(actions)) return actions;
+  const prop = (id: unknown) => (typeof id === 'string' ? (ctx.propMap.get(id) ?? id) : id);
+  const page = (id: unknown) => (typeof id === 'string' ? (ctx.pageMap.get(id) ?? id) : id);
+  // Relation values are row ids; select values are option ids (copied as they are).
+  const value = (v: unknown) => (Array.isArray(v) ? v.map(page) : v);
+  return actions.map((a: Record<string, unknown>) => ({
+    ...a,
+    ...('propId' in a ? { propId: prop(a.propId) } : {}),
+    ...('value' in a ? { value: value(a.value) } : {}),
+    ...('rowIds' in a && Array.isArray(a.rowIds) ? { rowIds: a.rowIds.map(page) } : {}),
+    ...('databaseId' in a ? { databaseId: page(a.databaseId) } : {}),
+    ...('templateId' in a && a.templateId ? { templateId: page(a.templateId) } : {}),
+    ...(a.values && typeof a.values === 'object'
+      ? { values: Object.fromEntries(Object.entries(a.values).map(([k, v]) => [prop(k) as string, value(v)])) }
+      : {}),
+  }));
+}
+
+/**
+ * Links touching a copied page. Under a copied property they follow it; under a
+ * twin whose copy became one-way they're turned round to belong to that copy;
+ * under a property that wasn't copied (a single row copied) the copy simply
+ * gains the same links.
+ */
+function copyLinks(ctx: Ctx) {
+  const { tx, pageMap, propMap } = ctx;
+  const old = [...pageMap.keys()];
+  const seen = new Set<string>();
+  for (let i = 0; i < old.length; i += 400) {
+    const chunk = old.slice(i, i + 400);
+    const rows = [
+      ...tx.select().from(propertyLinks).where(inArray(propertyLinks.pageId, chunk)).all(),
+      ...tx.select().from(propertyLinks).where(inArray(propertyLinks.targetId, chunk)).all(),
+    ];
+    for (const l of rows) {
+      const key = `${l.pageId} ${l.propId} ${l.targetId}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const twin = [...ctx.linked.values()].find((p) => p.config.reverseOf === l.propId && !propMap.has(l.propId));
+      let link: { pageId: string; propId: string; targetId: string } | null = null;
+      if (propMap.has(l.propId)) {
+        // Its database was copied, so the owning row was too (unless it's in the trash).
+        if (pageMap.has(l.pageId)) link = { pageId: pageMap.get(l.pageId)!, propId: propMap.get(l.propId)!, targetId: pageMap.get(l.targetId) ?? l.targetId };
+      } else if (twin) {
+        if (pageMap.has(l.targetId)) link = { pageId: pageMap.get(l.targetId)!, propId: propMap.get(twin.id)!, targetId: l.pageId };
+      } else {
+        link = { pageId: pageMap.get(l.pageId) ?? l.pageId, propId: l.propId, targetId: pageMap.get(l.targetId) ?? l.targetId };
+      }
+      if (link) tx.insert(propertyLinks).values({ ...link, orderKey: l.orderKey, createdAt: ctx.now }).onConflictDoNothing().run();
+    }
+  }
 }
 
 /**
@@ -172,6 +285,7 @@ function copyBlocks(ctx: Ctx, fromId: string, toId: string, resolve: boolean) {
   };
   walk(null);
   for (const b of ordered) tx.insert(blocks).values(b).run();
+  ctx.buttons.push(...ordered.filter((b) => b.type === 'button').map((b) => b.id));
   indexBlocks(tx, toId, ordered);
 }
 

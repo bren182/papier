@@ -1,11 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
-import { and, asc, desc, eq, gt, inArray, isNull, lt, sql, type SQL } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, sql, type SQL } from 'drizzle-orm';
 import {
   coerceValue,
   COMPUTED_TYPES,
   DatabaseQuery,
-  FILTER_OPS,
   InvalidValue,
   orderBetween,
   PageConvert,
@@ -15,23 +14,22 @@ import {
   RowCreate,
   RowMove,
   splitNames,
-  TITLE_PROP,
-  validateValue,
   valueToText,
-  VALUELESS_OPS,
   ViewConfig,
   ViewCreate,
   ViewUpdate,
-  type Filter,
+  type PropertyDef,
   type PropValue,
-  type Sort,
 } from '@papier/core';
 import type { Db } from '../db/index.ts';
-import { duplicatePage, TooBig } from '../db/duplicate.ts';
+import { TooBig } from '../db/duplicate.ts';
 import { liveLineage } from '../db/lineage.ts';
 import { properties, propFields, views, viewFields, writeValue, type Conn, type Prop, type Tx } from '../db/props.ts';
-import { indexTitle } from '../db/search.ts';
-import { blocks, dbProperties, dbViews, pageProps, pages } from '../db/schema.ts';
+import { alias, filterSql, likeEscape, queryCtx, rowsFrom, sortSql } from '../db/query.ts';
+import { handOverLinks, Relations, rowValues } from '../db/relations.ts';
+import { createRow, placeKey, writeValues } from '../db/rows.ts';
+import { indexTitle, reindexProp } from '../db/search.ts';
+import { blocks, dbProperties, dbViews, pageProps, pages, propertyLinks } from '../db/schema.ts';
 import { rowDatabase } from './pages.ts';
 
 type Option = { id: string; name: string };
@@ -67,41 +65,6 @@ function withOptionIds(options: { id?: string; name: string }[] | undefined): Op
 }
 
 /**
- * Order key for an item placed before/after a sibling (default: last), among
- * rows matched by `scope`. Shared by properties, views and rows.
- */
-function placeKey(
-  db: Conn,
-  table: typeof pages | typeof dbProperties | typeof dbViews,
-  scope: SQL | undefined,
-  { beforeId, afterId }: { beforeId?: string; afterId?: string },
-) {
-  const col = table.orderKey;
-  const key = (where: SQL | undefined, dir: 'asc' | 'desc') =>
-    db.select({ k: col }).from(table).where(and(scope, where)).orderBy(dir === 'asc' ? asc(col) : desc(col)).limit(1).get()?.k ?? null;
-  const refId = beforeId ?? afterId;
-  if (!refId) return orderBetween(key(undefined, 'desc'), null);
-  const ref = key(eq(table.id, refId), 'asc');
-  if (ref === null) throw new BadRequest('Sibling not found');
-  return beforeId ? orderBetween(key(lt(col, ref), 'desc'), ref) : orderBetween(ref, key(gt(col, ref), 'asc'));
-}
-
-/** Validate and write a set of values for one row. */
-function writeValues(db: Conn, pageId: string, props: Prop[], values: Record<string, unknown>, { template = false } = {}) {
-  const byId = new Map(props.map((p) => [p.id, p]));
-  for (const [propId, raw] of Object.entries(values)) {
-    const prop = byId.get(propId);
-    if (!prop) throw new BadRequest(`Unknown property ${propId}`);
-    try {
-      writeValue(db, pageId, prop, validateValue(prop, raw, { template }));
-    } catch (err) {
-      if (err instanceof InvalidValue) throw new BadRequest(err.message);
-      throw err;
-    }
-  }
-}
-
-/**
  * Re-derive every stored value of a property after its type or options change:
  * `convert` maps the old value to the new one (null drops it).
  */
@@ -111,129 +74,6 @@ function rewriteValues(db: Conn, prop: Prop, convert: (v: PropValue) => PropValu
     const next = convert(row.value as PropValue);
     if (next !== row.value) writeValue(db, row.pageId, prop, next);
   }
-}
-
-// ---------------------------------------------------------------------------
-// Query building. Every property referenced by a filter/sort gets one left
-// join on page_props (alias v0, v1, …); predicates run on the indexed
-// sort_text / sort_num columns, multi-select on json_each(value).
-
-type Ctx = { props: Map<string, Prop>; joins: Map<string, string>; tzOffset: number };
-
-function alias(ctx: Ctx, propId: string) {
-  let a = ctx.joins.get(propId);
-  if (!a) ctx.joins.set(propId, (a = `v${ctx.joins.size}`));
-  return sql.raw(a);
-}
-
-/** Local calendar date of a page timestamp column. */
-const dayOf = (col: 'created_at' | 'updated_at', tzOffset: number) =>
-  sql`date(p.${sql.raw(col)} / 1000 - ${tzOffset * 60}, 'unixepoch')`;
-
-const likeEscape = (s: string) => `%${s.toLowerCase().replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
-
-function typeOf(ctx: Ctx, propId: string) {
-  return propId === TITLE_PROP ? 'title' : ctx.props.get(propId)?.type;
-}
-
-/** SQL predicate for one filter, or null to ignore it (unknown property, no value yet). */
-function filterSql(ctx: Ctx, f: Filter): SQL | null {
-  const type = typeOf(ctx, f.propId);
-  if (!type || !FILTER_OPS[type]?.includes(f.op)) return null;
-  const v = f.value;
-  if (!VALUELESS_OPS.has(f.op) && (v === undefined || v === null || v === '')) return null;
-
-  if (type === 'created_time' || type === 'edited_time') {
-    const day = dayOf(type === 'created_time' ? 'created_at' : 'updated_at', ctx.tzOffset);
-    return compareDate(day, f.op, String(v));
-  }
-
-  if (type === 'title' || type === 'text' || type === 'url') {
-    const col = type === 'title' ? sql`nullif(lower(p.title), '')` : sql`${alias(ctx, f.propId)}.sort_text`;
-    const text = String(v ?? '');
-    switch (f.op) {
-      case 'contains': return sql`${col} like ${likeEscape(text)} escape '\\'`;
-      case 'not_contains': return sql`coalesce(${col}, '') not like ${likeEscape(text)} escape '\\'`;
-      case 'is': return sql`${col} = ${text.toLowerCase()}`;
-      case 'is_not': return sql`coalesce(${col}, '') <> ${text.toLowerCase()}`;
-      case 'is_empty': return sql`${col} is null`;
-      case 'is_not_empty': return sql`${col} is not null`;
-    }
-    return null;
-  }
-
-  const a = alias(ctx, f.propId);
-  if (f.op === 'is_empty') return sql`${a}.page_id is null`;
-  if (f.op === 'is_not_empty') return sql`${a}.page_id is not null`;
-
-  switch (type) {
-    case 'number': {
-      const n = Number(v);
-      if (!Number.isFinite(n)) return null;
-      const col = sql`${a}.sort_num`;
-      const ops: Record<string, SQL> = {
-        '=': sql`${col} = ${n}`,
-        '!=': sql`(${col} is null or ${col} <> ${n})`,
-        '>': sql`${col} > ${n}`,
-        '<': sql`${col} < ${n}`,
-        '>=': sql`${col} >= ${n}`,
-        '<=': sql`${col} <= ${n}`,
-      };
-      return ops[f.op] ?? null;
-    }
-    case 'select':
-      return f.op === 'is' ? sql`${a}.sort_text = ${String(v)}` : sql`(${a}.sort_text is null or ${a}.sort_text <> ${String(v)})`;
-    case 'multi_select': {
-      const has = sql`exists (select 1 from json_each(${a}.value) where json_each.value = ${String(v)})`;
-      return f.op === 'contains' ? has : sql`not ${has}`;
-    }
-    case 'date':
-      return compareDate(sql`${a}.sort_text`, f.op, String(v));
-    case 'checkbox':
-      return v === true || v === 'true' ? sql`${a}.sort_num = 1` : sql`${a}.sort_num is null`;
-  }
-  return null;
-}
-
-function compareDate(col: SQL, op: string, day: string): SQL | null {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
-  const ops: Record<string, SQL> = {
-    is: sql`${col} = ${day}`,
-    before: sql`${col} < ${day}`,
-    after: sql`${col} > ${day}`,
-    on_or_before: sql`${col} <= ${day}`,
-    on_or_after: sql`${col} >= ${day}`,
-  };
-  return ops[op] ?? null;
-}
-
-/** ORDER BY terms for one sort; empty values always last. */
-function sortSql(ctx: Ctx, s: Sort): SQL[] {
-  const dir = sql.raw(s.dir === 'desc' ? 'desc' : 'asc');
-  const type = typeOf(ctx, s.propId);
-  if (!type) return [];
-  if (type === 'date' && s.dir === 'upcoming') {
-    // Month-day of the value ('MM-DD'): today's and later ones first, then those that wrap into next year.
-    const md = sql`substr(${alias(ctx, s.propId)}.sort_text, 6, 5)`;
-    const today = new Date(Date.now() - ctx.tzOffset * 60_000).toISOString().slice(5, 10);
-    return [sql`${md} is null`, sql`${md} < ${today}`, md];
-  }
-  if (type === 'title') return [sql`p.title = ''`, sql`lower(p.title) ${dir}`];
-  if (type === 'created_time') return [sql`p.created_at ${dir}`];
-  if (type === 'edited_time') return [sql`p.updated_at ${dir}`];
-  const a = alias(ctx, s.propId);
-  if (type === 'select' || type === 'multi_select') {
-    // Option order, not alphabetical (like Notion).
-    const options = (ctx.props.get(s.propId)?.config.options ?? []) as Option[];
-    if (!options.length) return [];
-    const key = type === 'select' ? sql`${a}.sort_text` : sql`json_extract(${a}.value, '$[0]')`;
-    const rank = sql`case ${key} ${sql.join(options.map((o, i) => sql`when ${o.id} then ${i}`), sql` `)} end`;
-    return [sql`${rank} is null`, sql`${rank} ${dir}`];
-  }
-  const col = type === 'number' || type === 'checkbox' ? sql`${a}.sort_num` : sql`${a}.sort_text`;
-  // An unchecked box is "no value", but sorts as false rather than last.
-  if (type === 'checkbox') return [sql`coalesce(${col}, 0) ${dir}`];
-  return [sql`${col} is null`, sql`${col} ${dir}`];
 }
 
 // ---------------------------------------------------------------------------
@@ -250,13 +90,32 @@ export function databaseRoutes(app: FastifyInstance, db: Db) {
     try {
       return db.transaction(fn);
     } catch (err) {
-      if (err instanceof BadRequest || err instanceof TooBig) {
+      if (err instanceof BadRequest || err instanceof InvalidValue || err instanceof TooBig) {
         reply.code(400).send({ error: err.message });
         return undefined;
       }
       throw err;
     }
   };
+
+  /** Live databases by title, for choosing a relation's target. Templates and trashed ones are left out. */
+  app.get<{ Querystring: { q?: string; limit?: string } }>('/api/databases', async (req) => {
+    const q = String(req.query.q ?? '').trim().slice(0, 200);
+    const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 100);
+    const rows = db.all<{ id: string; title: string; title_content: string | null; icon: string | null }>(sql`
+      with recursive dead(id) as (
+        select id from pages where archived_at is not null or is_template = 1
+        union
+        select p.id from pages p join dead d on p.parent_id = d.id
+      )
+      select id, title, title_content, icon from pages
+      where kind = 'database' and id not in (select id from dead)
+        ${q ? sql`and lower(title) like ${likeEscape(q)} escape '\\'` : sql``}
+      order by title = '', lower(title), id
+      limit ${limit}
+    `);
+    return rows.map((r) => ({ id: r.id, title: r.title, titleContent: r.title_content === null ? null : JSON.parse(r.title_content), icon: r.icon }));
+  });
 
   app.get<{ Params: { id: string } }>('/api/databases/:id', async (req, reply) => {
     const id = liveDatabase(req.params.id);
@@ -305,10 +164,14 @@ export function databaseRoutes(app: FastifyInstance, db: Db) {
     const done = write(reply, (tx) => {
       const scope = eq(dbProperties.databaseId, id);
       const orderKey = placeKey(tx, dbProperties, scope, { afterId: input.afterId });
-      const config = { ...input.config, options: withOptionIds(input.config.options) };
-      tx.insert(dbProperties)
-        .values({ id: propId, databaseId: id, name: input.name, type: input.type, config: stripUndefined(config), orderKey, createdAt: Date.now() })
-        .run();
+      const { twoWay, reverseId: _r, reverseOf: _o, ...rest } = input.config;
+      const config = stripUndefined({ ...rest, options: withOptionIds(input.config.options) });
+      if (input.type === 'relation') checkTarget(tx, config.databaseId);
+      tx.insert(dbProperties).values({ id: propId, databaseId: id, name: input.name, type: input.type, config, orderKey, createdAt: Date.now() }).run();
+      // Two-way unless asked otherwise: the target database gets the twin.
+      if (input.type === 'relation' && config.databaseId && twoWay !== false) {
+        addTwin(tx, id, { id: propId, name: input.name, type: input.type, config, order: orderKey });
+      }
       return true;
     });
     if (!done) return reply;
@@ -330,8 +193,30 @@ export function databaseRoutes(app: FastifyInstance, db: Db) {
       }
 
       const type = input.type ?? old.type;
-      let config = { ...old.config, ...input.config, options: withOptionIds(input.config?.options ?? old.config.options) };
+      const { twoWay, reverseId: _r, reverseOf: _o, ...given } = input.config ?? {};
+      let config = { ...old.config, ...given, options: withOptionIds(input.config?.options ?? old.config.options) };
       const next: Prop = { ...old, type, config };
+
+      // Relations: re-targeting or changing type away unlinks; twoWay adds or drops the twin.
+      const wasRelation = old.type === 'relation';
+      const retarget = type === 'relation' && (config.databaseId ?? null) !== (wasRelation ? (old.config.databaseId ?? null) : null);
+      if (wasRelation && (type !== 'relation' || retarget)) {
+        if (old.config.reverseOf && type === 'relation') throw new BadRequest('Change this relation from its other side');
+        unlink(tx, old);
+        config = { ...config, reverseId: null, reverseOf: null };
+      }
+      if (type === 'relation') {
+        if (retarget) checkTarget(tx, config.databaseId);
+        if (!config.reverseOf) {
+          if (twoWay === false && config.reverseId) {
+            dropTwin(tx, config.reverseId);
+            config = { ...config, reverseId: null };
+          } else if (!config.reverseId && config.databaseId && (twoWay === true || (retarget && twoWay !== false))) {
+            config = { ...config, reverseId: addTwin(tx, id, { ...next, name: input.name ?? old.name, config }) };
+          }
+        }
+      }
+      next.config = config;
 
       if (type !== old.type) {
         // Text → select: every distinct value becomes an option.
@@ -350,7 +235,7 @@ export function databaseRoutes(app: FastifyInstance, db: Db) {
           config = { ...config, options: [...(config.options ?? []), ...added] };
           next.config = config;
         }
-        if (COMPUTED_TYPES.has(type)) {
+        if (COMPUTED_TYPES.has(type) || type === 'relation') {
           tx.delete(pageProps).where(eq(pageProps.propId, old.id)).run();
         } else {
           rewriteValues(tx, next, (v) => coerceValue(old, next, v));
@@ -369,6 +254,7 @@ export function databaseRoutes(app: FastifyInstance, db: Db) {
       patch.config = stripUndefined(config);
       tx.update(dbProperties).set(patch).where(eq(dbProperties.id, old.id)).run();
       if (type !== old.type) scrubViews(tx, id, old.id, { keepDisplay: true });
+      if (type !== old.type || input.config?.options) reindexProp(tx, { ...next, type, config });
       return true;
     });
     if (!done) return reply;
@@ -379,10 +265,19 @@ export function databaseRoutes(app: FastifyInstance, db: Db) {
     const id = liveDatabase(req.params.id);
     if (!id) return reply.code(404).send({ error: 'Database not found' });
     const deleted = db.transaction((tx) => {
-      // Values go with it (on delete cascade).
-      const row = tx.delete(dbProperties).where(and(eq(dbProperties.id, req.params.propId), eq(dbProperties.databaseId, id))).returning({ id: dbProperties.id }).get();
-      if (row) scrubViews(tx, id, row.id, { keepDisplay: false });
-      return row;
+      const prop = tx.select(propFields).from(dbProperties).where(and(eq(dbProperties.id, req.params.propId), eq(dbProperties.databaseId, id))).get() as Prop | undefined;
+      if (!prop) return false;
+      if (prop.type === 'relation') {
+        const { reverseId, reverseOf } = prop.config;
+        if (reverseId) {
+          // The twin takes over the links (read the other way round) and becomes one-way.
+          handOverLinks(tx, prop.id, reverseId);
+          setConfig(tx, reverseId, (c) => ({ ...c, reverseOf: null, reverseId: null }));
+        }
+        if (reverseOf) setConfig(tx, reverseOf, (c) => ({ ...c, reverseId: null }));
+      }
+      deleteProp(tx, id, prop.id);
+      return true;
     });
     if (!deleted) return reply.code(404).send({ error: 'Property not found' });
     return reply.code(204).send();
@@ -449,9 +344,9 @@ export function databaseRoutes(app: FastifyInstance, db: Db) {
       filters ??= config.filters;
     }
 
-    const props = properties(db, id);
-    const ctx: Ctx = { props: new Map(props.map((p) => [p.id, p])), joins: new Map(), tzOffset: q.tzOffset };
-    const where: SQL[] = [sql`p.parent_id = ${id}`, sql`p.archived_at is null`, sql`p.is_template = 0`];
+    const ctx = queryCtx(db, id, q.tzOffset);
+    const props = [...ctx.props.values()];
+    const where: SQL[] = [];
     for (const f of filters ?? []) {
       const pred = filterSql(ctx, f);
       if (pred) where.push(pred);
@@ -467,11 +362,7 @@ export function databaseRoutes(app: FastifyInstance, db: Db) {
     const order = (sorts ?? []).flatMap((s) => sortSql(ctx, s));
     order.push(sql`p.order_key`);
 
-    const joins = sql.join(
-      [...ctx.joins].map(([propId, a]) => sql`left join page_props ${sql.raw(a)} on ${sql.raw(a)}.page_id = p.id and ${sql.raw(a)}.prop_id = ${propId}`),
-      sql` `,
-    );
-    const from = sql`from pages p ${joins} where ${sql.join(where, sql` and `)}`;
+    const from = rowsFrom(ctx, id, where);
 
     const total = db.get<{ n: number }>(sql`select count(*) as n ${from}`)?.n ?? 0;
     const rows = db.all<{ id: string; title: string; title_content: string | null; icon: string | null; order_key: string; created_at: number; updated_at: number }>(
@@ -483,9 +374,13 @@ export function databaseRoutes(app: FastifyInstance, db: Db) {
       const found = db.select({ pageId: pageProps.pageId, propId: pageProps.propId, value: pageProps.value }).from(pageProps).where(inArray(pageProps.pageId, [...values.keys()])).all();
       for (const v of found) values.get(v.pageId)![v.propId] = v.value;
     }
+    const computed = ctx.rel.values(props, [...values.keys()]);
+    for (const [rowId, v] of computed.values) Object.assign(values.get(rowId)!, v);
 
     return {
       total,
+      /** Title and icon of every row a relation cell links to. */
+      refs: computed.refs,
       rows: rows.map((r) => ({
         id: r.id,
         title: r.title,
@@ -503,30 +398,8 @@ export function databaseRoutes(app: FastifyInstance, db: Db) {
     const input = RowCreate.parse(req.body ?? {});
     const id = liveDatabase(req.params.id);
     if (!id) return reply.code(404).send({ error: 'Database not found' });
-    if (input.templateId) {
-      const t = db.select({ parentId: pages.parentId, isTemplate: pages.isTemplate, archivedAt: pages.archivedAt }).from(pages).where(eq(pages.id, input.templateId)).get();
-      if (!t || t.parentId !== id || !t.isTemplate || t.archivedAt !== null) return reply.code(400).send({ error: 'Not a template of this database' });
-      if (!input.today) return reply.code(400).send({ error: 'today is required with a template' });
-    }
-    let rowId: string = randomUUID();
-    const done = write(reply, (tx) => {
-      const now = Date.now();
-      const orderKey = placeKey(tx, pages, and(eq(pages.parentId, id), isNull(pages.archivedAt)), input);
-      if (input.templateId) {
-        // A copy of the template (values, content, sub-pages); given values and title win.
-        rowId = duplicatePage(tx, input.templateId, { parentId: id, orderKey, isTemplate: false }, input.today as string);
-        if (input.title) {
-          tx.update(pages).set({ title: input.title, titleContent: null }).where(eq(pages.id, rowId)).run();
-          indexTitle(tx, rowId, input.title);
-        }
-      } else {
-        tx.insert(pages).values({ id: rowId, parentId: id, title: input.title, orderKey, createdAt: now, updatedAt: now }).run();
-        indexTitle(tx, rowId, input.title);
-      }
-      writeValues(tx, rowId, properties(tx, id), input.props);
-      return true;
-    });
-    if (!done) return reply;
+    const rowId = write(reply, (tx) => createRow(tx, id, input, input.today));
+    if (!rowId) return reply;
     return reply.code(201).send(rowById(db, rowId));
   });
 
@@ -577,16 +450,91 @@ export function databaseRoutes(app: FastifyInstance, db: Db) {
 }
 
 /** One row as the query route returns it. */
-function rowById(db: Db, id: string) {
+export function rowById(db: Db, id: string) {
   const page = db
     .select({ id: pages.id, title: pages.title, titleContent: pages.titleContent, icon: pages.icon, order: pages.orderKey, createdAt: pages.createdAt, updatedAt: pages.updatedAt })
     .from(pages)
     .where(eq(pages.id, id))
     .get();
-  const props = Object.fromEntries(
-    db.select({ propId: pageProps.propId, value: pageProps.value }).from(pageProps).where(eq(pageProps.pageId, id)).all().map((v) => [v.propId, v.value]),
-  );
-  return { ...page, props };
+  const { props, refs } = rowValues(db, id);
+  return { ...page, props, refs };
+}
+
+// ---------------------------------------------------------------------------
+// Relation pairs. The owning side keeps `reverseId` (its twin), the twin keeps
+// `reverseOf`; links are stored once, under the owner (db/relations.ts).
+
+/** A relation may only point at a live database (or nowhere yet). */
+function checkTarget(tx: Conn, databaseId: string | null | undefined) {
+  if (!databaseId) return;
+  if (!new Relations(tx).targetDb({ id: '', name: '', type: 'relation', config: { databaseId } })) throw new BadRequest('Relation target is not a database');
+}
+
+/**
+ * Give a relation its twin in the target database (named after this one) and
+ * point the pair at each other. Returns the twin's id.
+ */
+function addTwin(tx: Tx, databaseId: string, prop: Prop): string {
+  const target = prop.config.databaseId!;
+  const source = tx.select({ title: pages.title }).from(pages).where(eq(pages.id, databaseId)).get();
+  const base = (target === databaseId ? `${prop.name} (reverse)` : source?.title.trim() || 'Related').slice(0, 90);
+  const taken = new Set(properties(tx, target).map((p) => p.name.toLowerCase()));
+  let name = base;
+  for (let i = 2; taken.has(name.toLowerCase()); i++) name = `${base} ${i}`;
+  const twinId = randomUUID();
+  tx.insert(dbProperties)
+    .values({
+      id: twinId,
+      databaseId: target,
+      name,
+      type: 'relation',
+      config: { databaseId, reverseOf: prop.id },
+      orderKey: placeKey(tx, dbProperties, eq(dbProperties.databaseId, target), {}),
+      createdAt: Date.now(),
+    })
+    .run();
+  setConfig(tx, prop.id, (c) => ({ ...c, reverseId: twinId }));
+  return twinId;
+}
+
+/** A relation stops being one: an owner drops its links and twin, a twin just detaches. */
+function unlink(tx: Tx, prop: Prop) {
+  const { reverseId, reverseOf } = prop.config;
+  if (reverseOf) setConfig(tx, reverseOf, (c) => ({ ...c, reverseId: null }));
+  else {
+    tx.delete(propertyLinks).where(eq(propertyLinks.propId, prop.id)).run();
+    if (reverseId) dropTwin(tx, reverseId);
+  }
+  scrubRollups(tx, prop.id);
+}
+
+/** Delete a relation's twin (its links belong to the owner and go with it). */
+function dropTwin(tx: Tx, twinId: string) {
+  const twin = tx.select({ databaseId: dbProperties.databaseId }).from(dbProperties).where(eq(dbProperties.id, twinId)).get();
+  if (twin) deleteProp(tx, twin.databaseId, twinId);
+}
+
+/** Delete a property and scrub what refers to it. Values, links and search rows cascade. */
+function deleteProp(tx: Tx, databaseId: string, propId: string) {
+  tx.delete(dbProperties).where(eq(dbProperties.id, propId)).run();
+  scrubViews(tx, databaseId, propId, { keepDisplay: false });
+  scrubRollups(tx, propId);
+}
+
+/** Rollups over a property that is gone (or no longer a relation) lose that part of their config. */
+function scrubRollups(tx: Tx, propId: string) {
+  const rows = tx.all<{ id: string }>(sql`
+    select id from db_properties where type = 'rollup'
+      and (json_extract(config, '$.relationId') = ${propId} or json_extract(config, '$.targetPropId') = ${propId})
+  `);
+  for (const r of rows) {
+    setConfig(tx, r.id, (c) => (c.relationId === propId ? { ...c, relationId: null, targetPropId: null } : { ...c, targetPropId: null }));
+  }
+}
+
+function setConfig(tx: Tx, propId: string, fn: (c: PropertyDef['config']) => PropertyDef['config']) {
+  const row = tx.select({ config: dbProperties.config }).from(dbProperties).where(eq(dbProperties.id, propId)).get();
+  if (row) tx.update(dbProperties).set({ config: fn(row.config as PropertyDef['config']) }).where(eq(dbProperties.id, propId)).run();
 }
 
 /**

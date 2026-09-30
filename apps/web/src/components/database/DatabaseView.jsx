@@ -76,7 +76,7 @@ export function DatabaseView({ databaseId, inline = false, viewId, onViewChange,
 
 /**
  * Values a new row starts with so it passes the view's simple filters
- * (select is X, tags contain X, checkbox is checked).
+ * (select is X, tags contain X, checkbox is checked, links to X).
  * @param {View} view
  * @param {import('./context.js').Property[]} properties
  */
@@ -89,6 +89,7 @@ function prefill(view, properties) {
     if (p.type === 'select' && f.op === 'is') out[p.id] = f.value;
     if (p.type === 'multi_select' && f.op === 'contains') out[p.id] = [f.value];
     if (p.type === 'checkbox' && f.op === 'is' && f.value === true) out[p.id] = true;
+    if (p.type === 'relation' && f.op === 'contains') out[p.id] = [f.value];
   }
   return out;
 }

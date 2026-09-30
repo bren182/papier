@@ -7,6 +7,7 @@ import { api } from './client.js';
  *   page: Crumb,
  *   ancestors: Crumb[],
  *   blockId: string | null,
+ *   field: string | null,
  *   snippet: string,
  * }} SearchHit
  * @typedef {{ items: SearchHit[], nextOffset: number | null }} SearchResult

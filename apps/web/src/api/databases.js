@@ -13,8 +13,41 @@ import { today } from './templates.js';
  * @typedef {{ id: string, title: string, titleContent: import('@papier/core').InlineContent | null, icon: string | null,
  *   order: string, createdAt: number, updatedAt: number, props: Record<string, unknown> }} Row
  * @typedef {{ sorts?: ViewConfig['sorts'], filters?: ViewConfig['filters'], group?: { propId: string, value: string | null }, limit?: number }} RowQuery
- * @typedef {{ rows: Row[], total: number }} RowPage
+ * @typedef {{ title: string, titleContent: import('@papier/core').InlineContent | null, icon: string | null }} Ref  a row a relation links to
+ * @typedef {{ rows: Row[], total: number, refs: Record<string, Ref> }} RowPage
+ * @typedef {{ id: string, title: string, titleContent: import('@papier/core').InlineContent | null, icon: string | null }} DatabaseSummary
  */
+
+/**
+ * Titles of rows that relation cells link to, by id. Filled from every row
+ * query and row page (and the relation picker), so a cell can show a link as
+ * soon as it's picked; a refetch re-renders with fresh titles.
+ * @type {Map<string, Ref>}
+ */
+const refs = new Map();
+
+/** @param {Record<string, Ref> | undefined} found */
+export function rememberRefs(found) {
+  for (const [id, ref] of Object.entries(found ?? {})) refs.set(id, ref);
+}
+
+/** @param {string} id */
+export const refOf = (id) => refs.get(id);
+
+/** Every database's rows list (a relation edit changes the other side; rollups follow other databases). */
+const allRows = { predicate: (/** @type {{ queryKey: readonly unknown[] }} */ q) => q.queryKey[0] === 'db' && q.queryKey[2] === 'rows' };
+
+/**
+ * Live databases by title, for choosing a relation's target.
+ * @param {string} q
+ */
+export function useDatabaseList(q) {
+  return useQuery({
+    queryKey: ['db', 'list', q],
+    queryFn: () => /** @type {Promise<DatabaseSummary[]>} */ (api(`/databases?q=${encodeURIComponent(q)}&limit=50`)),
+    placeholderData: (prev) => prev,
+  });
+}
 
 export const dbKeys = {
   schema: (/** @type {string} */ id) => ['db', id, 'schema'],
@@ -39,13 +72,16 @@ export function useRows(id, q) {
   const limit = q.limit ?? 50;
   return useInfiniteQuery({
     queryKey: dbKeys.query(id, q),
-    queryFn: ({ pageParam }) =>
-      /** @type {Promise<RowPage>} */ (
-        api(`/databases/${id}/query`, {
+    queryFn: async ({ pageParam }) => {
+      const page = /** @type {RowPage} */ (
+        await api(`/databases/${id}/query`, {
           method: 'POST',
           body: { sorts: q.sorts, filters: q.filters, group: q.group, limit, offset: pageParam, tzOffset: new Date().getTimezoneOffset() },
         })
-      ),
+      );
+      rememberRefs(page.refs);
+      return page;
+    },
     initialPageParam: 0,
     getNextPageParam: (last, pages) => {
       const loaded = pages.reduce((n, p) => n + p.rows.length, 0);
@@ -74,6 +110,8 @@ export function useDatabaseMutations(dbId) {
   const qc = useQueryClient();
   const refreshSchema = () => qc.invalidateQueries({ queryKey: dbKeys.schema(dbId) });
   const refreshRows = () => qc.invalidateQueries({ queryKey: dbKeys.rows(dbId) });
+  /** A relation change reaches its twin in another database (schema and rows). */
+  const refreshAll = () => qc.invalidateQueries({ queryKey: ['db'] });
   /** @param {(s: DatabaseSchema) => DatabaseSchema} fn */
   const patchSchema = (fn) => qc.setQueryData(dbKeys.schema(dbId), (/** @type {DatabaseSchema | undefined} */ s) => s && fn(s));
 
@@ -82,6 +120,7 @@ export function useDatabaseMutations(dbId) {
     addProperty: async (body) => {
       const prop = /** @type {Property} */ (await api(`/databases/${dbId}/properties`, { method: 'POST', body }));
       patchSchema((s) => ({ ...s, properties: [...s.properties, prop].sort((a, b) => (a.order < b.order ? -1 : 1)) }));
+      if (prop.type === 'relation') refreshAll();
       return prop;
     },
 
@@ -94,6 +133,7 @@ export function useDatabaseMutations(dbId) {
         refreshRows();
         refreshSchema();
         qc.invalidateQueries({ queryKey: pageKeys.all });
+        if (prop.type === 'relation' || body.type) refreshAll();
       }
       return prop;
     },
@@ -102,8 +142,8 @@ export function useDatabaseMutations(dbId) {
     deleteProperty: async (propId) => {
       patchSchema((s) => ({ ...s, properties: s.properties.filter((p) => p.id !== propId) }));
       await api(`/databases/${dbId}/properties/${propId}`, { method: 'DELETE' });
-      refreshSchema();
-      refreshRows();
+      // Its twin, or rollups over it, may live in another database.
+      refreshAll();
     },
 
     /** @param {{ name: string, type: 'table' | 'board', config?: Partial<ViewConfig> }} body */
@@ -162,7 +202,9 @@ export function useDatabaseMutations(dbId) {
       try {
         await api(`/pages/${rowId}/props`, { method: 'PATCH', body: values });
       } finally {
-        refreshRows();
+        // Relations and rollups can show this row in other databases too.
+        qc.invalidateQueries(allRows);
+        qc.invalidateQueries({ queryKey: pageKeys.detail(rowId) });
       }
     },
 

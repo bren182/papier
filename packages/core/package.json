@@ -6,7 +6,8 @@
   "exports": {
     ".": "./src/index.js",
     "./text": "./src/text.js",
-    "./props": "./src/props.js"
+    "./props": "./src/props.js",
+    "./actions": "./src/actions.js"
   },
   "dependencies": {
     "fractional-indexing": "^4.0.0",

@@ -6,9 +6,10 @@ import { duplicatePage, TooBig } from '../db/duplicate.ts';
 import type { Db } from '../db/index.ts';
 import { liveLineage } from '../db/lineage.ts';
 import { appendPageBlock, isSelfOrDescendant, removePageBlocks } from '../db/pageTree.ts';
+import { rowValues } from '../db/relations.ts';
 import { indexTitle } from '../db/search.ts';
 import { createDefaultView } from './databases.ts';
-import { pageProps, pages } from '../db/schema.ts';
+import { pages } from '../db/schema.ts';
 
 const pageFields = {
   id: pages.id,
@@ -66,13 +67,8 @@ export function pageRoutes(app: FastifyInstance, db: Db) {
 
     const page = db.select(pageFields).from(pages).where(eq(pages.id, req.params.id)).get();
     const database = rowDatabase(db, req.params.id);
-    // A row carries its property values (the database's schema is loaded separately).
-    const props = database
-      ? Object.fromEntries(
-          db.select({ propId: pageProps.propId, value: pageProps.value }).from(pageProps).where(eq(pageProps.pageId, req.params.id)).all()
-            .map((v) => [v.propId, v.value]),
-        )
-      : null;
+    // A row carries its property values and the titles of rows it links to (the schema is loaded separately).
+    const values = database ? rowValues(db, req.params.id) : null;
     // Inside a template (not one itself): its dates stay dynamic too.
     const inTemplate = Boolean(
       db.get<{ hit: number }>(sql`
@@ -84,7 +80,7 @@ export function pageRoutes(app: FastifyInstance, db: Db) {
         select exists (select 1 from up join pages p on p.id = up.id where up.id <> ${req.params.id} and p.is_template = 1) as hit
       `)?.hit,
     );
-    return { page, ancestors: lineage.slice(0, -1), database, props, inTemplate };
+    return { page, ancestors: lineage.slice(0, -1), database, props: values?.props ?? null, refs: values?.refs ?? {}, inTemplate };
   });
 
   app.post('/api/pages', async (req, reply) => {

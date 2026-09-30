@@ -1,7 +1,7 @@
-import { sql } from 'drizzle-orm';
-import { HIT_END, HIT_START, plainText } from '@papier/core';
+import { and, eq, sql } from 'drizzle-orm';
+import { HIT_END, HIT_START, plainText, valueToText, type PropertyDef, type PropValue } from '@papier/core';
 import type { Db } from './index.ts';
-import { searchRows } from './schema.ts';
+import { pageProps, searchRows } from './schema.ts';
 
 /**
  * Full-text search. The only SQLite-specific module: `search_rows` holds plain
@@ -34,14 +34,39 @@ export function indexBlocks(db: Writer, pageId: string, upserts: { id: string; c
 export function indexTitle(db: Writer, pageId: string, title: string) {
   db.insert(searchRows)
     .values({ pageId, text: title })
-    .onConflictDoUpdate({ target: searchRows.pageId, targetWhere: sql`block_id is null`, set: { text: title } })
+    .onConflictDoUpdate({ target: searchRows.pageId, targetWhere: sql`block_id is null and prop_id is null`, set: { text: title } })
     .run();
+}
+
+/** Property types whose values are searchable (select types by option name). */
+const SEARCHED_TYPES = new Set(['text', 'url', 'select', 'multi_select']);
+
+/** Index (or unindex: null, or a type that isn't searched) one row value. */
+export function indexValue(db: Writer, pageId: string, prop: PropertyDef, value: PropValue) {
+  const text = SEARCHED_TYPES.has(prop.type) ? valueToText(prop, value) : '';
+  if (!text) {
+    db.delete(searchRows).where(and(eq(searchRows.pageId, pageId), eq(searchRows.propId, prop.id))).run();
+    return;
+  }
+  db.insert(searchRows)
+    .values({ pageId, propId: prop.id, text })
+    .onConflictDoUpdate({ target: [searchRows.pageId, searchRows.propId], targetWhere: sql`prop_id is not null`, set: { text } })
+    .run();
+}
+
+/** Rebuild a property's search rows (after its type or option names change). */
+export function reindexProp(db: Writer, prop: PropertyDef) {
+  db.delete(searchRows).where(eq(searchRows.propId, prop.id)).run();
+  if (!SEARCHED_TYPES.has(prop.type)) return;
+  for (const row of db.select({ pageId: pageProps.pageId, value: pageProps.value }).from(pageProps).where(eq(pageProps.propId, prop.id)).all()) {
+    indexValue(db, row.pageId, prop, row.value as PropValue);
+  }
 }
 
 /**
  * Index blocks that have no search row yet (a database from before search, or
  * rows written outside the API). One indexed pass when there's nothing to do.
- * @returns how many blocks were indexed
+ * @returns how many blocks and property values were indexed
  */
 export function backfillSearch(db: Db) {
   let total = 0;
@@ -51,11 +76,39 @@ export function backfillSearch(db: Db) {
       where not exists (select 1 from search_rows s where s.block_id = b.id)
       limit ${BACKFILL_CHUNK}
     `);
-    if (rows.length === 0) return total;
+    if (rows.length === 0) break;
     db.transaction((tx) => {
       for (const r of rows) indexBlocks(tx, r.page_id, [{ id: r.id, content: JSON.parse(r.content) }]);
     });
     total += rows.length;
+  }
+  return total + backfillValues(db);
+}
+
+/** Index searchable property values that have no search row yet (from before value search). */
+function backfillValues(db: Db) {
+  let total = 0;
+  // A value can have no text (and so still no row afterwards): walk by rowid rather than re-asking.
+  let after = 0;
+  for (;;) {
+    const rows = db.all<{ rid: number; page_id: string; value: string; id: string; name: string; type: string; config: string }>(sql`
+      select v.rowid as rid, v.page_id, v.value, d.id, d.name, d.type, d.config from page_props v
+      join db_properties d on d.id = v.prop_id
+      where v.rowid > ${after}
+        and d.type in (${sql.join([...SEARCHED_TYPES].map((t) => sql`${t}`), sql`, `)})
+        and not exists (select 1 from search_rows s where s.page_id = v.page_id and s.prop_id = v.prop_id)
+      order by v.rowid
+      limit ${BACKFILL_CHUNK}
+    `);
+    if (rows.length === 0) return total;
+    db.transaction((tx) => {
+      for (const r of rows) {
+        const prop = { id: r.id, name: r.name, type: r.type, config: JSON.parse(r.config) };
+        indexValue(tx, r.page_id, prop, JSON.parse(r.value));
+      }
+    });
+    total += rows.length;
+    after = rows[rows.length - 1]!.rid;
   }
 }
 
@@ -79,8 +132,10 @@ export type SearchHit = {
   title: string;
   titleContent: unknown[] | null;
   icon: string | null;
-  /** Null when the page's title was the best match. */
+  /** Null when the page's title (or a property value) was the best match. */
   blockId: string | null;
+  /** The property whose value matched best (database rows), or null. */
+  field: string | null;
   /** Plain text with HIT_START / HIT_END around matched terms. */
   snippet: string;
 };
@@ -111,17 +166,17 @@ export function searchPages(db: Db, q: string, { limit, offset }: { limit: numbe
       select rowid, rank from search_fts where search_fts match ${match} order by rank limit ${CANDIDATES}
     ),
     hits as (
-      select s.id, s.page_id, s.block_id,
-        top.rank * (case when s.block_id is null then ${TITLE_WEIGHT} else 1 end) as score
+      select s.id, s.page_id, s.block_id, s.prop_id,
+        top.rank * (case when s.block_id is null and s.prop_id is null then ${TITLE_WEIGHT} else 1 end) as score
       from top join search_rows s on s.id = top.rowid
       where s.page_id not in (select id from dead)
     ),
     ranked as (
       select *, row_number() over (partition by page_id order by score) as n from hits
     )
-    select r.id as rowid, r.page_id as pageId, r.block_id as blockId,
+    select r.id as rowid, r.page_id as pageId, r.block_id as blockId, d.name as field,
       p.title as title, p.title_content as titleContent, p.icon as icon
-    from ranked r join pages p on p.id = r.page_id
+    from ranked r join pages p on p.id = r.page_id left join db_properties d on d.id = r.prop_id
     where r.n = 1
     order by r.score, p.id
     limit ${limit + 1} offset ${offset}

@@ -309,3 +309,39 @@ describe('converting a page', () => {
     await call('POST', `/api/pages/${db.id}/convert`, {}, 400);
   });
 });
+
+describe('searching property values', () => {
+  const search = async (q: string) =>
+    ((await call('GET', `/api/search?q=${encodeURIComponent(q)}`, undefined, 200)) as { items: { page: { title: string }; snippet: string }[] }).items;
+
+  it('finds rows by text, url and option names; follows edits, renames and deletes', async () => {
+    const s = await seed();
+    const notes = await addProp(s.db, { name: 'Notes', type: 'text' });
+    const row = await addRow(s.db, 'Garden', { [notes.id]: 'Plant the tulips', [s.status.id]: s.todo });
+    expect((await search('tulips')).map((h) => h.page.title)).toEqual(['Garden']);
+    // A title row and value rows for the same page coexist.
+    expect((await search('garden')).map((h) => h.page.title)).toEqual(['Garden']);
+    // Option names, not ids.
+    expect((await search('doing')).map((h) => h.page.title)).toEqual(['Ship']);
+    expect((await search('blue')).map((h) => h.page.title)).toEqual(['Test']);
+
+    await call('PATCH', `/api/pages/${row.id}/props`, { [notes.id]: 'Plant the roses' }, 200);
+    expect(await search('tulips')).toEqual([]);
+    expect((await search('roses'))[0]!.snippet).toContain('roses');
+
+    const options = s.status.config.options!.map((o) => (o.id === s.doing ? { ...o, name: 'Underway' } : o));
+    await call('PATCH', `/api/databases/${s.db}/properties/${s.status.id}`, { config: { options } }, 200);
+    expect(await search('doing')).toEqual([]);
+    expect((await search('underway')).map((h) => h.page.title)).toEqual(['Ship']);
+
+    // Values of a type that isn't searched drop out; deleting the property drops them too.
+    await call('PATCH', `/api/databases/${s.db}/properties/${notes.id}`, { type: 'number' }, 200);
+    expect(await search('roses')).toEqual([]);
+    await call('DELETE', `/api/databases/${s.db}/properties/${s.status.id}`, undefined, 204);
+    expect(await search('underway')).toEqual([]);
+
+    // Trashed rows stay out.
+    await call('DELETE', `/api/pages/${(await query(s.db)).rows.find((r) => r.title === 'Test')!.id}`, undefined, 204);
+    expect(await search('blue')).toEqual([]);
+  });
+});

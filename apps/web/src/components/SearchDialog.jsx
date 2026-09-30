@@ -8,7 +8,7 @@ import { TitleText } from './TitleText.jsx';
 const DEBOUNCE_MS = 120;
 
 /** "Top level" in the move picker: a hit with no page. */
-const ROOT_HIT = /** @type {SearchHit} */ ({ page: { id: '', title: 'Top level', titleContent: null, icon: null }, ancestors: [], blockId: null, snippet: '' });
+const ROOT_HIT = /** @type {SearchHit} */ ({ page: { id: '', title: 'Top level', titleContent: null, icon: null }, ancestors: [], blockId: null, field: null, snippet: '' });
 
 /**
  * Ctrl/Cmd-K search: type, ↑/↓ to pick, Enter to open (at the matching
@@ -139,7 +139,7 @@ export function SearchDialog({ onClose, onOpen, label = 'Search', rootOption = f
                     </span>
                   )}
                 </div>
-                {hit.blockId && <Snippet text={hit.snippet} />}
+                {(hit.blockId || hit.field) && <Snippet text={hit.snippet} field={hit.field} />}
               </li>
             ))}
           </ul>
@@ -153,10 +153,11 @@ export function SearchDialog({ onClose, onOpen, label = 'Search', rootOption = f
   );
 }
 
-/** A snippet with its matched terms highlighted. @param {{ text: string }} props */
-function Snippet({ text }) {
+/** A snippet with its matched terms highlighted; `field` names the property it's from. @param {{ text: string, field?: string | null }} props */
+function Snippet({ text, field }) {
   return (
     <p className="mt-0.5 line-clamp-2 text-[13px] leading-5 text-muted">
+      {field && <span className="text-faint">{field}: </span>}
       {snippetParts(text.trim()).map((part, i) =>
         part.hit ? (
           <mark key={i} className="rounded-[3px] bg-accent-soft px-0.5 text-fg-strong">

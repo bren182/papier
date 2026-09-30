@@ -8,6 +8,7 @@ import { Page } from './components/Page.jsx';
 import { SearchDialog } from './components/SearchDialog.jsx';
 import { ShortcutsDialog } from './components/ShortcutsDialog.jsx';
 import { TemplateLibrary } from './components/TemplateLibrary.jsx';
+import { Toaster } from './components/Toaster.jsx';
 
 export function App() {
   const [prefs, updatePrefs] = usePrefs();
@@ -65,6 +66,7 @@ export function App() {
       {searching && <SearchDialog onClose={() => setSearching(false)} onOpen={select} />}
       {shortcuts && <ShortcutsDialog onClose={() => setShortcuts(false)} />}
       {library && <TemplateLibrary target={library} onClose={() => setLibrary(null)} onOpen={select} />}
+      <Toaster />
     </div>
   );
 }

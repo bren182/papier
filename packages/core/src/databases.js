@@ -1,6 +1,8 @@
 import { z } from 'zod';
-import { FILTER_OPS, PROPERTY_TYPES } from './props.js';
+import { MAX_ACTIONS } from './actions.js';
+import { FILTER_OPS, PROPERTY_TYPES, ROLLUP_FN_NAMES } from './props.js';
 
+export * from './actions.js';
 export * from './props.js';
 
 export const PropertyId = z.string().min(1).max(64);
@@ -12,10 +14,65 @@ export const SelectOption = z.object({
   name: z.string().trim().min(1).max(100),
 });
 
+const Ref = z.string().min(1).max(64).nullable();
+const Id = z.string().min(1).max(64);
+
+/** One action (see actions.js). Values are checked against their property when it runs. */
+export const Action = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('set'), propId: Id, value: z.unknown() }),
+  z.object({ type: z.literal('set_today'), propId: Id }),
+  z.object({
+    type: z.literal('shift_date'),
+    propId: Id,
+    amount: z.number().int().min(-10_000).max(10_000),
+    unit: z.enum(['day', 'week', 'month', 'year']),
+    from: z.enum(['value', 'today']).default('value'),
+  }),
+  z.object({ type: z.literal('check'), propId: Id, to: z.union([z.boolean(), z.literal('toggle')]) }),
+  z.object({ type: z.literal('add_number'), propId: Id, amount: z.number().finite() }),
+  z.object({ type: z.literal('link'), propId: Id, rowIds: z.array(Id).max(100), mode: z.enum(['add', 'remove']) }),
+  z.object({
+    type: z.literal('add_row'),
+    databaseId: Id,
+    templateId: Id.nullable().optional(),
+    title: z.string().max(500).optional(),
+    values: z.record(Id, z.unknown()).default({}),
+  }),
+]);
+
+export const Actions = z.array(Action).max(MAX_ACTIONS);
+
+/** Running a button (or an automation by hand): the viewer's day, for "today". */
+export const ActionRun = z.object({
+  today: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  tzOffset: z.number().int().min(-900).max(900).default(0),
+});
+
+/** Put back what a run changed: values as they were, rows it added go to the trash. */
+export const ActionUndo = z.object({
+  rows: z.array(z.object({ id: Id, props: z.record(Id, z.unknown()) })).max(1000).default([]),
+  created: z.array(Id).max(1000).default([]),
+});
+
+/**
+ * One config shape for every type; each type reads its own keys. `reverseId` /
+ * `reverseOf` are managed by the server (input ones are ignored); `twoWay` is
+ * input only — it adds or removes a relation's twin in the target database.
+ */
 export const PropertyConfig = z
   .object({
     options: z.array(SelectOption).max(500),
     format: z.enum(['number', 'percent']),
+    databaseId: Ref,
+    reverseId: Ref,
+    reverseOf: Ref,
+    twoWay: z.boolean(),
+    relationId: Ref,
+    targetPropId: Ref,
+    fn: z.enum(ROLLUP_FN_NAMES).nullable(),
+    /** Button: its label (default: the property name) and what it does. */
+    label: z.string().trim().max(100),
+    actions: Actions,
   })
   .partial();
 

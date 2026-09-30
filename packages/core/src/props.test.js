@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { coerceValue, InvalidValue, sortKeys, textToValue, validateValue, valueToText } from './props.js';
+import { coerceValue, filterOps, InvalidValue, rollupFns, rollupResultType, sortKeys, textToValue, validateValue, valueToText } from './props.js';
 import { Filter, ViewConfig } from './databases.js';
 
 /** @param {string} type @param {import('./props.js').PropertyConfig} [config] */
@@ -69,5 +69,37 @@ describe('ViewConfig', () => {
 
   it('rejects unknown filter operators', () => {
     expect(Filter.safeParse({ propId: 'p', op: 'like' }).success).toBe(false);
+  });
+});
+
+describe('relations and rollups', () => {
+  it('validate relation links: unique ids, empty is null', () => {
+    const rel = prop('relation', { databaseId: 'd' });
+    expect(validateValue(rel, ['a', 'b', 'a'])).toEqual(['a', 'b']);
+    expect(validateValue(rel, [])).toBe(null);
+    expect(() => validateValue(rel, 'a')).toThrow(InvalidValue);
+    expect(() => validateValue(rel, [1])).toThrow(InvalidValue);
+    expect(() => validateValue(prop('rollup'), 3)).toThrow(InvalidValue);
+    expect(coerceValue(prop('text'), rel, 'x')).toBe(null);
+    expect(coerceValue(rel, prop('text'), ['a'])).toBe(null);
+  });
+
+  it('offer rollup functions by target type, and know what they produce', () => {
+    expect(rollupFns('number')).toContain('sum');
+    expect(rollupFns('checkbox')).toContain('percent_checked');
+    expect(rollupFns('created_time')).toContain('earliest');
+    expect(rollupFns('text')).not.toContain('sum');
+    expect(rollupFns('rollup')).toEqual([]);
+    expect(rollupResultType('percent_checked')).toBe('percent');
+    expect(rollupResultType('latest')).toBe('date');
+    expect(rollupResultType('show_original')).toBe('list');
+    expect(rollupResultType('count')).toBe('number');
+  });
+
+  it('filter a rollup like its result', () => {
+    expect(filterOps(prop('rollup', { fn: 'sum' }))).toContain('>=');
+    expect(filterOps(prop('rollup', { fn: 'earliest' }))).toContain('before');
+    expect(filterOps(prop('rollup', { fn: 'show_original' }))).toEqual(['is_empty', 'is_not_empty']);
+    expect(filterOps(prop('relation'))).toContain('contains');
   });
 });

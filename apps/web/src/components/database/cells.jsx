@@ -1,6 +1,11 @@
-import { useRef, useState } from 'react';
-import { DYNAMIC_TODAY, valueToText } from '@papier/core/props';
+import { useEffect, useRef, useState } from 'react';
+import { DYNAMIC_TODAY, rollupResultType, TITLE_PROP, valueToText } from '@papier/core/props';
+import { useRunButton } from '../../api/actions.js';
+import { refOf, rememberRefs, useDatabaseMutations, useRows } from '../../api/databases.js';
 import { formatDateLong, formatDateMention, parseDateQuery, toISODate } from '../../editor/dates.js';
+import { useSelectedPage } from '../../useSelectedPage.js';
+import { TitleText } from '../TitleText.jsx';
+import { Icon, ICONS } from './meta.jsx';
 import { field, menuItem, Popover } from './Popover.jsx';
 
 /**
@@ -12,7 +17,7 @@ import { field, menuItem, Popover } from './Popover.jsx';
  * @typedef {{
  *   prop: Property,
  *   value: unknown,
- *   row: { createdAt: number, updatedAt: number },
+ *   row: { id?: string, createdAt: number, updatedAt: number },
  *   onChange: (value: unknown) => void,
  *   onAddOption: (prop: Property, name: string) => Promise<string | undefined>,
  *   className?: string,
@@ -27,6 +32,29 @@ export function Chip({ name, onRemove }) {
       <span className="truncate">{name}</span>
       {onRemove && (
         <button type="button" aria-label={`Remove ${name}`} onClick={onRemove} className="text-muted hover:text-fg">
+          ×
+        </button>
+      )}
+    </span>
+  );
+}
+
+/** A linked row, by id (titles come from refOf). @param {{ id: string, onRemove?: () => void, onOpen?: () => void }} props */
+export function RefChip({ id, onRemove, onOpen }) {
+  const ref = refOf(id);
+  return (
+    <span className="inline-flex h-5 max-w-full shrink-0 items-center gap-1 rounded bg-white/[0.08] px-1.5 text-[12px] leading-5 text-fg">
+      <span className="truncate underline decoration-white/20 underline-offset-2">
+        {ref?.icon && <span className="mr-1 no-underline">{ref.icon}</span>}
+        <TitleText title={ref?.title ?? ''} titleContent={ref?.titleContent} />
+      </span>
+      {onOpen && (
+        <button type="button" aria-label="Open" onClick={onOpen} className="text-muted hover:text-fg">
+          <Icon path={ICONS.open} size={11} />
+        </button>
+      )}
+      {onRemove && (
+        <button type="button" aria-label="Remove" onClick={onRemove} className="text-muted hover:text-fg">
           ×
         </button>
       )}
@@ -85,6 +113,39 @@ export function ValueDisplay({ prop, value, row, wrap = false }) {
       return typeof value === 'number' ? (
         <span className="tabular-nums">{prop.config.format === 'percent' ? `${round(value * 100)}%` : value.toLocaleString()}</span>
       ) : null;
+    case 'relation': {
+      const ids = Array.isArray(value) ? /** @type {string[]} */ (value) : [];
+      return (
+        <span className={`flex min-w-0 gap-1 ${wrap ? 'flex-wrap' : 'overflow-hidden'}`}>
+          {ids.map((id) => (
+            <RefChip key={id} id={id} />
+          ))}
+        </span>
+      );
+    }
+    case 'rollup': {
+      if (value === undefined || value === null) return null;
+      const result = rollupResultType(prop.config.fn ?? undefined);
+      if (result === 'list' && Array.isArray(value)) {
+        return (
+          <span className={`flex min-w-0 gap-1 ${wrap ? 'flex-wrap' : 'overflow-hidden'}`}>
+            {value.map((v, i) => (
+              <Chip key={i} name={String(v)} />
+            ))}
+          </span>
+        );
+      }
+      if (result === 'date' && typeof value === 'string') {
+        return (
+          <time dateTime={value} title={formatDateLong(value)} className="text-muted">
+            {formatDateMention(value)}
+          </time>
+        );
+      }
+      if (typeof value !== 'number') return null;
+      const percent = result === 'percent' || prop.config.format === 'percent';
+      return <span className="tabular-nums text-muted">{percent ? `${round(value * 100)}%` : round(value).toLocaleString()}</span>;
+    }
     default:
       return value ? <span className={wrap ? 'break-words whitespace-pre-wrap' : 'truncate'}>{valueToText(prop, /** @type {any} */ (value))}</span> : null;
   }
@@ -114,9 +175,46 @@ function Check({ checked }) {
  * @param {CellProps & { placeholder?: string, wrap?: boolean }} props
  */
 export function ValueCell({ prop, value, row, onChange, onAddOption, className = '', placeholder = '', wrap = false, template = false }) {
+  if (prop.type === 'button') return <ButtonCell prop={prop} rowId={row.id} className={className} disabled={template} />;
+  return <EditableCell prop={prop} value={value} row={row} onChange={onChange} onAddOption={onAddOption} className={className} placeholder={placeholder} wrap={wrap} template={template} />;
+}
+
+/**
+ * A button property's cell: runs its actions on the row, then says what changed
+ * (with Undo). Disabled in templates and where there's no row.
+ * @param {{ prop: Property, rowId?: string, className?: string, disabled?: boolean }} props
+ */
+function ButtonCell({ prop, rowId, className = '', disabled = false }) {
+  const { runProperty } = useRunButton();
+  const [busy, setBusy] = useState(false);
+  const empty = !prop.config.actions?.length;
+  return (
+    <div className={`flex min-w-0 items-center ${className}`} data-prop={prop.name}>
+      <button
+        type="button"
+        disabled={disabled || !rowId || busy}
+        title={empty ? 'This button has no actions yet: set them up from its property menu' : undefined}
+        onClick={async (e) => {
+          e.stopPropagation();
+          if (!rowId) return;
+          setBusy(true);
+          await runProperty(rowId, prop.id);
+          setBusy(false);
+        }}
+        className="h-6 max-w-full truncate rounded-md border border-line bg-white/[0.06] px-2 text-[12px] text-fg hover:bg-white/[0.12] disabled:opacity-50"
+      >
+        {prop.config.label || prop.name}
+      </button>
+    </div>
+  );
+}
+
+/** @param {CellProps & { placeholder?: string, wrap?: boolean }} props */
+function EditableCell({ prop, value, row, onChange, onAddOption, className = '', placeholder = '', wrap = false, template = false }) {
   const [editing, setEditing] = useState(false);
   const ref = useRef(/** @type {HTMLDivElement | null} */ (null));
-  const readOnly = prop.type === 'created_time' || prop.type === 'edited_time';
+  // A relation with no target yet is set up from its property menu.
+  const readOnly = prop.type === 'created_time' || prop.type === 'edited_time' || prop.type === 'rollup' || (prop.type === 'relation' && !prop.config.databaseId);
   const empty = value === undefined || value === null;
 
   const open = () => {
@@ -169,6 +267,11 @@ export function ValueCell({ prop, value, row, onChange, onAddOption, className =
             }}
             onAddOption={onAddOption}
           />
+        </Popover>
+      )}
+      {editing && prop.type === 'relation' && (
+        <Popover anchor={ref.current} onClose={() => setEditing(false)} width={300}>
+          <RelationPicker prop={prop} value={value} onChange={onChange} />
         </Popover>
       )}
       {editing && prop.type === 'date' && (
@@ -286,6 +389,99 @@ export function OptionPicker({ prop, value, onChange, onAddOption }) {
           <button type="button" className={menuItem} onClick={create}>
             <span className="text-muted">Create</span>
             <Chip name={q.trim()} />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Link rows of the relation's target database: search them by title, pick,
+ * or create one. `single` picks one row (a filter value).
+ * @param {{ prop: Property, value: unknown, onChange: (ids: string[] | null) => void, single?: boolean }} props
+ */
+export function RelationPicker({ prop, value, onChange, single = false }) {
+  const targetId = /** @type {string} */ (prop.config.databaseId);
+  const [q, setQ] = useState('');
+  const [search, setSearch] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(q.trim()), 150);
+    return () => clearTimeout(t);
+  }, [q]);
+  const { data, isFetching } = useRows(targetId, { filters: search ? [{ propId: TITLE_PROP, op: 'contains', value: search }] : [], limit: 30 });
+  const rows = data?.pages.flatMap((p) => p.rows) ?? [];
+  const m = useDatabaseMutations(targetId);
+  const [, openPage] = useSelectedPage();
+  const selected = Array.isArray(value) ? /** @type {string[]} */ (value) : [];
+
+  /** @param {import('../../api/databases.js').Row} row */
+  const remember = (row) => rememberRefs({ [row.id]: { title: row.title, titleContent: row.titleContent, icon: row.icon } });
+  /** @param {string} id */
+  const toggle = (id) => {
+    if (single) return onChange(selected[0] === id ? null : [id]);
+    const next = selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id];
+    onChange(next.length ? next : null);
+  };
+  const create = async () => {
+    const row = await m.addRow({ title: q.trim() });
+    remember(row);
+    setQ('');
+    onChange(single ? [row.id] : [...selected, row.id]);
+  };
+  const query = q.trim().toLowerCase();
+  const exact = rows.some((r) => r.title.toLowerCase() === query);
+
+  return (
+    <div className="flex flex-col gap-1">
+      {selected.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1 px-1 pt-1">
+          {selected.map((id) => (
+            <RefChip key={id} id={id} onRemove={() => toggle(id)} onOpen={single ? undefined : () => openPage(id)} />
+          ))}
+        </div>
+      )}
+      <input
+        autoFocus
+        value={q}
+        placeholder="Search or create a row…"
+        onChange={(e) => setQ(e.target.value)}
+        onKeyDown={(e) => {
+          e.stopPropagation();
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            const hit = rows.find((r) => r.title.toLowerCase() === query) ?? (rows.length === 1 && search === q.trim() ? rows[0] : undefined);
+            if (hit) {
+              remember(hit);
+              toggle(hit.id);
+            } else if (query && !isFetching) create();
+          }
+        }}
+        className={field}
+      />
+      <div className="max-h-[260px] overflow-y-auto">
+        {rows.map((r) => (
+          <button
+            key={r.id}
+            type="button"
+            className={menuItem}
+            onClick={() => {
+              remember(r);
+              toggle(r.id);
+            }}
+          >
+            <span className="min-w-0 flex-1 truncate">
+              {r.icon && <span className="mr-1">{r.icon}</span>}
+              <TitleText title={r.title} titleContent={r.titleContent} />
+            </span>
+            {selected.includes(r.id) && <span className="text-accent">✓</span>}
+          </button>
+        ))}
+        {!rows.length && !query && <div className="px-2 py-1 text-[13px] text-muted">No rows yet.</div>}
+        {query && !exact && !single && (
+          <button type="button" className={menuItem} onClick={create}>
+            <span className="text-muted">New</span>
+            <span className="truncate">{q.trim()}</span>
           </button>
         )}
       </div>

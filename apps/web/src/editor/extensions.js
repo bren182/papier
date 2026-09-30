@@ -9,6 +9,7 @@ import Underline from '@tiptap/extension-underline';
 import { Dropcursor, Gapcursor, Placeholder, UndoRedo } from '@tiptap/extensions';
 import { DateNode } from './DateNode.js';
 import { PageBlock } from './PageBlock.js';
+import { ButtonBlock } from './ButtonBlock.jsx';
 import { DatabaseBlock } from './DatabaseBlock.jsx';
 import { BlockInputRules } from './inputRules.js';
 import { BlockKeymap } from './keymap.js';
@@ -61,9 +62,10 @@ function placeholderFor(node) {
 /**
  * Everything the page body editor is made of.
  * @param {{ pages?: Partial<import('./PageBlock.js').PageBlockOptions>, databases?: Partial<import('./DatabaseBlock.jsx').DatabaseBlockOptions>,
- *   template?: boolean }} [opts]  page and database blocks' data and views (none in tests); template: a template page
+ *   buttons?: Partial<import('./ButtonBlock.jsx').ButtonBlockOptions>, template?: boolean }} [opts]
+ *   page, database and button blocks' data and views (none in tests); template: a template page
  */
-export function bodyExtensions({ pages = {}, databases = {}, template = false } = {}) {
+export function bodyExtensions({ pages = {}, databases = {}, buttons = {}, template = false } = {}) {
   return [
     TemplateMode.configure({ enabled: template }),
     PapierDocument,
@@ -71,6 +73,7 @@ export function bodyExtensions({ pages = {}, databases = {}, template = false } 
     ...BLOCK_NODES,
     PageBlock.configure(pages),
     DatabaseBlock.configure(databases),
+    ButtonBlock.configure(buttons),
     DateNode,
     SoftBreak,
     Bold,

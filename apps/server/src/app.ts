@@ -4,6 +4,7 @@ import { BLOCK_TYPES } from '@papier/core';
 import { openDb } from './db/index.ts';
 import { backfillPageBlocks } from './db/pageTree.ts';
 import { backfillSearch } from './db/search.ts';
+import { actionRoutes } from './routes/actions.ts';
 import { blockRoutes } from './routes/blocks.ts';
 import { databaseRoutes } from './routes/databases.ts';
 import { pageRoutes } from './routes/pages.ts';
@@ -21,7 +22,7 @@ export function buildApp({ dbPath = ':memory:', logger = true }: AppOptions = {}
   const linked = backfillPageBlocks(db);
   if (linked) app.log.info({ pages: linked }, 'Added page blocks for sub-pages');
   const backfilled = backfillSearch(db);
-  if (backfilled) app.log.info({ blocks: backfilled }, 'Indexed blocks for search');
+  if (backfilled) app.log.info({ rows: backfilled }, 'Indexed blocks and property values for search');
 
   app.addHook('onClose', async () => {
     sqlite.close();
@@ -39,6 +40,7 @@ export function buildApp({ dbPath = ':memory:', logger = true }: AppOptions = {}
   blockRoutes(app, db);
   databaseRoutes(app, db);
   searchRoutes(app, db);
+  actionRoutes(app, db);
 
   return app;
 }

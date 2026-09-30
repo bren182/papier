@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
-import { FILTER_OPS, VALUELESS_OPS } from '@papier/core/props';
+import { filterOps, rollupResultType, VALUELESS_OPS } from '@papier/core/props';
+import { RefChip, RelationPicker } from './cells.jsx';
 import { defaultTemplate, orderedProperties, TITLE, useDb } from './context.js';
 import { Icon, ICONS, OP_LABELS, TypeIcon } from './meta.jsx';
 import { field, menuItem, menuLabel, Popover } from './Popover.jsx';
@@ -195,7 +196,7 @@ function FilterMenu({ anchor, onClose }) {
       {filters.map((f, i) => {
         const prop = byId.get(f.propId);
         if (!prop) return null;
-        const ops = FILTER_OPS[prop.type] ?? [];
+        const ops = filterOps(prop);
         return (
           <div key={i} className="flex items-center gap-1 px-1 py-0.5">
             <PropSelect
@@ -203,7 +204,7 @@ function FilterMenu({ anchor, onClose }) {
               options={all}
               onChange={(propId) => {
                 const next = byId.get(propId);
-                update(i, { propId, op: FILTER_OPS[next?.type ?? 'text']?.[0] ?? 'is', value: next?.type === 'checkbox' ? true : undefined });
+                update(i, { propId, op: filterOps(next ?? { type: 'text' })[0] ?? 'is', value: next?.type === 'checkbox' ? true : undefined });
               }}
             />
             <select value={f.op} aria-label="Condition" onChange={(e) => update(i, { op: e.target.value })} className={`${field} w-[130px]`}>
@@ -237,7 +238,11 @@ function FilterMenu({ anchor, onClose }) {
 function FilterValue({ prop, value, onChange }) {
   const [text, setText] = useState(value === undefined || value === null ? '' : String(value));
   const cls = `${field} min-w-0 flex-1`;
-  switch (prop.type) {
+  // A rollup is filtered as its result: a number (percentages as shown, 0–100) or a date.
+  const type = prop.type === 'rollup' ? (rollupResultType(prop.config.fn ?? undefined) === 'date' ? 'date' : 'number') : prop.type;
+  switch (type) {
+    case 'relation':
+      return <RelationFilterValue prop={prop} value={typeof value === 'string' ? value : null} onChange={onChange} />;
     case 'select':
     case 'multi_select':
       return (
@@ -263,13 +268,13 @@ function FilterValue({ prop, value, onChange }) {
       return <input type="date" aria-label="Value" value={String(value ?? '')} onChange={(e) => onChange(e.target.value || null)} className={`${cls} [color-scheme:dark]`} />;
     default: {
       // Typing re-queries; commit on a short pause rather than every key.
-      const commit = (/** @type {string} */ t) => onChange(prop.type === 'number' ? (t.trim() === '' ? null : Number(t)) : t);
+      const commit = (/** @type {string} */ t) => onChange(type === 'number' ? (t.trim() === '' ? null : Number(t)) : t);
       return (
         <input
           aria-label="Value"
           value={text}
           placeholder="Value"
-          inputMode={prop.type === 'number' ? 'decimal' : undefined}
+          inputMode={type === 'number' ? 'decimal' : undefined}
           onChange={(e) => {
             setText(e.target.value);
             debounce(() => commit(e.target.value));
@@ -281,6 +286,36 @@ function FilterValue({ prop, value, onChange }) {
       );
     }
   }
+}
+
+/**
+ * One row of the relation's target database, picked like a relation cell.
+ * @param {{ prop: import('./context.js').Property, value: string | null, onChange: (v: string | null) => void }} props
+ */
+function RelationFilterValue({ prop, value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(/** @type {HTMLButtonElement | null} */ (null));
+  if (!prop.config.databaseId) return <span className="flex-1 px-2 text-[13px] text-muted">Not linked yet</span>;
+  return (
+    <>
+      <button ref={ref} type="button" aria-label="Value" onClick={() => setOpen(true)} className={`${field} flex min-w-0 flex-1 items-center text-left`}>
+        {value ? <RefChip id={value} /> : <span className="text-muted">Choose…</span>}
+      </button>
+      {open && (
+        <Popover anchor={ref.current} onClose={() => setOpen(false)} width={280}>
+          <RelationPicker
+            single
+            prop={prop}
+            value={value ? [value] : null}
+            onChange={(ids) => {
+              onChange(ids?.[0] ?? null);
+              setOpen(false);
+            }}
+          />
+        </Popover>
+      )}
+    </>
+  );
 }
 
 let timer = 0;

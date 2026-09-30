@@ -17,10 +17,61 @@ export const PROPERTY_TYPES = /** @type {const} */ ([
   'url',
   'created_time',
   'edited_time',
+  'relation',
+  'rollup',
+  'button',
 ]);
 
-/** Types whose value comes from the page itself; they have no `page_props` rows. */
-export const COMPUTED_TYPES = new Set(['created_time', 'edited_time']);
+/**
+ * Types with no value of their own to edit: computed (from the page itself, or a
+ * rollup over a relation) or a button, which does things instead. They have no
+ * `page_props` rows. Relations have none either — their links live in `property_links`.
+ */
+export const COMPUTED_TYPES = new Set(['created_time', 'edited_time', 'rollup', 'button']);
+
+/**
+ * Rollup functions by the type of the property they aggregate. `any` applies to
+ * every type (a rollup can't aggregate a rollup or a relation).
+ * @type {Record<string, readonly string[]>}
+ */
+export const ROLLUP_FNS = {
+  any: ['show_original', 'count', 'count_values', 'count_unique', 'count_empty', 'percent_empty'],
+  number: ['sum', 'avg', 'min', 'max', 'range'],
+  date: ['earliest', 'latest'],
+  checkbox: ['checked', 'percent_checked'],
+};
+
+/** Every rollup function name. */
+export const ROLLUP_FN_NAMES = /** @type {const} */ ([
+  'show_original', 'count', 'count_values', 'count_unique', 'count_empty', 'percent_empty',
+  'sum', 'avg', 'min', 'max', 'range', 'earliest', 'latest', 'checked', 'percent_checked',
+]);
+
+/** Property types a rollup can aggregate (`title` too). */
+export const ROLLUP_TARGET_TYPES = new Set(['title', 'text', 'number', 'select', 'multi_select', 'date', 'checkbox', 'url', 'created_time', 'edited_time']);
+
+/**
+ * Rollup functions that apply to a target property type.
+ * @param {string} targetType  a property type, or 'title'
+ */
+export function rollupFns(targetType) {
+  if (!ROLLUP_TARGET_TYPES.has(targetType)) return [];
+  const dateLike = targetType === 'date' || targetType === 'created_time' || targetType === 'edited_time';
+  return [...ROLLUP_FNS.any, ...(ROLLUP_FNS[dateLike ? 'date' : targetType] ?? [])];
+}
+
+/**
+ * What a rollup function produces: a number, a fraction 0–1 (`percent`), a
+ * `YYYY-MM-DD` date, or a list of display strings (`show_original`).
+ * @param {string | undefined} fn
+ * @returns {'number' | 'percent' | 'date' | 'list'}
+ */
+export function rollupResultType(fn) {
+  if (fn === 'show_original' || !fn) return 'list';
+  if (fn === 'percent_empty' || fn === 'percent_checked') return 'percent';
+  if (fn === 'earliest' || fn === 'latest') return 'date';
+  return 'number';
+}
 
 /** Pseudo-property ids views can sort/filter on besides real property ids. */
 export const TITLE_PROP = 'title';
@@ -40,7 +91,22 @@ export const FILTER_OPS = {
   checkbox: ['is'],
   created_time: ['is', 'before', 'after', 'on_or_before', 'on_or_after'],
   edited_time: ['is', 'before', 'after', 'on_or_before', 'on_or_after'],
+  relation: ['contains', 'not_contains', 'is_empty', 'is_not_empty'],
+  rollup_list: ['is_empty', 'is_not_empty'],
 };
+
+/**
+ * Filter operators for a property (or the `title` pseudo-property); a rollup
+ * filters like its result.
+ * @param {{ type: string, config?: PropertyConfig } | undefined} prop
+ * @returns {readonly string[]}
+ */
+export function filterOps(prop) {
+  if (!prop) return [];
+  if (prop.type !== 'rollup') return FILTER_OPS[prop.type] ?? [];
+  const result = rollupResultType(prop.config?.fn ?? undefined);
+  return FILTER_OPS[result === 'list' ? 'rollup_list' : result === 'percent' ? 'number' : result] ?? [];
+}
 
 /**
  * A date that means "the day a page is made from this template". Only valid in
@@ -53,10 +119,23 @@ export const VALUELESS_OPS = new Set(['is_empty', 'is_not_empty']);
 
 /**
  * @typedef {{ id: string, name: string }} SelectOption
- * @typedef {{ options?: SelectOption[], format?: 'number' | 'percent' }} PropertyConfig
+ * @typedef {object} PropertyConfig
+ * @property {SelectOption[]} [options]  select, multi_select
+ * @property {'number' | 'percent'} [format]  number, and number-valued rollups
+ * @property {string | null} [databaseId]  relation: the target database
+ * @property {string | null} [reverseId]  relation: its two-way twin in the target (this side owns the links)
+ * @property {string | null} [reverseOf]  relation: the twin that owns the links (this side reads them backwards)
+ * @property {string | null} [relationId]  rollup: the relation it aggregates over
+ * @property {string | null} [targetPropId]  rollup: the target database property (or `title`)
+ * @property {string | null} [fn]  rollup: one of ROLLUP_FN_NAMES
+ * @property {string} [label]  button: its label (default: the property name)
+ * @property {import('./actions.js').Action[]} [actions]  button: what it does
  * @typedef {{ id: string, name: string, type: string, config: PropertyConfig }} PropertyDef
  * @typedef {string | number | boolean | string[] | null} PropValue
  */
+
+/** Most rows one relation cell links to. */
+export const MAX_LINKS = 500;
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -101,6 +180,12 @@ export function validateValue(prop, v, { template = false } = {}) {
     case 'checkbox':
       if (typeof v !== 'boolean') fail();
       return v ? true : null;
+    case 'relation': {
+      if (!Array.isArray(v) || v.length > MAX_LINKS) fail();
+      const out = [...new Set(/** @type {unknown[]} */ (v))];
+      if (!out.every((id) => typeof id === 'string' && id.length > 0 && id.length <= 64)) fail();
+      return out.length ? /** @type {string[]} */ (out) : null;
+    }
     default:
       throw new InvalidValue(`"${prop.name}" is read-only`);
   }
@@ -204,6 +289,8 @@ export function splitNames(/** @type {string} */ text) {
  */
 export function coerceValue(from, to, v) {
   if (from.type === to.type) return v;
+  // Relations link rows; nothing else converts to or from them.
+  if (from.type === 'relation' || to.type === 'relation') return null;
   // Select ↔ multi-select keep option ids (the options carry over).
   if (from.type === 'select' && to.type === 'multi_select') return v === null ? null : [/** @type {string} */ (v)];
   if (from.type === 'multi_select' && to.type === 'select') return Array.isArray(v) ? (v[0] ?? null) : null;

@@ -29,10 +29,11 @@ const TO_NODE = {
   divider: 'divider',
   page: 'pageBlock',
   database: 'databaseBlock',
+  button: 'buttonBlock',
 };
 
 /** Node types without inline content. */
-const ATOMS = new Set(['divider', 'pageBlock', 'databaseBlock']);
+const ATOMS = new Set(['divider', 'pageBlock', 'databaseBlock', 'buttonBlock']);
 
 /** @type {Record<string, BlockTypeName>} */
 const FROM_NODE = Object.fromEntries(Object.entries(TO_NODE).map(([ours, node]) => [node, /** @type {BlockTypeName} */ (ours)]));
@@ -45,6 +46,7 @@ const PROPS = {
   code: ['language'],
   page: ['pageId'],
   database: ['pageId', 'viewId'],
+  button: ['label', 'actions'],
 };
 
 /** Inline styles, in the fixed order they're stored (keeps saves diff-stable). */

@@ -1,19 +1,22 @@
 import { useState } from 'react';
-import { PROPERTY_TYPES } from '@papier/core/props';
+import { PROPERTY_TYPES, rollupResultType } from '@papier/core/props';
 import { useDb } from './context.js';
 import { Icon, ICONS, TYPE_LABELS, TypeIcon } from './meta.jsx';
 import { field, menuItem, menuLabel, Popover } from './Popover.jsx';
+import { ButtonConfig, RelationConfig, RollupConfig } from './RelationConfig.jsx';
 
 /**
  * Column header menu: rename, change type, edit options, sort, hide, delete.
  * @param {{ prop: import('./context.js').Property, anchor: HTMLElement | null, onClose: () => void }} props
  */
 export function PropertyMenu({ prop, anchor, onClose }) {
-  const { m, view, setConfig } = useDb();
+  const { m, view, setConfig, properties } = useDb();
   const [name, setName] = useState(prop.name);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [typesOpen, setTypesOpen] = useState(false);
   const isTitle = prop.id === 'title';
+  // A list rollup ("show original") has nothing to sort by.
+  const sortable = prop.type !== 'button' && !(prop.type === 'rollup' && rollupResultType(prop.config.fn ?? undefined) === 'list');
 
   const rename = () => {
     const n = name.trim();
@@ -27,7 +30,7 @@ export function PropertyMenu({ prop, anchor, onClose }) {
   };
 
   return (
-    <Popover anchor={anchor} onClose={onClose} width={250}>
+    <Popover anchor={anchor} onClose={onClose} width={prop.type === 'button' ? 340 : 250}>
       {!isTitle && (
         <div className="p-1">
           <input
@@ -75,6 +78,9 @@ export function PropertyMenu({ prop, anchor, onClose }) {
             </div>
           )}
           {(prop.type === 'select' || prop.type === 'multi_select') && <OptionsEditor prop={prop} />}
+          {prop.type === 'relation' && <RelationConfig prop={prop} m={m} />}
+          {prop.type === 'rollup' && <RollupConfig prop={prop} m={m} properties={properties} />}
+          {prop.type === 'button' && <ButtonConfig prop={prop} m={m} properties={properties} />}
           {prop.type === 'number' && (
             <button
               type="button"
@@ -89,14 +95,18 @@ export function PropertyMenu({ prop, anchor, onClose }) {
         </>
       )}
 
-      <button type="button" className={menuItem} onClick={() => sortBy('asc')}>
-        <Icon path={ICONS.sort} />
-        Sort ascending
-      </button>
-      <button type="button" className={menuItem} onClick={() => sortBy('desc')}>
-        <Icon path={ICONS.sort} />
-        Sort descending
-      </button>
+      {sortable && (
+        <>
+          <button type="button" className={menuItem} onClick={() => sortBy('asc')}>
+            <Icon path={ICONS.sort} />
+            Sort ascending
+          </button>
+          <button type="button" className={menuItem} onClick={() => sortBy('desc')}>
+            <Icon path={ICONS.sort} />
+            Sort descending
+          </button>
+        </>
+      )}
       {prop.type === 'date' && (
         <button type="button" className={menuItem} onClick={() => sortBy('upcoming')}>
           <Icon path={ICONS.sort} />
@@ -127,7 +137,7 @@ export function PropertyMenu({ prop, anchor, onClose }) {
             }}
           >
             <Icon path={ICONS.trash} />
-            {confirmDelete ? 'Click again to delete' : 'Delete property'}
+            {confirmDelete ? (prop.type === 'relation' && prop.config.reverseId ? 'Click again (the other side keeps its links)' : 'Click again to delete') : 'Delete property'}
           </button>
         </>
       )}

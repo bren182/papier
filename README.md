@@ -63,11 +63,11 @@ Tick boxes as they land. Anything unticked in a shipped milestone moves to the n
 - [x] Page tree sidebar: create / rename / nest / drag-reorder / delete to trash
 - [x] Block editor: paragraph, H1–H3, bullet + numbered list, todo, quote, code, divider
 - [x] Markdown-style input rules (`# `, `- `, `[] `, ` ``` `) and `/` slash menu
-- [ ] `@` date mentions in text and titles: `@today`, `@2 days ago`, `@last fri`, `@oct 5` — stored as plain `YYYY-MM-DD`, shown live and relative ("Today", "3 weeks ago") until far off, then as a date
-- [ ] Keyboard-first editing: Enter/Backspace/Tab semantics that feel like Notion
+- [x] `@` date mentions in text and titles: `@today`, `@2 days ago`, `@last fri`, `@oct 5` — stored as plain `YYYY-MM-DD`, shown live and relative ("Today", "3 weeks ago") until far off, then as a date
+- [x] Keyboard-first editing: Enter/Backspace/Tab semantics that feel like Notion
 - [x] Autosave, per-block, no save button, ever
 - [x] Full-text search across all pages (SQLite FTS5)
-- [ ] Dark mode ONLY
+- [x] Dark mode ONLY
 - [ ] Runs as one `docker compose up` on a Linux VM behind HTTPS
 
 ### v0.2 — "it's actually nice"
@@ -87,7 +87,8 @@ Tick boxes as they land. Anything unticked in a shipped milestone moves to the n
 - [x] Board (kanban) view grouped by select property
 - [ ] List, gallery, calendar views
 - [x] Inline databases embedded in a page
-- [ ] Relations + rollups (count, sum, % complete, etc.) — core, not optional. Scope carefully: this is where it explodes.
+- [x] Relations + rollups (count, sum, % complete, etc.) — core, not optional. Two-way by default (`property_links`, each link stored once), rollups computed in SQL so they sort and filter; property values are searchable too
+- [ ] Buttons + automations: button property and page button blocks (done: set / today / move date / check / +number / link / add row, Undo toast); triggered and scheduled automations next
 - [x] Templates: save any page as a template (library), database templates with a default per view, "Today ↻" dates that resolve on use; Duplicate
 - [ ] Built-in template library — decided after importing + analysing my Notion workspace
 
@@ -416,3 +417,4 @@ that I hate.*
 - Being able to setup a custom "Home" page. So where you land you can see certain important blocks that you can customise. 
 - Uploading images for backgrounds for the app, and background for headers, background for pages etc. For now we'll assume storage stays local on a user's computer so no syncing yet.
 - Shortcut minigame: a "Practice" button in the keyboard shortcuts dialog (Ctrl+/) starts a Dance Dance Revolution–style drill (like Discord's keybinds easter egg) — shortcuts scroll up as falling prompts, press the right combo in time, streaks + a best score. A fun way to actually learn them. 
+- A small templating language for custom button logic (like Notion's formulas in buttons): a documented set of expressions that compile to whitelisted, parameterised SQLite queries — e.g. "set Reminder to next birthday", "count rows where…" — so buttons and automations can compute values, not just set fixed ones. Plugs into the actions engine (`apps/server/src/db/actions.ts`) as one more action or value type.

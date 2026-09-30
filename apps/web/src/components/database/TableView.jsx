@@ -184,7 +184,10 @@ function Header({ columns, widthOf, onResize }) {
         <Icon path={ICONS.plus} />
       </button>
 
-      {menu && <PropertyMenu key={menu.prop.id} prop={menu.prop} anchor={menu.el} onClose={() => setMenu(null)} />}
+      {menu && (
+        // The live property, so the menu follows its own edits (type, target, options).
+        <PropertyMenu key={menu.prop.id} prop={properties.find((p) => p.id === menu.prop.id) ?? menu.prop} anchor={menu.el} onClose={() => setMenu(null)} />
+      )}
       {adding && (
         <Popover anchor={adding} onClose={() => setAdding(null)} width={220} align="end">
           <div className={menuLabel}>New property</div>

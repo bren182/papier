@@ -9,7 +9,8 @@ import { api, ApiError } from './client.js';
 /**
  * A page, its ancestors, and — for a database row — its database and values.
  * @typedef {{ page: Page, ancestors: Crumb[], database: { id: string, title: string } | null, props: Record<string, unknown> | null,
- *   inTemplate: boolean }} PageDetail  inTemplate: some ancestor is a template
+ *   refs?: Record<string, import('./databases.js').Ref>, inTemplate: boolean }} PageDetail  inTemplate: some ancestor is a template;
+ *   refs: titles of the rows its relations link to
  */
 
 export const pageKeys = {
