@@ -41,7 +41,8 @@ TipTap v3 with our own schema, not a kit. Lazy-loaded as one chunk (`editor/inde
   (`{type:'text',text,styles}`, `{type:'link',…}`, `{type:'date',props:{date}}`).
 - `schema.js`: nodes, plus `TreeInvariants` (clamps indents, gives every block a
   unique id) and list numbering. `keymap.js` / `inputRules.js`: Notion-style keys.
-  `blockOps.js`: shared block operations. `dropPlan.js`: drag-and-drop gap/level/type.
+  `blockOps.js`: shared block operations. `SideMenu.jsx`: the handle, drag, and the block
+  menu (also on right-click; "Turn into → Page" is `turnIntoPage` in `menuItems.js`). `dropPlan.js`: drag-and-drop gap/level/type.
 - Autosave: `blockSaver.js` diffs rows against what the server confirmed and posts
   one batch (`POST /api/pages/:id/blocks/batch`).
 - Dates are stored as `YYYY-MM-DD` and rendered live and relative (`dates.js`). Page
@@ -75,7 +76,8 @@ Type/option changes rewrite values (`coerceValue`) and scrub view configs. Views
 (`db_views`) hold sorts/filters/hidden/widths/propOrder/groupBy; `POST …/query` builds one
 SQL query (a left join per referenced property), offset-paginated. Value/filter helpers
 are zod-free in `@papier/core/props` (client-safe). Client: `api/databases.js`; the UI is a
-lazy chunk; menus use `database/Popover.jsx` (portalled). Drags inside a view set
+lazy chunk; menus use `database/Popover.jsx` (portalled). An empty page can become one
+in place (`POST /api/pages/:id/convert`, the "Or start as a database" strip in `Page.jsx`). Drags inside a view set
 `DB_DRAG_TYPE` so the inline node view keeps them from ProseMirror.
 
 ## Search (`apps/server/src/db/search.ts`)

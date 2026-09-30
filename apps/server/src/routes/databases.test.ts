@@ -260,3 +260,30 @@ describe('inline databases', () => {
     sqlite.close();
   });
 });
+
+describe('converting a page', () => {
+  it('turns an empty page into a board database', async () => {
+    const page = (await call('POST', '/api/pages', { title: 'Tasks' }, 201)) as { id: string };
+    await call('POST', `/api/pages/${page.id}/blocks/batch`, { upserts: [{ id: 'e1', type: 'paragraph', parentId: null, order: 'a0', content: [] }] }, 200);
+    await call('POST', `/api/pages/${page.id}/convert`, { layout: 'board' }, 200);
+    const { properties, views } = await schema(page.id);
+    expect(properties.map((p) => [p.name, p.config.options?.map((o) => o.name)])).toEqual([['Status', ['Todo', 'Doing', 'Done']]]);
+    expect(views.map((v) => [v.name, v.config.groupBy])).toEqual([['Board', properties[0]!.id], ['Table', null]]);
+    expect(await call('GET', `/api/pages/${page.id}/blocks`, undefined, 200)).toEqual([]);
+  });
+
+  it('refuses pages with content, sub-pages, rows and databases', async () => {
+    const full = (await call('POST', '/api/pages', { title: 'Notes' }, 201)) as { id: string };
+    await call('POST', `/api/pages/${full.id}/blocks/batch`, { upserts: [{ id: 't1', type: 'paragraph', parentId: null, order: 'a0', content: [{ type: 'text', text: 'hi' }] }] }, 200);
+    await call('POST', `/api/pages/${full.id}/convert`, {}, 400);
+
+    const parent = (await call('POST', '/api/pages', { title: 'Parent' }, 201)) as { id: string };
+    await call('POST', '/api/pages', { title: 'Child', parentId: parent.id }, 201);
+    await call('POST', `/api/pages/${parent.id}/convert`, {}, 400);
+
+    const db = await createDatabase();
+    const row = await addRow(db.id, 'Row');
+    await call('POST', `/api/pages/${row.id}/convert`, {}, 400);
+    await call('POST', `/api/pages/${db.id}/convert`, {}, 400);
+  });
+});

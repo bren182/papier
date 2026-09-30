@@ -144,10 +144,10 @@ test('an inline database lives in its block: delete trashes it, undo restores it
   await inline.getByLabel('Database title').fill('Reading list');
   await inline.getByLabel('Database title').press('Enter');
 
-  // Saved as a database block in the host page.
+  // Saved as a database block in the host page, with a line to keep writing on below it.
   await expect
     .poll(async () => (await (await request.get(`/api/pages/${host.id}/blocks`)).json()).map((/** @type {{ type: string }} */ b) => b.type))
-    .toEqual(['database']);
+    .toEqual(['database', 'paragraph']);
 
   // Delete the block from its handle menu → the database goes to the trash.
   await page.locator('.papier-editor > .pb[data-type=databaseBlock]').hover({ position: { x: 20, y: 10 } });
@@ -160,4 +160,15 @@ test('an inline database lives in its block: delete trashes it, undo restores it
   await page.keyboard.press('Control+z');
   await expect(page.locator(`[data-database="${dbId}"]`)).toBeVisible();
   await expect.poll(async () => (await request.get(`/api/databases/${dbId}`)).status()).toBe(200);
+});
+
+test('a new empty page can start as a board database', async ({ page, request }) => {
+  const created = /** @type {{ id: string }} */ (await (await request.post('/api/pages', { data: { title: `Start ${uid()}` } })).json());
+  await page.goto(`/?p=${created.id}`);
+
+  await page.getByRole('button', { name: 'Board' }).click();
+  await expect(page.getByRole('tab', { name: 'Board', selected: true })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Todo' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Or start as/ })).toHaveCount(0);
+  expect((await (await request.get(`/api/pages/${created.id}`)).json()).page.kind).toBe('database');
 });

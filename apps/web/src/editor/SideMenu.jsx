@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { TextSelection } from '@tiptap/pm/state';
 import { blockAt, deleteBlock, duplicateBlock, posOfIndex, setBlockType, withDescendants } from './blockOps.js';
 import { applyDrop, planDrop } from './dropPlan.js';
-import { BLOCK_TYPES } from './menuItems.js';
+import { BLOCK_TYPES, turnIntoPage } from './menuItems.js';
 import { INDENT_REM } from './schema.js';
 
 /** @typedef {import('@tiptap/core').Editor} Editor */
@@ -56,13 +56,28 @@ export function SideMenu({ editor, container }) {
     };
     const onLeave = () => !menu && !drag.current && setHover(null);
     const onKey = () => !menu && setHover(null); // typing hides the handle, like Notion
+    // Right-click a block: its menu, at the pointer. Shift+right-click and
+    // inline databases (which have their own controls) keep the browser's menu.
+    /** @param {MouseEvent} e */
+    const onContext = (e) => {
+      if (e.shiftKey || drag.current) return;
+      if (e.target instanceof Element && e.target.closest('.pb-database, input, textarea')) return;
+      const found = locate(view, container, e.clientX, e.clientY);
+      if (!found) return;
+      e.preventDefault();
+      const outer = container.getBoundingClientRect();
+      setHover(found);
+      setMenu({ index: found.index, top: e.clientY - outer.top - 28, left: e.clientX - outer.left - 24 });
+    };
 
     container.addEventListener('mousemove', onMove);
     container.addEventListener('mouseleave', onLeave);
+    container.addEventListener('contextmenu', onContext);
     view.dom.addEventListener('keydown', onKey);
     return () => {
       container.removeEventListener('mousemove', onMove);
       container.removeEventListener('mouseleave', onLeave);
+      container.removeEventListener('contextmenu', onContext);
       view.dom.removeEventListener('keydown', onKey);
     };
   }, [editor, container, menu]);
@@ -345,6 +360,20 @@ function BlockMenu({ editor, at, onClose }) {
           </button>
         );
       })}
+      {!owning && node.type.name !== 'divider' && (
+        <button
+          type="button"
+          role="menuitem"
+          onClick={() => {
+            onClose();
+            turnIntoPage(editor, at.index);
+          }}
+          className="flex w-full items-center gap-2.5 rounded-md px-2 py-1 text-left text-[13px] text-fg hover:bg-hover"
+        >
+          <span className="w-5 text-center text-[12px] text-muted">▤</span>
+          <span className="flex-1">Page</span>
+        </button>
+      )}
       {!owning && <div className="my-1 h-px bg-line" />}
       <button
         type="button"

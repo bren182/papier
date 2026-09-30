@@ -1,4 +1,6 @@
-import { blockAt, insertBlockAfter, setBlockType } from './blockOps.js';
+import { TextSelection } from '@tiptap/pm/state';
+import { blockAt, insertBlockAfter, setBlockType, withDescendants } from './blockOps.js';
+import { docToRows } from './convert.js';
 import { dateSuggestions } from './dates.js';
 
 /** @typedef {import('./SuggestionMenu.jsx').MenuItem} MenuItem */
@@ -70,14 +72,66 @@ const insertOwnedPage = async (editor, range, nodeName, kind) => {
   if (!block) return;
   const tr = state.tr;
   const type = state.schema.nodes[nodeName];
+  const indent = block.node.attrs.indent;
+  let at = block.pos;
   if (block.node.type.name === 'paragraph' && block.node.content.size === 0) {
-    tr.replaceWith(block.pos, block.pos + block.node.nodeSize, type.create({ id: block.node.attrs.id, indent: block.node.attrs.indent, pageId }));
+    tr.replaceWith(block.pos, block.pos + block.node.nodeSize, type.create({ id: block.node.attrs.id, indent, pageId }));
   } else {
-    tr.insert(block.pos + block.node.nodeSize, type.create({ indent: block.node.attrs.indent, pageId }));
+    at = block.pos + block.node.nodeSize;
+    tr.insert(at, type.create({ indent, pageId }));
   }
-  editor.view.dispatch(tr);
+  if (nodeName === 'databaseBlock') {
+    // Keep writing below it (a selected database would be one Backspace from the trash).
+    const after = at + /** @type {import('@tiptap/pm/model').Node} */ (tr.doc.nodeAt(at)).nodeSize;
+    tr.insert(after, state.schema.nodes.paragraph.create({ indent }));
+    tr.setSelection(TextSelection.create(tr.doc, after + 1));
+  }
+  editor.view.dispatch(tr.scrollIntoView());
   return pageId;
 };
+
+/**
+ * Turn a block into a sub-page, as Notion does: its text becomes the page's
+ * title, its nested blocks become the page's content, and a page block takes
+ * its place. (Rich bits of the title, like date mentions, become plain text.)
+ * @param {Editor} editor @param {number} index
+ */
+export async function turnIntoPage(editor, index) {
+  const opts = /** @type {import('./PageBlock.js').PageBlockOptions | undefined} */ (
+    editor.extensionManager.extensions.find((e) => e.name === 'pageBlock')?.options
+  );
+  if (!opts?.createPage || !opts.saveContent) return;
+  const { doc } = editor.state;
+  const node = doc.child(index);
+  const blockId = node.attrs.id;
+  const end = withDescendants(doc, index, index);
+  const base = node.attrs.indent + 1;
+  // Nested blocks move with fresh ids: ids are unique per page.
+  const children = [];
+  for (let i = index + 1; i <= end; i++) {
+    const json = doc.child(i).toJSON();
+    json.attrs = { ...json.attrs, id: crypto.randomUUID(), indent: json.attrs.indent - base };
+    children.push(json);
+  }
+
+  const pageId = await opts.createPage('page', node.textContent.trim().slice(0, 500));
+  if (children.length) await opts.saveContent(pageId, docToRows({ type: 'doc', content: children }, new Map()));
+  if (editor.isDestroyed) return;
+
+  // The document may have changed while we waited: find the block again by id.
+  const now = editor.state.doc;
+  let at = -1;
+  now.forEach((n, _offset, i) => {
+    if (n.attrs.id === blockId) at = i;
+  });
+  if (at < 0) return;
+  let from = 0;
+  for (let i = 0; i < at; i++) from += now.child(i).nodeSize;
+  let to = from;
+  for (let i = at; i <= withDescendants(now, at, at); i++) to += now.child(i).nodeSize;
+  const tr = editor.state.tr.replaceWith(from, to, editor.schema.nodes.pageBlock.create({ id: blockId, indent: node.attrs.indent, pageId }));
+  editor.view.dispatch(tr.scrollIntoView());
+}
 
 /** A new sub-page, as a block where the `/page` was typed; then open it. @type {MenuItem['run']} */
 const newSubPage = async (editor, range) => {

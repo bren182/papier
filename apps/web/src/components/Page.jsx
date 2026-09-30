@@ -1,7 +1,9 @@
-import { lazy, Suspense, useRef } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { api } from '../api/client.js';
 import { ApiError } from '../api/client.js';
 import { useContentVersion } from '../api/blocks.js';
-import { useCreatePage, usePage } from '../api/pages.js';
+import { pageKeys, useCreatePage, usePage } from '../api/pages.js';
 import { TitleText } from './TitleText.jsx';
 
 /** @typedef {import('@papier/core').Page} PageData */
@@ -24,6 +26,10 @@ export function Page({ selectedId, onSelect }) {
   const editorRef = useRef(/** @type {PageEditorHandle | null} */ (null));
   const contentVersion = useContentVersion(selectedId ?? '');
   const isDatabase = data?.page.kind === 'database';
+  const [empty, setEmpty] = useState(false);
+  useEffect(() => setEmpty(false), [selectedId]);
+  // A brand-new page can still become a database instead.
+  const canStartAs = Boolean(data && empty && !isDatabase && !data.database && !data.page.hasChildren);
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
@@ -66,15 +72,62 @@ export function Page({ selectedId, onSelect }) {
                   {isDatabase ? (
                     <DatabaseView key={data.page.id} databaseId={data.page.id} onOpenRow={onSelect} />
                   ) : (
-                    <PageEditor key={`${data.page.id}:${contentVersion}`} pageId={data.page.id} onOpenPage={onSelect} ref={editorRef} />
+                    <PageEditor
+                      key={`${data.page.id}:${contentVersion}`}
+                      pageId={data.page.id}
+                      onOpenPage={onSelect}
+                      onEmptyChange={setEmpty}
+                      ref={editorRef}
+                    />
                   )}
                 </Suspense>
               </div>
+              {canStartAs && <StartAs pageId={data.page.id} />}
             </>
           )}
         </article>
       </div>
     </div>
+  );
+}
+
+/**
+ * "Start as a table / board": turns a new, empty page into a database.
+ * @param {{ pageId: string }} props
+ */
+function StartAs({ pageId }) {
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  /** @param {'table' | 'board'} layout */
+  const convert = async (layout) => {
+    setBusy(true);
+    try {
+      await api(`/pages/${pageId}/convert`, { method: 'POST', body: { layout } });
+      await qc.invalidateQueries({ queryKey: pageKeys.all });
+    } finally {
+      setBusy(false);
+    }
+  };
+  const option = 'flex h-8 items-center gap-2 rounded-md border border-line px-3 text-[13px] text-muted hover:bg-hover hover:text-fg disabled:opacity-50';
+  return (
+    <div className="mt-6 flex flex-wrap items-center gap-2" aria-label="Start as">
+      <span className="mr-1 text-[13px] text-faint">Or start as a database:</span>
+      <button type="button" className={option} disabled={busy} onClick={() => convert('table')}>
+        <GridIcon path="M3.5 5.5h17v13h-17zM3.5 10h17M9.5 10v8.5" /> Table
+      </button>
+      <button type="button" className={option} disabled={busy} onClick={() => convert('board')}>
+        <GridIcon path="M4 5h4v14H4zM10 5h4v9h-4zM16 5h4v11h-4z" /> Board
+      </button>
+    </div>
+  );
+}
+
+/** @param {{ path: string }} props */
+function GridIcon({ path }) {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d={path} />
+    </svg>
   );
 }
 

@@ -20,19 +20,21 @@ import { InlineDatabase } from '../components/database/InlineDatabase.jsx';
 /**
  * The page body. Loads the page's blocks once, then the editor owns them and
  * autosaves changes per block.
- * @param {{ pageId: string, onOpenPage: (id: string) => void, ref?: import('react').Ref<PageEditorHandle> }} props
+ * @param {{ pageId: string, onOpenPage: (id: string) => void, onEmptyChange?: (empty: boolean) => void, ref?: import('react').Ref<PageEditorHandle> }} props
+ *   onEmptyChange: whether the content is just one empty line (a new page)
  */
-export function PageEditor({ pageId, onOpenPage, ref }) {
+export function PageEditor({ pageId, onOpenPage, onEmptyChange, ref }) {
   const { data, error } = usePageBlocks(pageId);
   if (error) return <p className="text-[15px] leading-6 text-muted">Couldn’t load this page’s content.</p>;
   if (!data) return null;
-  return <Editor pageId={pageId} rows={data} onOpenPage={onOpenPage} editorRef={ref} />;
+  return <Editor pageId={pageId} rows={data} onOpenPage={onOpenPage} onEmptyChange={onEmptyChange} editorRef={ref} />;
 }
 
 /**
- * @param {{ pageId: string, rows: Block[], onOpenPage: (id: string) => void, editorRef?: import('react').Ref<PageEditorHandle> }} props
+ * @param {{ pageId: string, rows: Block[], onOpenPage: (id: string) => void, onEmptyChange?: (empty: boolean) => void,
+ *   editorRef?: import('react').Ref<PageEditorHandle> }} props
  */
-function Editor({ pageId, rows, onOpenPage, editorRef }) {
+function Editor({ pageId, rows, onOpenPage, onEmptyChange, editorRef }) {
   const [container, setContainer] = useState(/** @type {HTMLDivElement | null} */ (null));
   const qc = useQueryClient();
   const editor = useEditor({
@@ -47,11 +49,12 @@ function Editor({ pageId, rows, onOpenPage, editorRef }) {
           return observer.subscribe(report);
         },
         openPage: (id) => onOpenPage(id),
-        createPage: async (kind = 'page') => {
-          const page = /** @type {Page} */ (await api('/pages', { method: 'POST', body: { parentId: pageId, kind, block: false } }));
+        createPage: async (kind = 'page', title = '') => {
+          const page = /** @type {Page} */ (await api('/pages', { method: 'POST', body: { parentId: pageId, kind, title, block: false } }));
           qc.invalidateQueries({ queryKey: ['pages', 'children'] });
           return page.id;
         },
+        saveContent: (id, rows) => saveBlocks(id, { upserts: rows, deletes: [] }),
       },
       databases: { View: InlineDatabase, openPage: (id) => onOpenPage(id) },
     }),
@@ -128,6 +131,19 @@ function Editor({ pageId, rows, onOpenPage, editorRef }) {
   }, [editor, container, target, clearTarget]);
 
   useImperativeHandle(editorRef, () => ({ focusStart: () => editor.commands.focus('start') }), [editor]);
+
+  useEffect(() => {
+    if (!onEmptyChange) return;
+    const check = () => {
+      const first = editor.state.doc.firstChild;
+      onEmptyChange(editor.state.doc.childCount === 1 && first?.type.name === 'paragraph' && first.content.size === 0);
+    };
+    check();
+    editor.on('update', check);
+    return () => {
+      editor.off('update', check);
+    };
+  }, [editor, onEmptyChange]);
 
   return (
     // The left padding is the gutter for the + / drag handle — inside the page

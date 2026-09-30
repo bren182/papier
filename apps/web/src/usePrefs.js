@@ -1,13 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 /**
- * @typedef {{ mode: 'ambient' | 'grayscale', glass: 'frosted' | 'clear', motion: boolean }} Prefs
+ * @typedef {{ mode: 'ambient' | 'grayscale', glass: 'frosted' | 'clear', motion: boolean, sidebar: boolean }} Prefs
  */
 
 const KEY = 'papier.prefs';
 
 /** @type {Prefs} */
-const DEFAULTS = { mode: 'ambient', glass: 'frosted', motion: true };
+const DEFAULTS = { mode: 'ambient', glass: 'frosted', motion: true, sidebar: true };
 
 /** @returns {Prefs} */
 function load() {
@@ -38,8 +38,12 @@ export function usePrefs() {
     }
   }, [prefs]);
 
-  /** @param {Partial<Prefs>} patch */
-  const update = (patch) => setPrefs((p) => ({ ...p, ...patch }));
+  /** A patch, or a function of the current prefs returning one. Stable across renders. */
+  const update = useCallback(
+    /** @param {Partial<Prefs> | ((p: Prefs) => Partial<Prefs>)} patch */
+    (patch) => setPrefs((p) => ({ ...p, ...(typeof patch === 'function' ? patch(p) : patch) })),
+    [],
+  );
 
   return /** @type {const} */ ([prefs, update]);
 }

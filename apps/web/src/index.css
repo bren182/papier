@@ -246,6 +246,11 @@ body {
   box-shadow: 0 0 0 2px var(--p-accent-soft);
   background: var(--p-accent-soft);
 }
+/* a selected inline database keeps the page background: just an outline */
+.papier-editor .ProseMirror-selectednode[data-type='databaseBlock'] {
+  background: none;
+  box-shadow: 0 0 0 1px var(--p-line);
+}
 
 /* placeholder: after the text column so it never fights the ::before markers */
 .papier-editor .pb.is-empty::after {

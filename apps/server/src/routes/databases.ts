@@ -8,6 +8,7 @@ import {
   FILTER_OPS,
   InvalidValue,
   orderBetween,
+  PageConvert,
   PropertyCreate,
   PropertyUpdate,
   PropsPatch,
@@ -30,7 +31,7 @@ import {
 import type { Db } from '../db/index.ts';
 import { liveLineage } from '../db/lineage.ts';
 import { indexTitle } from '../db/search.ts';
-import { dbProperties, dbViews, pageProps, pages } from '../db/schema.ts';
+import { blocks, dbProperties, dbViews, pageProps, pages } from '../db/schema.ts';
 import { rowDatabase } from './pages.ts';
 
 type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
@@ -44,18 +45,25 @@ class BadRequest extends Error {}
 const propFields = { id: dbProperties.id, name: dbProperties.name, type: dbProperties.type, config: dbProperties.config, order: dbProperties.orderKey };
 const viewFields = { id: dbViews.id, name: dbViews.name, type: dbViews.type, config: dbViews.config, order: dbViews.orderKey };
 
-/** The first view every database starts with. */
-export function createDefaultView(db: Conn, databaseId: string) {
+/**
+ * The views a new database starts with: a table — or, for a board, a Status
+ * select (Todo / Doing / Done) with a board grouped by it, then the table.
+ */
+export function createDefaultView(db: Conn, databaseId: string, layout: 'table' | 'board' = 'table') {
+  const now = Date.now();
+  const first = orderBetween(null, null);
+  let tableKey = first;
+  if (layout === 'board') {
+    const statusId = randomUUID();
+    const options = ['Todo', 'Doing', 'Done'].map((name) => ({ id: randomUUID().slice(0, 8), name }));
+    db.insert(dbProperties).values({ id: statusId, databaseId, name: 'Status', type: 'select', config: { options }, orderKey: first, createdAt: now }).run();
+    db.insert(dbViews)
+      .values({ id: randomUUID(), databaseId, name: 'Board', type: 'board', config: ViewConfig.parse({ groupBy: statusId }), orderKey: first, createdAt: now })
+      .run();
+    tableKey = orderBetween(first, null);
+  }
   db.insert(dbViews)
-    .values({
-      id: randomUUID(),
-      databaseId,
-      name: 'Table',
-      type: 'table',
-      config: ViewConfig.parse({}),
-      orderKey: orderBetween(null, null),
-      createdAt: Date.now(),
-    })
+    .values({ id: randomUUID(), databaseId, name: 'Table', type: 'table', config: ViewConfig.parse({}), orderKey: tableKey, createdAt: now })
     .run();
 }
 
@@ -275,6 +283,30 @@ export function databaseRoutes(app: FastifyInstance, db: Db) {
     const id = liveDatabase(req.params.id);
     if (!id) return reply.code(404).send({ error: 'Database not found' });
     return { id, properties: properties(db, id), views: views(db, id) };
+  });
+
+  /**
+   * Turn a new, empty page into a database (Notion's "start as a table/board").
+   * Refused once it has content or sub-pages, and for rows.
+   */
+  app.post<{ Params: { id: string } }>('/api/pages/:id/convert', async (req, reply) => {
+    const { layout } = PageConvert.parse(req.body ?? {});
+    const id = req.params.id;
+    const page = db.select({ kind: pages.kind }).from(pages).where(and(eq(pages.id, id), isNull(pages.archivedAt))).get();
+    if (!page || !liveLineage(db, id)) return reply.code(404).send({ error: 'Page not found' });
+    if (page.kind === 'database') return reply.code(400).send({ error: 'Already a database' });
+    if (rowDatabase(db, id)) return reply.code(400).send({ error: 'A row can’t become a database' });
+    const hasChild = db.select({ id: pages.id }).from(pages).where(and(eq(pages.parentId, id), isNull(pages.archivedAt))).limit(1).get();
+    const content = db.select({ type: blocks.type, content: blocks.content }).from(blocks).where(eq(blocks.pageId, id)).all();
+    const empty = content.every((b) => b.type === 'paragraph' && b.content.every((n) => !n.text));
+    if (hasChild || !empty) return reply.code(400).send({ error: 'Only an empty page can become a database' });
+
+    db.transaction((tx) => {
+      tx.delete(blocks).where(eq(blocks.pageId, id)).run();
+      tx.update(pages).set({ kind: 'database', updatedAt: Date.now() }).where(eq(pages.id, id)).run();
+      createDefaultView(tx, id, layout);
+    });
+    return { id, kind: 'database' };
   });
 
   // --- properties ---

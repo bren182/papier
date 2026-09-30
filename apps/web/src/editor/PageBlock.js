@@ -16,7 +16,8 @@ import { formatDateMention } from './dates.js';
  * @typedef {{
  *   watchPage: ((pageId: string, onChange: (page: PageInfo | undefined) => void) => () => void) | null,
  *   openPage: ((pageId: string) => void) | null,
- *   createPage: ((kind?: 'page' | 'database') => Promise<string>) | null,
+ *   createPage: ((kind?: 'page' | 'database', title?: string) => Promise<string>) | null,
+ *   saveContent?: ((pageId: string, rows: import('@papier/core').Block[]) => Promise<unknown>) | null,
  * }} PageBlockOptions
  */
 

@@ -25,6 +25,17 @@ export function Topbar({ selectedId, onSelect, prefs, onChange }) {
       className="flex h-11 shrink-0 items-center gap-2 bg-s-top px-4 text-sm"
       style={{ backdropFilter: 'var(--s-top-glass)', WebkitBackdropFilter: 'var(--s-top-glass)' }}
     >
+      {!prefs.sidebar && (
+        <button
+          type="button"
+          aria-label="Show sidebar"
+          title="Show sidebar (Ctrl+\)"
+          onClick={() => onChange({ sidebar: true })}
+          className="-ml-1.5 flex size-7 shrink-0 items-center justify-center rounded-md text-muted hover:bg-s-active hover:text-fg"
+        >
+          <SidebarIcon />
+        </button>
+      )}
       <nav aria-label="Breadcrumb" className="flex min-w-0 flex-1 items-center gap-1">
         {data &&
           [...data.ancestors, data.page].map((crumb, i, all) => {
@@ -92,4 +103,14 @@ function useServerHealth() {
   }, []);
 
   return online;
+}
+
+/** A panel-with-sidebar glyph for the show/hide sidebar buttons. */
+export function SidebarIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3.5" y="4.5" width="17" height="15" rx="2" />
+      <path d="M9.5 4.5v15" />
+    </svg>
+  );
 }

@@ -21,15 +21,27 @@ export function App() {
         e.preventDefault();
         setSearching((open) => !open);
       }
+      // Ctrl/Cmd- shows or hides the sidebar (as in Notion).
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key === '\\') {
+        e.preventDefault();
+        updatePrefs((p) => ({ sidebar: !p.sidebar }));
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [updatePrefs]);
 
   return (
     <div className="relative flex h-full overflow-hidden">
       <Backdrop />
-      <Sidebar selectedId={selectedId} onSelect={select} onSearch={() => setSearching(true)} />
+      {/* Collapsing slides the sidebar out; it stays mounted so its tree state survives. */}
+      <div
+        className="relative flex shrink-0 overflow-hidden transition-[width] duration-200 ease-out motion-reduce:transition-none"
+        style={{ width: prefs.sidebar ? 260 : 0 }}
+        inert={!prefs.sidebar}
+      >
+        <Sidebar selectedId={selectedId} onSelect={select} onSearch={() => setSearching(true)} onCollapse={() => updatePrefs({ sidebar: false })} />
+      </div>
       <main className="relative flex min-w-0 flex-1 flex-col">
         <Topbar selectedId={selectedId} onSelect={select} prefs={prefs} onChange={updatePrefs} />
         <Page selectedId={selectedId} onSelect={select} />

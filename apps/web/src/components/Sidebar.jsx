@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { pageKeys, useArchivePage, useChildPages, useCreatePage, useMovePage } from '../api/pages.js';
 import { SearchDialog } from './SearchDialog.jsx';
 import { TitleText } from './TitleText.jsx';
+import { SidebarIcon } from './Topbar.jsx';
 
 /** @typedef {import('@papier/core').Page} Page */
 /** @typedef {'before' | 'inside' | 'after'} DropWhere */
@@ -38,8 +39,8 @@ const EXPAND_DELAY_MS = 600;
 const navButton =
   'flex h-8 items-center gap-2.5 rounded-md px-2.5 text-left text-sm text-muted hover:bg-s-active hover:text-fg';
 
-/** @param {{ selectedId: string | null, onSelect: (id: string | null) => void, onSearch: () => void }} props */
-export function Sidebar({ selectedId, onSelect, onSearch }) {
+/** @param {{ selectedId: string | null, onSelect: (id: string | null) => void, onSearch: () => void, onCollapse: () => void }} props */
+export function Sidebar({ selectedId, onSelect, onSearch, onCollapse }) {
   const [isExpanded, setExpanded] = useExpandedSet();
   const createPage = useCreatePage();
   const archivePage = useArchivePage();
@@ -81,16 +82,27 @@ export function Sidebar({ selectedId, onSelect, onSearch }) {
       aria-label="Workspace"
       className="p-glass relative flex w-[260px] shrink-0 flex-col gap-0.5 border-r border-white/5 bg-s-sidebar px-2 py-3"
     >
-      <button
-        type="button"
-        onClick={() => onSelect(null)}
-        className="flex h-10 items-center gap-2.5 rounded-md px-2.5 text-left hover:bg-s-active"
-      >
-        <span className="flex size-[22px] items-center justify-center rounded-[5px] bg-hover font-display text-sm text-fg-strong">
-          P
-        </span>
-        <span className="flex-1 text-sm font-semibold text-fg-strong">Papier</span>
-      </button>
+      <div className="group/head flex items-center">
+        <button
+          type="button"
+          onClick={() => onSelect(null)}
+          className="flex h-10 min-w-0 flex-1 items-center gap-2.5 rounded-md px-2.5 text-left hover:bg-s-active"
+        >
+          <span className="flex size-[22px] items-center justify-center rounded-[5px] bg-hover font-display text-sm text-fg-strong">
+            P
+          </span>
+          <span className="flex-1 text-sm font-semibold text-fg-strong">Papier</span>
+        </button>
+        <button
+          type="button"
+          aria-label="Hide sidebar"
+          title="Hide sidebar (Ctrl+\)"
+          onClick={onCollapse}
+          className="ml-1 flex size-7 shrink-0 items-center justify-center rounded-md text-muted opacity-0 group-hover/head:opacity-100 hover:bg-s-active hover:text-fg focus-visible:opacity-100"
+        >
+          <SidebarIcon />
+        </button>
+      </div>
 
       <button type="button" onClick={onSearch} className={navButton}>
         <SearchIcon />

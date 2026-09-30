@@ -408,6 +408,8 @@ Works today: `pnpm dev`, `pnpm test`, `pnpm typecheck`, `pnpm build`. The server
 📝 *Dumping ground. Ideas, links, things Notion does that I want, things Notion does
 that I hate.*
 
--
--
--
+- Notifications being customsiable, i.e. I can @Remind tomorrow or @Remind + datepicker value to set a reminder
+- Schedules or specials actions/automations. I can setup a system where if I click a button it updates a property. Values are dynamic, going off of the birthday calendar, I can click "celebrate" which will shift the date of remind one year back so I can be reminded next year. 
+- Notion has a huge library of prebuilt templates, it would be cool to add a similar "plugin" library, where we can add stuff like "plugin for a recipe book" which can be a combination of pages and some other external tools/integrations like a recipe API + cart API that can put things in a shopping list for you. 
+- Being able to setup a custom "Home" page. So where you land you can see certain important blocks that you can customise. 
+- Uploading images for backgrounds for the app, and background for headers, background for pages etc. For now we'll assume storage stays local on a user's computer so no syncing yet. 

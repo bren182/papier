@@ -108,6 +108,9 @@ export const RowMove = z
   .object({ beforeId: z.string().min(1).max(64).optional(), afterId: z.string().min(1).max(64).optional() })
   .refine((v) => !(v.beforeId && v.afterId), 'Give beforeId or afterId, not both');
 
+/** Turn an empty page into a database, laid out as a table or a board. */
+export const PageConvert = z.object({ layout: z.enum(['table', 'board']).default('table') });
+
 /** `PATCH /api/pages/:id/props`: property id → value (null clears). */
 export const PropsPatch = z.record(PropertyId, z.unknown()).refine((v) => Object.keys(v).length > 0, 'Nothing to update');
 
