@@ -5,7 +5,7 @@ import { today } from './templates.js';
 
 /**
  * @typedef {import('@papier/core/props').PropertyDef & { order: string }} Property
- * @typedef {{ sorts: { propId: string, dir: 'asc' | 'desc' }[], filters: { propId: string, op: string, value?: string | number | boolean | null }[],
+ * @typedef {{ sorts: { propId: string, dir: 'asc' | 'desc' | 'upcoming' }[], filters: { propId: string, op: string, value?: string | number | boolean | null }[],
  *   hidden: string[], widths: Record<string, number>, propOrder: string[], groupBy: string | null, template: string | null }} ViewConfig
  * @typedef {{ id: string, name: string, type: 'table' | 'board', config: ViewConfig, order: string }} View
  * @typedef {{ id: string, title: string, titleContent: import('@papier/core').InlineContent | null, icon: string | null }} RowTemplate

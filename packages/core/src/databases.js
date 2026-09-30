@@ -42,7 +42,11 @@ export const PropertyUpdate = z
 export const VIEW_TYPES = /** @type {const} */ (['table', 'board']);
 export const ViewType = z.enum(VIEW_TYPES);
 
-export const Sort = z.object({ propId: PropertyId, dir: z.enum(['asc', 'desc']).default('asc') });
+/**
+ * `upcoming` (dates only): by the next anniversary of the date, from today in the
+ * viewer's timezone — birthdays come round in order. Other types read it as `asc`.
+ */
+export const Sort = z.object({ propId: PropertyId, dir: z.enum(['asc', 'desc', 'upcoming']).default('asc') });
 
 export const Filter = z
   .object({

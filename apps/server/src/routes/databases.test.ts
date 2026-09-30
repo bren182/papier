@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app.ts';
 import { openDb } from '../db/index.ts';
 import { backfillPageBlocks } from '../db/pageTree.ts';
@@ -114,6 +114,28 @@ describe('query', () => {
     expect(await titles(db, { sorts: [{ propId: points.id, dir: 'desc' }] })).toEqual(['Test', 'Write', 'Plan', 'Ship']);
     expect(await titles(db, { sorts: [{ propId: status.id, dir: 'asc' }] })).toEqual(['Test', 'Ship', 'Write', 'Plan']);
     expect(await titles(db, { sorts: [{ propId: 'title', dir: 'asc' }] })).toEqual(['Plan', 'Ship', 'Test', 'Write']);
+  });
+
+  it('sorts dates by upcoming anniversary in the viewer timezone', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      // 22:30 UTC on Jun 9 is already Jun 10 at UTC+2 (tzOffset -120).
+      vi.setSystemTime(new Date('2026-06-09T22:30:00Z'));
+      const db = await createDatabase('Birthdays');
+      const born = await addProp(db.id, { name: 'Born', type: 'date' });
+      await addRow(db.id, 'Jan', { [born.id]: '1990-01-05' });
+      await addRow(db.id, 'Today', { [born.id]: '2001-06-10' });
+      await addRow(db.id, 'Yesterday', { [born.id]: '1985-06-09' });
+      await addRow(db.id, 'Dec', { [born.id]: '2010-12-31' });
+      await addRow(db.id, 'Unknown');
+      const sorts = [{ propId: born.id, dir: 'upcoming' }];
+      expect(await titles(db.id, { sorts, tzOffset: -120 })).toEqual(['Today', 'Dec', 'Jan', 'Yesterday', 'Unknown']);
+      expect(await titles(db.id, { sorts, tzOffset: 0 })).toEqual(['Yesterday', 'Today', 'Dec', 'Jan', 'Unknown']);
+      // Non-date properties read it as ascending.
+      expect(await titles(db.id, { sorts: [{ propId: 'title', dir: 'upcoming' }] })).toEqual(['Dec', 'Jan', 'Today', 'Unknown', 'Yesterday']);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('filters on each type', async () => {

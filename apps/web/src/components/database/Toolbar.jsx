@@ -140,22 +140,32 @@ function SortMenu({ anchor, onClose }) {
   return (
     <Popover anchor={anchor} onClose={onClose} width={320}>
       {sorts.length === 0 && <div className="px-2 py-1.5 text-[13px] text-muted">No sorts — rows are in manual order.</div>}
-      {sorts.map((s, i) => (
-        <div key={s.propId} className="flex items-center gap-1 px-1 py-0.5">
-          <PropSelect value={s.propId} options={all.filter((p) => p.id === s.propId || !sorts.some((x) => x.propId === p.id))}
-            onChange={(propId) => setConfig({ sorts: sorts.map((x, j) => (j === i ? { ...x, propId } : x)) })} />
-          <select
-            value={s.dir}
-            aria-label="Direction"
-            onChange={(e) => setConfig({ sorts: sorts.map((x, j) => (j === i ? { ...x, dir: /** @type {'asc' | 'desc'} */ (e.target.value) } : x)) })}
-            className={`${field} w-[110px]`}
-          >
-            <option value="asc">Ascending</option>
-            <option value="desc">Descending</option>
-          </select>
-          <RemoveButton label="Remove sort" onClick={() => setConfig({ sorts: sorts.filter((_, j) => j !== i) })} />
-        </div>
-      ))}
+      {sorts.map((s, i) => {
+        const isDate = all.find((p) => p.id === s.propId)?.type === 'date';
+        /** @param {string} propId */
+        const setProp = (propId) => {
+          // "Upcoming" only means something for dates.
+          const date = all.find((p) => p.id === propId)?.type === 'date';
+          return { ...s, propId, dir: s.dir === 'upcoming' && !date ? /** @type {const} */ ('asc') : s.dir };
+        };
+        return (
+          <div key={s.propId} className="flex items-center gap-1 px-1 py-0.5">
+            <PropSelect value={s.propId} options={all.filter((p) => p.id === s.propId || !sorts.some((x) => x.propId === p.id))}
+              onChange={(propId) => setConfig({ sorts: sorts.map((x, j) => (j === i ? setProp(propId) : x)) })} />
+            <select
+              value={s.dir}
+              aria-label="Direction"
+              onChange={(e) => setConfig({ sorts: sorts.map((x, j) => (j === i ? { ...x, dir: /** @type {'asc' | 'desc' | 'upcoming'} */ (e.target.value) } : x)) })}
+              className={`${field} w-[110px]`}
+            >
+              <option value="asc">Ascending</option>
+              <option value="desc">Descending</option>
+              {isDate && <option value="upcoming" title="Next anniversary first, like birthdays">Upcoming</option>}
+            </select>
+            <RemoveButton label="Remove sort" onClick={() => setConfig({ sorts: sorts.filter((_, j) => j !== i) })} />
+          </div>
+        );
+      })}
       <div className="my-1 h-px bg-line" />
       <button
         type="button"

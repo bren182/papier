@@ -74,7 +74,8 @@ a page block (`OWNING_BLOCKS` in `pageTree.ts`). Properties: `db_properties`; va
 every write (always go through `writeValue`). Title is the pseudo-property `title`.
 Type/option changes rewrite values (`coerceValue`) and scrub view configs. Views
 (`db_views`) hold sorts/filters/hidden/widths/propOrder/groupBy; `POST …/query` builds one
-SQL query (a left join per referenced property), offset-paginated. Value/filter helpers
+SQL query (a left join per referenced property), offset-paginated. A date sort can be
+`dir: 'upcoming'` (next anniversary from the viewer's today, via `tzOffset`) — birthdays. Value/filter helpers
 are zod-free in `@papier/core/props` (client-safe). Client: `api/databases.js`; the UI is a
 lazy chunk; menus use `database/Popover.jsx` (portalled). An empty page can become one
 in place (`POST /api/pages/:id/convert`, the "Or start as a database" strip in `Page.jsx`). Drags inside a view set

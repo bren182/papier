@@ -212,6 +212,12 @@ function sortSql(ctx: Ctx, s: Sort): SQL[] {
   const dir = sql.raw(s.dir === 'desc' ? 'desc' : 'asc');
   const type = typeOf(ctx, s.propId);
   if (!type) return [];
+  if (type === 'date' && s.dir === 'upcoming') {
+    // Month-day of the value ('MM-DD'): today's and later ones first, then those that wrap into next year.
+    const md = sql`substr(${alias(ctx, s.propId)}.sort_text, 6, 5)`;
+    const today = new Date(Date.now() - ctx.tzOffset * 60_000).toISOString().slice(5, 10);
+    return [sql`${md} is null`, sql`${md} < ${today}`, md];
+  }
   if (type === 'title') return [sql`p.title = ''`, sql`lower(p.title) ${dir}`];
   if (type === 'created_time') return [sql`p.created_at ${dir}`];
   if (type === 'edited_time') return [sql`p.updated_at ${dir}`];

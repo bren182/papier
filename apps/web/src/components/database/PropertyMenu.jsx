@@ -20,7 +20,7 @@ export function PropertyMenu({ prop, anchor, onClose }) {
     if (n && n !== prop.name) m.updateProperty(prop.id, { name: n });
   };
 
-  /** @param {'asc' | 'desc'} dir */
+  /** @param {'asc' | 'desc' | 'upcoming'} dir */
   const sortBy = (dir) => {
     setConfig({ sorts: [{ propId: prop.id, dir }, ...view.config.sorts.filter((s) => s.propId !== prop.id)] });
     onClose();
@@ -97,6 +97,12 @@ export function PropertyMenu({ prop, anchor, onClose }) {
         <Icon path={ICONS.sort} />
         Sort descending
       </button>
+      {prop.type === 'date' && (
+        <button type="button" className={menuItem} onClick={() => sortBy('upcoming')}>
+          <Icon path={ICONS.sort} />
+          Sort by upcoming
+        </button>
+      )}
 
       {!isTitle && (
         <>
