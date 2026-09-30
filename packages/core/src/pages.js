@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { generateKeyBetween } from 'fractional-indexing';
+import { generateKeyBetween, generateNKeysBetween } from 'fractional-indexing';
 
 export const PageId = z.string().min(1).max(64);
 
@@ -36,6 +36,48 @@ export const PageUpdate = z
  */
 export function orderBetween(before, after) {
   return generateKeyBetween(before, after);
+}
+
+/**
+ * Order keys for a sibling list after an edit. `keys` are the siblings' current
+ * keys in their new order (null for new items). The longest run that is still
+ * increasing is kept, and only the rest get fresh keys — moving one item rewrites one row.
+ * @param {(string | null)[]} keys
+ * @returns {string[]}
+ */
+export function rebalanceOrder(keys) {
+  // Longest strictly increasing subsequence of the existing keys (patience sort).
+  /** @type {number[]} */ const tails = []; // index into keys of the smallest tail per length
+  /** @type {number[]} */ const prev = new Array(keys.length).fill(-1);
+  keys.forEach((key, i) => {
+    if (key === null) return;
+    let lo = 0;
+    let hi = tails.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (/** @type {string} */ (keys[/** @type {number} */ (tails[mid])]) < key) lo = mid + 1;
+      else hi = mid;
+    }
+    if (lo > 0) prev[i] = /** @type {number} */ (tails[lo - 1]);
+    tails[lo] = i;
+  });
+
+  const kept = new Set();
+  for (let i = tails.length ? /** @type {number} */ (tails[tails.length - 1]) : -1; i !== -1; i = /** @type {number} */ (prev[i])) {
+    kept.add(i);
+  }
+
+  /** @type {string[]} */ const out = new Array(keys.length);
+  let start = 0; // first index of the current gap
+  for (let i = 0; i <= keys.length; i++) {
+    if (i < keys.length && !kept.has(i)) continue;
+    const lower = start > 0 ? /** @type {string} */ (out[start - 1]) : null;
+    const upper = i < keys.length ? /** @type {string} */ (keys[i]) : null;
+    generateNKeysBetween(lower, upper, i - start).forEach((k, j) => (out[start + j] = k));
+    if (i < keys.length) out[i] = upper ?? '';
+    start = i + 1;
+  }
+  return out;
 }
 
 /** @typedef {z.infer<typeof Page>} Page */

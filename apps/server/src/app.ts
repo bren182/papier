@@ -2,6 +2,7 @@ import Fastify from 'fastify';
 import { ZodError } from 'zod';
 import { BLOCK_TYPES } from '@papier/core';
 import { openDb } from './db/index.ts';
+import { blockRoutes } from './routes/blocks.ts';
 import { pageRoutes } from './routes/pages.ts';
 
 type AppOptions = {
@@ -27,6 +28,7 @@ export function buildApp({ dbPath = ':memory:', logger = true }: AppOptions = {}
 
   app.get('/api/health', async () => ({ ok: true, blockTypes: BLOCK_TYPES.length }));
   pageRoutes(app, db);
+  blockRoutes(app, db);
 
   return app;
 }

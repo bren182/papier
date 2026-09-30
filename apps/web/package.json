@@ -10,6 +10,11 @@
     "typecheck": "tsc -p jsconfig.json"
   },
   "dependencies": {
+    "@blocknote/core": "^0.55.0",
+    "@blocknote/mantine": "^0.55.0",
+    "@blocknote/react": "^0.55.0",
+    "@mantine/core": "^9.6.3",
+    "@mantine/hooks": "^9.6.3",
     "@papier/core": "workspace:*",
     "@papier/ui": "workspace:*",
     "@tanstack/react-query": "^5.104.0",

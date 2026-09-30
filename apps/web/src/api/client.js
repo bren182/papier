@@ -9,11 +9,13 @@ export class ApiError extends Error {
 /**
  * JSON fetch against the papier server. Throws ApiError on non-2xx.
  * @param {string} path  path under /api, e.g. '/pages'
- * @param {{ method?: string, body?: unknown }} [opts]
+ * @param {{ method?: string, body?: unknown, keepalive?: boolean }} [opts]
+ *   keepalive lets a request outlive the page (saves on tab close).
  */
-export async function api(path, { method = 'GET', body } = {}) {
+export async function api(path, { method = 'GET', body, keepalive } = {}) {
   const res = await fetch(`/api${path}`, {
     method,
+    keepalive,
     headers: body === undefined ? undefined : { 'content-type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
   });

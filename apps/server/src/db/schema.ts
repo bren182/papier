@@ -16,3 +16,26 @@ export const pages = sqliteTable(
   },
   (t) => [index('pages_parent_order').on(t.parentId, t.orderKey)],
 );
+
+export const blocks = sqliteTable(
+  'blocks',
+  {
+    id: text('id').primaryKey(),
+    pageId: text('page_id')
+      .notNull()
+      .references(() => pages.id),
+    /** Null = top level of the page. Deleting a block removes its subtree. */
+    parentId: text('parent_id').references((): AnySQLiteColumn => blocks.id, { onDelete: 'cascade' }),
+    /** One of BLOCK_TYPES in @papier/core. */
+    type: text('type').notNull(),
+    /** Fractional index among siblings. */
+    orderKey: text('order_key').notNull(),
+    /** JSON object: type-specific settings (heading level, checked, language). */
+    props: text('props', { mode: 'json' }).$type<Record<string, unknown>>().notNull().default({}),
+    /** JSON array: inline rich text (see InlineContent in @papier/core). */
+    content: text('content', { mode: 'json' }).$type<Array<Record<string, unknown>>>().notNull().default([]),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => [index('blocks_page_parent_order').on(t.pageId, t.parentId, t.orderKey)],
+);

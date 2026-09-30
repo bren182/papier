@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm';
 import { orderBetween, PageCreate, PageUpdate } from '@papier/core';
 import type { Db } from '../db/index.ts';
+import { liveLineage } from '../db/lineage.ts';
 import { pages } from '../db/schema.ts';
 
 const pageFields = {
@@ -20,9 +21,6 @@ const pageFields = {
   updatedAt: pages.updatedAt,
 };
 
-type Crumb = { id: string; title: string; icon: string | null };
-type Lineage = Crumb & { archived_at: number | null; depth: number };
-
 export function pageRoutes(app: FastifyInstance, db: Db) {
   /** Children of one parent (root when `parent` is omitted). The sidebar loads lazily. */
   app.get<{ Querystring: { parent?: string } }>('/api/pages', async (req) => {
@@ -37,24 +35,11 @@ export function pageRoutes(app: FastifyInstance, db: Db) {
 
   /** One page plus its ancestors (root first) for breadcrumbs. */
   app.get<{ Params: { id: string } }>('/api/pages/:id', async (req, reply) => {
-    const lineage = db.all<Lineage>(sql`
-      with recursive lineage(id, parent_id, title, icon, archived_at, depth) as (
-        select id, parent_id, title, icon, archived_at, 0 from pages where id = ${req.params.id}
-        union all
-        select p.id, p.parent_id, p.title, p.icon, p.archived_at, l.depth + 1
-        from pages p join lineage l on p.id = l.parent_id
-      )
-      select id, title, icon, archived_at, depth from lineage order by depth desc
-    `);
-
-    // Missing, or it (or an ancestor) is in the trash.
-    if (lineage.length === 0 || lineage.some((p) => p.archived_at !== null)) {
-      return reply.code(404).send({ error: 'Page not found' });
-    }
+    const lineage = liveLineage(db, req.params.id);
+    if (!lineage) return reply.code(404).send({ error: 'Page not found' });
 
     const page = db.select(pageFields).from(pages).where(eq(pages.id, req.params.id)).get();
-    const ancestors: Crumb[] = lineage.slice(0, -1).map(({ id, title, icon }) => ({ id, title, icon }));
-    return { page, ancestors };
+    return { page, ancestors: lineage.slice(0, -1) };
   });
 
   app.post('/api/pages', async (req, reply) => {

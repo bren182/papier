@@ -61,10 +61,11 @@ Tick boxes as they land. Anything unticked in a shipped milestone moves to the n
 
 - [ ] Auth: single owner account, email + password, session cookie
 - [ ] Page tree sidebar: create / rename / nest / drag-reorder / delete to trash
-- [ ] Block editor: paragraph, H1–H3, bullet + numbered list, todo, quote, code, divider
-- [ ] Markdown-style input rules (`# `, `- `, `[] `, ` ``` `) and `/` slash menu
+- [x] Block editor: paragraph, H1–H3, bullet + numbered list, todo, quote, code, divider
+- [x] Markdown-style input rules (`# `, `- `, `[] `, ` ``` `) and `/` slash menu
+- [ ] `@` date mentions: `@today`, `@tomorrow`, `@fri`, `@oct 5`, `@in 3 days` — stored as plain `YYYY-MM-DD`, shown relative (Today / Tomorrow)
 - [ ] Keyboard-first editing: Enter/Backspace/Tab semantics that feel like Notion
-- [ ] Autosave, per-block, no save button, ever
+- [x] Autosave, per-block, no save button, ever
 - [ ] Full-text search across all pages (SQLite FTS5)
 - [ ] Dark mode ONLY
 - [ ] Runs as one `docker compose up` on a Linux VM behind HTTPS
@@ -245,6 +246,10 @@ search_index (VIRTUAL TABLE fts5: page_id, title, body)
   derived read/search projection? The second is simpler to keep consistent, harder to
   query. Leaning: Yjs is truth for block content, SQL rows are a projection rebuilt on
   save for search and API reads.*
+- **Until Yjs lands (v0.4), the `blocks` rows *are* the truth.** One row per block:
+  `parent_id` nests blocks within a page, `order_key` orders siblings, `props` holds
+  type settings (heading level, checked, language), `content` holds inline rich text as
+  JSON. The editor autosaves changed/removed blocks as one atomic batch.
 
 ---
 
@@ -346,7 +351,7 @@ Dev machine is Windows, so Linux/macOS builds only ever get verified by CI + a V
 | # | Question | Leaning |
 | --- | --- | --- |
 | 1 | Yjs-as-truth or SQL-as-truth for block content? | Yjs, SQL as projection |
-| 2 | TipTap from scratch, or BlockNote for a head start? | BlockNote, eject later if it limits |
+| 2 | TipTap from scratch, or BlockNote for a head start? | **Decided: BlockNote** (v0.1). Stored blocks use Papier's own types/props (`apps/web/src/editor/convert.js` maps them), so ejecting later doesn't touch data. |
 | 3 | Tauri or Electron? | Tauri 2 |
 | 4 | SQLite or Postgres? | SQLite, keep the swap possible |
 | 5 | Multiplayer in v1 at all, or solo-first and add it later? | 📝 |

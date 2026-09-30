@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ApiError } from '../api/client.js';
 import { useCreatePage, usePage, useUpdatePage } from '../api/pages.js';
 
@@ -6,9 +6,13 @@ import { useCreatePage, usePage, useUpdatePage } from '../api/pages.js';
 
 const SAVE_DELAY_MS = 400;
 
+// BlockNote is most of the bundle; the shell and sidebar paint without it.
+const PageEditor = lazy(() => import('../editor/PageEditor.jsx').then((m) => ({ default: m.PageEditor })));
+
 /** @param {{ selectedId: string | null, onSelect: (id: string | null) => void }} props */
 export function Page({ selectedId, onSelect }) {
   const { data, isPending, error } = usePage(selectedId);
+  const editorRef = useRef(/** @type {import('../editor/PageEditor.jsx').PageEditorHandle | null} */ (null));
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
@@ -27,8 +31,12 @@ export function Page({ selectedId, onSelect }) {
             </Message>
           ) : isPending ? null : (
             <>
-              <TitleEditor key={data.page.id} page={data.page} />
-              <p className="mt-4 text-[15px] leading-6 text-faint">Blocks arrive with the editor — next iteration.</p>
+              <TitleEditor key={data.page.id} page={data.page} onEnter={() => editorRef.current?.focusStart()} />
+              <div className="-mx-[54px] mt-4">
+                <Suspense fallback={null}>
+                  <PageEditor key={data.page.id} pageId={data.page.id} ref={editorRef} />
+                </Suspense>
+              </div>
             </>
           )}
         </article>
@@ -40,9 +48,9 @@ export function Page({ selectedId, onSelect }) {
 /**
  * Page title, saved as you type (debounced). The sidebar and breadcrumbs update
  * immediately through the optimistic cache write in useUpdatePage.
- * @param {{ page: PageData }} props
+ * @param {{ page: PageData, onEnter: () => void }} props
  */
-function TitleEditor({ page }) {
+function TitleEditor({ page, onEnter }) {
   const [title, setTitle] = useState(page.title);
   const updatePage = useUpdatePage();
   const ref = useRef(/** @type {HTMLTextAreaElement | null} */ (null));
@@ -89,7 +97,11 @@ function TitleEditor({ page }) {
       onChange={(e) => onChange(e.target.value)}
       onBlur={flush}
       onKeyDown={(e) => {
-        if (e.key === 'Enter') e.preventDefault();
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          flush();
+          onEnter();
+        }
       }}
       className="w-full resize-none overflow-hidden bg-transparent font-display text-[40px] leading-[48px] font-semibold tracking-[-0.01em] text-fg-strong outline-none placeholder:text-[#3d3d3d] focus-visible:outline-none"
     />

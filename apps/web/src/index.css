@@ -45,3 +45,60 @@ body {
   outline: 2px solid var(--p-accent);
   outline-offset: 2px;
 }
+
+/* Block editor (BlockNote) on Papier tokens. Theme colours are set in PageEditor.jsx. */
+.papier-editor .bn-editor {
+  font-size: 16px;
+  line-height: 1.6;
+  text-shadow: var(--s-text-shadow);
+}
+.papier-editor .bn-inline-content:has(> .ProseMirror-trailingBreak:only-child)::before {
+  color: var(--p-faint);
+}
+.papier-editor [data-content-type='heading'] {
+  color: var(--p-strong);
+}
+.papier-editor .bn-inline-content a {
+  color: var(--p-accent-text);
+  text-decoration-color: rgb(123 178 217 / 0.4);
+}
+.papier-editor .bn-inline-content code {
+  font-family: var(--p-font-mono);
+  font-size: 0.88em;
+  background: var(--s-active);
+  border-radius: 4px;
+  padding: 0.1em 0.3em;
+}
+.papier-editor [data-content-type='codeBlock'] {
+  font-family: var(--p-font-mono);
+  background: var(--s-callout);
+  color: var(--p-text);
+}
+.papier-editor [data-content-type='quote'] blockquote {
+  border-left-color: var(--p-line);
+  color: var(--p-text);
+}
+.papier-editor [data-content-type='checkListItem'] input[type='checkbox'] {
+  accent-color: var(--p-accent);
+}
+.papier-editor [data-content-type='checkListItem'][data-checked='true'] .bn-inline-content {
+  color: var(--p-faint);
+}
+.papier-editor [data-content-type='divider'] hr {
+  border-color: var(--p-line);
+}
+.papier-editor ::selection {
+  background: var(--p-accent-soft);
+}
+.papier-editor .papier-date {
+  color: var(--p-muted);
+  border-radius: 4px;
+  padding: 0 0.15em;
+  white-space: nowrap;
+}
+.papier-editor .papier-date span {
+  color: var(--p-faint);
+}
+.papier-editor .papier-date:hover {
+  background: var(--s-active);
+}
