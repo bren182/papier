@@ -1,13 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { and, asc, desc, eq, gt, isNull, lt, ne, sql } from 'drizzle-orm';
-import { orderBetween, PageCreate, PageDuplicate, PageMove, PageUpdate, plainText } from '@papier/core';
+import { InvalidValue, orderBetween, PageCreate, PageDuplicate, PageMove, PageUpdate, plainText } from '@papier/core';
 import { duplicatePage, TooBig } from '../db/duplicate.ts';
 import type { Db } from '../db/index.ts';
 import { liveLineage } from '../db/lineage.ts';
 import { appendPageBlock, isSelfOrDescendant, removePageBlocks } from '../db/pageTree.ts';
 import { rowValues } from '../db/relations.ts';
 import { indexTitle } from '../db/search.ts';
+import { listTrash, purgePages, restorePage } from '../db/trash.ts';
 import { createDefaultView } from './databases.ts';
 import { pages } from '../db/schema.ts';
 
@@ -17,6 +18,7 @@ const pageFields = {
   title: pages.title,
   titleContent: pages.titleContent,
   icon: pages.icon,
+  appearance: pages.appearance,
   kind: pages.kind,
   isTemplate: pages.isTemplate,
   order: pages.orderKey,
@@ -63,7 +65,11 @@ export function pageRoutes(app: FastifyInstance, db: Db) {
   /** One page plus its ancestors (root first) for breadcrumbs. */
   app.get<{ Params: { id: string } }>('/api/pages/:id', async (req, reply) => {
     const lineage = liveLineage(db, req.params.id);
-    if (!lineage) return reply.code(404).send({ error: 'Page not found' });
+    if (!lineage) {
+      // Say whether it's in the trash (and can be restored) or gone.
+      const exists = db.select({ id: pages.id }).from(pages).where(eq(pages.id, req.params.id)).get();
+      return reply.code(404).send({ error: 'Page not found', trashed: Boolean(exists) });
+    }
 
     const page = db.select(pageFields).from(pages).where(eq(pages.id, req.params.id)).get();
     const database = rowDatabase(db, req.params.id);
@@ -129,7 +135,7 @@ export function pageRoutes(app: FastifyInstance, db: Db) {
   });
 
   app.patch<{ Params: { id: string } }>('/api/pages/:id', async (req, reply) => {
-    const { titleContent, ...patch } = PageUpdate.parse(req.body ?? {});
+    const { titleContent, appearance: look, ...patch } = PageUpdate.parse(req.body ?? {});
     // One source of truth: a rich title derives the plain one; a plain title drops the rich one.
     const title =
       titleContent !== undefined
@@ -138,9 +144,15 @@ export function pageRoutes(app: FastifyInstance, db: Db) {
           ? { titleContent: null }
           : {};
     const updated = db.transaction((tx) => {
+      // Appearance patches merge; a null value drops that key.
+      let appearance: Record<string, unknown> | undefined;
+      if (look) {
+        const current = tx.select({ a: pages.appearance }).from(pages).where(eq(pages.id, req.params.id)).get()?.a ?? {};
+        appearance = Object.fromEntries(Object.entries({ ...current, ...look }).filter(([, v]) => v !== null && v !== undefined));
+      }
       const row = tx
         .update(pages)
-        .set({ ...patch, ...title, updatedAt: Date.now() })
+        .set({ ...patch, ...title, ...(appearance ? { appearance } : {}), updatedAt: Date.now() })
         .where(and(eq(pages.id, req.params.id), isNull(pages.archivedAt)))
         .returning({ id: pages.id, title: pages.title })
         .get();
@@ -247,6 +259,29 @@ export function pageRoutes(app: FastifyInstance, db: Db) {
   });
 
   /** Move to trash. Descendants stay attached and disappear with it; so does its page block. */
+  // --- trash ---
+
+  app.get<{ Querystring: { q?: string } }>('/api/trash', async (req) => listTrash(db, String(req.query.q ?? '').trim().slice(0, 200)));
+
+  app.post<{ Params: { id: string } }>('/api/pages/:id/restore', async (req, reply) => {
+    try {
+      const result = db.transaction((tx) => restorePage(tx, req.params.id));
+      return { page: db.select(pageFields).from(pages).where(eq(pages.id, req.params.id)).get(), ...result };
+    } catch (err) {
+      if (err instanceof InvalidValue) return reply.code(400).send({ error: err.message });
+      throw err;
+    }
+  });
+
+  /** Delete forever: only pages already in the trash. */
+  app.delete<{ Params: { id: string } }>('/api/pages/:id/purge', async (req, reply) => {
+    const page = db.select({ archivedAt: pages.archivedAt }).from(pages).where(eq(pages.id, req.params.id)).get();
+    if (!page) return reply.code(404).send({ error: 'Page not found' });
+    if (page.archivedAt === null) return reply.code(400).send({ error: 'Only pages in the trash can be deleted forever' });
+    db.transaction((tx) => purgePages(tx, [req.params.id]));
+    return reply.code(204).send();
+  });
+
   app.delete<{ Params: { id: string } }>('/api/pages/:id', async (req, reply) => {
     const archived = db.transaction((tx) => {
       const row = tx

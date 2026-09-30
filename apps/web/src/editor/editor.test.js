@@ -69,12 +69,13 @@ describe('input rules', () => {
     expect(e.state.doc.child(0).attrs).toMatchObject({ id: 'b0', level: 1 });
   });
 
-  it('makes lists, to-dos, quotes and code', () => {
+  it('makes lists, to-dos, toggles, quotes and code', () => {
     const cases = /** @type {const} */ ([
       ['- x', 'bulletItem'],
       ['1. x', 'numberedItem'],
       ['[] x', 'todo'],
-      ['> x', 'quote'],
+      ['> x', 'toggle'],
+      ['" x', 'quote'],
     ]);
     for (const [input, name] of cases) {
       const e = setup(['']);
@@ -303,5 +304,60 @@ describe('page blocks', () => {
     expect(blocks(e).map((b) => b.split(':')[0])).toEqual(['paragraph', 'pageBlock', 'pageBlock']);
     expect(e.state.doc.child(2).attrs.pageId).toBe('new-page');
     expect(opened).toEqual(['new-page']);
+  });
+});
+
+describe('toggles', () => {
+  /** Setup where block `index` gets extra attrs (e.g. collapsed). @param {string[]} specs @param {number} index @param {Record<string, unknown>} attrs */
+  const withAttrs = (specs, index, attrs) => {
+    const e = setup(specs);
+    let pos = 0;
+    for (let i = 0; i < index; i++) pos += e.state.doc.child(i).nodeSize;
+    for (const [k, v] of Object.entries(attrs)) e.view.dispatch(e.state.tr.setNodeAttribute(pos, k, v));
+    return e;
+  };
+  /** Classes the Outline plugin puts on each block. @param {Editor} e */
+  const classes = (e) => [...e.view.dom.querySelectorAll(':scope > .pb')].map((el) => (el.classList.contains('pb-hidden') ? 'hidden' : el.classList.contains('in-callout') ? 'in' : '-'));
+
+  it('Enter at the end of an open toggle starts its first child', () => {
+    const e = setup(['toggle:0:Details']);
+    press(e, 'Enter');
+    type(e, 'inside');
+    expect(blocks(e)).toEqual(['toggle:0:Details', 'paragraph:1:inside']);
+  });
+
+  it('a collapsed toggle hides its children, and Enter adds a sibling after them', () => {
+    const e = withAttrs(['toggle:0:Details', 'paragraph:1:a', 'paragraph:2:b', 'after'], 0, { collapsed: true });
+    expect(classes(e)).toEqual(['-', 'hidden', 'hidden', '-']);
+    cursorAt(e, 0, 7);
+    press(e, 'Enter');
+    type(e, 'next');
+    expect(blocks(e)).toEqual(['toggle:0:Details', 'paragraph:1:a', 'paragraph:2:b', 'paragraph:0:next', 'paragraph:0:after']);
+  });
+
+  it('keeps the cursor out of folded blocks', () => {
+    const e = withAttrs(['toggle:0:Details', 'paragraph:1:secret', 'after'], 0, { collapsed: true });
+    // Moving forward into the fold lands after it; moving back lands on the toggle.
+    cursorAt(e, 0, 7);
+    cursorAt(e, 1, 2);
+    expect(e.state.selection.$head.parent.textContent).toBe('after');
+    cursorAt(e, 2, 0);
+    cursorAt(e, 1, 2);
+    expect(e.state.selection.$head.parent.textContent).toBe('Details');
+  });
+
+  it('a callout wraps the blocks indented under it', () => {
+    const e = setup(['callout:0:Note', 'paragraph:1:inside', 'paragraph:2:deeper', 'outside']);
+    expect(classes(e)).toEqual(['-', 'in', 'in', '-']);
+    expect(e.view.dom.querySelector('.pb.in-callout-end')?.textContent).toBe('deeper');
+  });
+
+  it('store collapsed and icon', () => {
+    const e = withAttrs(['toggle:0:T', 'callout:0:C'], 0, { collapsed: true });
+    const rows = docToRows(/** @type {any} */ (e.getJSON()), new Map());
+    expect(rows.map((r) => [r.type, r.props])).toEqual([
+      ['toggle', { collapsed: true }],
+      ['callout', { icon: '💡' }],
+    ]);
   });
 });

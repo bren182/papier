@@ -73,19 +73,19 @@ Tick boxes as they land. Anything unticked in a shipped milestone moves to the n
 ### v0.2 — "it's actually nice"
 
 - [ ] Image + file uploads (drag, paste, resize) with local disk storage
-- [ ] Toggle blocks, callouts, nested/indented everything
+- [x] Toggle blocks, callouts, nested/indented everything
 - [ ] Tables (simple) and `/embed` for links with preview
-- [ ] Trash with restore, 30-day retention
-- [ ] Page icons + covers, emoji picker
-- [ ] Command palette (`Ctrl/Cmd-K`): jump to page, run command
+- [x] Trash with restore, 30-day retention (auto-purge; Delete forever)
+- [x] Page icons + covers, emoji picker — plus layout (full width, small text, font), per-page mood and app colour themes; image covers wait for uploads
+- [x] Command palette (`Ctrl/Cmd-K`): jump to page, run command (`>` for commands only)
 - [ ] Copy/paste of rich content in and out (markdown + HTML clipboard)
 
 ### v0.3 — "databases"
 
 - [ ] Typed properties: text, number, select, multi-select, date, checkbox, URL, person, file, created/edited time — all but person + file landed (those wait on auth + uploads)
-- [ ] Table view with sort, filter, group, hide/show columns — all but group landed (plus column resize/reorder, manual row order)
+- [x] Table view with sort, filter, group, hide/show columns (plus column resize/reorder, manual row order, row selection + bulk actions, Excel-style fill, move/copy rows to another database)
 - [x] Board (kanban) view grouped by select property
-- [ ] List, gallery, calendar views
+- [ ] List, gallery, calendar views — calendar landed
 - [x] Inline databases embedded in a page
 - [x] Relations + rollups (count, sum, % complete, etc.) — core, not optional. Two-way by default (`property_links`, each link stored once), rollups computed in SQL so they sort and filter; property values are searchable too
 - [x] Buttons + automations: button property and page button blocks (set / today / move date / check / +number / link / add row, Undo toast); automations when a row is added, when a property changes, or on a schedule (per database, ⚡ panel)
@@ -418,3 +418,5 @@ that I hate.*
 - Uploading images for backgrounds for the app, and background for headers, background for pages etc. For now we'll assume storage stays local on a user's computer so no syncing yet.
 - Shortcut minigame: a "Practice" button in the keyboard shortcuts dialog (Ctrl+/) starts a Dance Dance Revolution–style drill (like Discord's keybinds easter egg) — shortcuts scroll up as falling prompts, press the right combo in time, streaks + a best score. A fun way to actually learn them. 
 - A small templating language for custom button logic (like Notion's formulas in buttons): a documented set of expressions that compile to whitelisted, parameterised SQLite queries — e.g. "set Reminder to next birthday", "count rows where…" — so buttons and automations can compute values, not just set fixed ones. Plugs into the actions engine (`apps/server/src/db/actions.ts`) as one more action or value type.
+- Noticed a small UX bug with the datepicker, some click actions close the popup immediately like using arrows to click to next month. 
+- The top header space on each page shoul.d be hideable and not shown by dfeefulat i think also the image does not get bluyrred in this header curently

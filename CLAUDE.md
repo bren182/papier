@@ -131,6 +131,53 @@ do. Undo fires nothing. The scheduler (`automations/scheduler.ts`) starts only w
 Duplicating a database copies its automations with remapped ids. UI: the ⚡ button in `Toolbar.jsx`
 opens `AutomationsPanel.jsx`. Conditions reuse `ConditionRow` (the view filter row).
 
+## Trash (`apps/server/src/db/trash.ts`)
+
+`DELETE /api/pages/:id` trashes one page (`archived_at`); everything under it is hidden with it.
+`GET /api/trash` lists only the top-most trashed pages. `POST /api/pages/:id/restore` works as follows:
+- under a live page, it re-appends the owning block (a `page` block, or a `database` block for an inline database);
+- a row goes back into its database, and is refused while the database itself is trashed;
+- with its parent gone, the page moves to the top level.
+
+`DELETE /api/pages/:id/purge` (trashed pages only) and `purgeExpired` (after `RETENTION_DAYS`, run hourly by the
+scheduler) call `purgePages`. That deletes the whole subtree, including other databases' links to it and
+the schema, views and automations of purged databases, and un-twins relations elsewhere. A 404 on
+`GET /api/pages/:id` says `trashed: true` so the page view can offer Restore (`ApiError.data`).
+
+## Appearance, themes, palette (`packages/ui/src/themes.js`, `apps/web/src/components/PageHeader.jsx`)
+
+`pages.appearance` (JSON `Appearance` in core: `cover`, `fullWidth`, `smallText`, `font`, `mood`) merges
+on PATCH; a null value drops a key. Duplicate copies it. **Themes** are `[data-theme]` blocks in `theme.css`
+that swap only the backdrop palette (`--p-walnut…ash`, registered with `@property` so they fade) and the
+accent. `THEMES`/`COVERS` live in `packages/ui`. `theme.js` sets `<html data-theme>`: the open page's mood
+(`usePageMood`) wins over `prefs.theme`. Covers are palette gradients (`coverCss`); image covers wait for
+uploads. Emoji: `EmojiPicker.jsx` + `emojiData.js` (lazy, no dependency). **Command palette:**
+`SearchDialog` with `commands` (`CommandPalette.jsx`; `>` lists commands only; recent pages come from
+`recentPages.js`). Page-owned UI (icon, cover, customise, move) opens through `pageActions.js` events.
+Palette commands chain on `mutateAsync`, because the palette unmounts before the mutation settles.
+
+## Views and rows at scale (`apps/web/src/components/database/`)
+
+**Grouped tables** use `ViewConfig.groupBy` (select, multi-select, checkbox or relation; `GROUPABLE`),
+with one `GroupSection` per value. Each section has its own paged `useRows({ group })`, so the ungrouped
+query is disabled (`useRows(…, { enabled })`). Sections report their rows up, so selection and fill see
+them in display order. The server's `group` handles checkbox (`'true'`/null) and relation (via
+`Relations.hasLink`). **Calendar** (`CalendarView.jsx`, `ViewConfig.dateBy`) fetches a month as two
+date filters on `dateBy` and drags cards to change a `date` value. **Row tools** (`tableTools.jsx`):
+- selection: click / Shift / Ctrl, and the bulk bar;
+- the Excel-style fill handle (pointer events, `data-row-index`);
+- the row menu (⋯ or right-click).
+
+Bulk server routes: `PATCH …/rows/props` and `POST …/rows/delete`. `db/transfer.ts` moves or copies rows
+between databases: values follow property names (`mapProperties`; `addMissing` creates the rest).
+Links that belonged to the old database are scrubbed. `GET …/transfer-preview` backs the dialog, and
+`GET /api/databases` includes each database's `path`.
+
+**Editor blocks:** `toggle` (`collapsed`) and `callout` (`icon`) are lead-column node views
+(`leadView` in `schema.js`). The `Outline` plugin hides blocks under a collapsed toggle (`pb-hidden`), keeps
+the cursor out of them, and marks callout children (`in-callout`). `> ` makes a toggle and `" ` a quote.
+A new page's title takes focus in an effect, never while a dialog is open.
+
 ## Templates (`apps/server/src/db/duplicate.ts`)
 
 A template is a page with `is_template`: a root page (the library, `GET /api/templates`)

@@ -5,7 +5,12 @@ import { api, ApiError } from './client.js';
 
 /** @typedef {import('@papier/core').Page} Page */
 /** @typedef {{ id: string, title: string, titleContent: import('@papier/core').InlineContent | null, icon: string | null }} Crumb */
-/** @typedef {{ title?: string, titleContent?: import('@papier/core').InlineContent, icon?: string | null }} PagePatch */
+/** @typedef {{ cover?: string | null, fullWidth?: boolean | null, smallText?: boolean | null, font?: 'serif' | 'sans' | 'mono' | null, mood?: string | null }} Appearance */
+/** @typedef {{ title?: string, titleContent?: import('@papier/core').InlineContent, icon?: string | null, appearance?: Appearance }} PagePatch */
+/**
+ * A trashed page, as the trash lists it.
+ * @typedef {{ page: Crumb & { kind: string, isTemplate: boolean }, trashedAt: number, parent: Crumb | null, isRow: boolean }} TrashItem
+ */
 /**
  * A page, its ancestors, and — for a database row — its database and values.
  * @typedef {{ page: Page, ancestors: Crumb[], database: { id: string, title: string } | null, props: Record<string, unknown> | null,
@@ -73,14 +78,61 @@ export function useUpdatePage() {
           : input.title !== undefined
             ? { ...input, titleContent: null }
             : input;
+      // Appearance merges, like on the server (null drops a key).
+      const apply = (/** @type {Page} */ p) => ({ ...p, ...patch, ...(patch.appearance ? { appearance: mergeAppearance(p.appearance, patch.appearance) } : {}) });
       qc.setQueriesData({ queryKey: ['pages', 'children'] }, (/** @type {Page[] | undefined} */ list) =>
-        list?.map((p) => (p.id === id ? { ...p, ...patch } : p)),
+        list?.map((p) => (p.id === id ? apply(p) : p)),
       );
       qc.setQueryData(pageKeys.detail(id), (/** @type {{ page: Page, ancestors: Crumb[] } | undefined} */ d) =>
-        d && { ...d, page: { ...d.page, ...patch } },
+        d && { ...d, page: apply(d.page) },
       );
     },
     onError: () => qc.invalidateQueries({ queryKey: pageKeys.all }),
+  });
+}
+
+/** @param {Appearance | undefined} current @param {Appearance} patch */
+function mergeAppearance(current, patch) {
+  return Object.fromEntries(Object.entries({ ...(current ?? {}), ...patch }).filter(([, v]) => v !== null && v !== undefined));
+}
+
+/** Pages in the trash (top-most ones), newest first. @param {string} q */
+export function useTrash(q) {
+  return useQuery({
+    queryKey: ['trash', q],
+    queryFn: () => /** @type {Promise<TrashItem[]>} */ (api(`/trash?q=${encodeURIComponent(q)}`)),
+    placeholderData: (prev) => prev,
+  });
+}
+
+/** Everything restoring or purging a page can change. @param {import('@tanstack/react-query').QueryClient} qc */
+function refreshAfterTrash(qc) {
+  qc.invalidateQueries({ queryKey: ['trash'] });
+  qc.invalidateQueries({ queryKey: pageKeys.all });
+  qc.invalidateQueries({ queryKey: ['templates'] });
+  qc.invalidateQueries({ queryKey: ['db'] });
+}
+
+/** Take a page out of the trash (its page block comes back in its parent). */
+export function useRestorePage() {
+  const qc = useQueryClient();
+  return useMutation({
+    /** @param {string} id */
+    mutationFn: (id) => /** @type {Promise<{ page: Page, parentId: string | null, contentChanged: string | null }>} */ (api(`/pages/${id}/restore`, { method: 'POST' })),
+    onSuccess: (res) => {
+      refreshAfterTrash(qc);
+      if (res.contentChanged) reloadContent(qc, [res.contentChanged]);
+    },
+  });
+}
+
+/** Delete a trashed page for good. */
+export function usePurgePage() {
+  const qc = useQueryClient();
+  return useMutation({
+    /** @param {string} id */
+    mutationFn: (id) => api(`/pages/${id}/purge`, { method: 'DELETE' }),
+    onSuccess: () => refreshAfterTrash(qc),
   });
 }
 
@@ -93,6 +145,7 @@ export function useArchivePage() {
       qc.invalidateQueries({ queryKey: pageKeys.all });
       qc.invalidateQueries({ queryKey: ['templates'] });
       qc.invalidateQueries({ queryKey: ['db'] }); // a row or a database template
+      qc.invalidateQueries({ queryKey: ['trash'] });
       reloadContent(qc, [page.parentId]); // its page block is gone
     },
   });

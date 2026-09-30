@@ -1,16 +1,22 @@
-import { useRef, useState } from 'react';
+import { lazy, Suspense, useRef, useState } from 'react';
 import { useArchivePage, useMovePage } from '../api/pages.js';
 import { useDuplicatePage } from '../api/templates.js';
+import { usePageAction } from '../pageActions.js';
 import { menuItem, Popover } from './database/Popover.jsx';
 import { SearchDialog } from './SearchDialog.jsx';
 
 /** @typedef {import('@papier/core').Page} Page */
 
+const TransferDialog = lazy(() => import('./database/TransferDialog.jsx').then((m) => ({ default: m.TransferDialog })));
+
 /**
- * The open page's ⋯ menu: Duplicate, Save as template, Move to…, Delete.
- * @param {{ page: Page, isRow: boolean, onSelect: (id: string | null) => void }} props
+ * The open page's ⋯ menu: Duplicate, Save as template, Move to…, Delete —
+ * and for a database row, Move / Copy to another database.
+ * @param {{ page: Page, databaseId: string | null, onSelect: (id: string | null) => void }} props
  */
-export function PageMenu({ page, isRow, onSelect }) {
+export function PageMenu({ page, databaseId, onSelect }) {
+  const isRow = Boolean(databaseId);
+  const [transfer, setTransfer] = useState(/** @type {'move' | 'copy' | null} */ (null));
   const ref = useRef(/** @type {HTMLButtonElement | null} */ (null));
   const [open, setOpen] = useState(false);
   const [moving, setMoving] = useState(false);
@@ -19,6 +25,8 @@ export function PageMenu({ page, isRow, onSelect }) {
   const archive = useArchivePage();
   const move = useMovePage();
   const close = () => setOpen(false);
+  // The command palette's "Move to…".
+  usePageAction('move', () => !isRow && !page.isTemplate && setMoving(true));
 
   return (
     <>
@@ -79,6 +87,30 @@ export function PageMenu({ page, isRow, onSelect }) {
               Move to…
             </button>
           )}
+          {isRow && !page.isTemplate && (
+            <>
+              <button
+                type="button"
+                className={menuItem}
+                onClick={() => {
+                  close();
+                  setTransfer('move');
+                }}
+              >
+                Move to another database…
+              </button>
+              <button
+                type="button"
+                className={menuItem}
+                onClick={() => {
+                  close();
+                  setTransfer('copy');
+                }}
+              >
+                Copy to another database…
+              </button>
+            </>
+          )}
           <div className="my-1 h-px bg-line" />
           <button
             type="button"
@@ -93,6 +125,11 @@ export function PageMenu({ page, isRow, onSelect }) {
         </Popover>
       )}
 
+      {transfer && databaseId && (
+        <Suspense fallback={null}>
+          <TransferDialog sourceId={databaseId} rowIds={[page.id]} mode={transfer} onClose={() => setTransfer(null)} />
+        </Suspense>
+      )}
       {moving && (
         <SearchDialog
           label={`Move “${page.title || 'Untitled'}” to…`}

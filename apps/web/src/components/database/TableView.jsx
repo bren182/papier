@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { PROPERTY_TYPES } from '@papier/core/props';
 import { useRows } from '../../api/databases.js';
@@ -8,6 +8,7 @@ import { DB_DRAG_TYPE, TITLE, useDb, visibleColumns } from './context.js';
 import { Icon, ICONS, TYPE_LABELS, TypeIcon } from './meta.jsx';
 import { menuItem, menuLabel, Popover } from './Popover.jsx';
 import { PropertyMenu } from './PropertyMenu.jsx';
+import { BulkBar, FillHandle, RowMenu, TableCtx, useFill, useSelection, useTableTools, useTransfer } from './tableTools.jsx';
 
 /** @typedef {import('../../api/databases.js').Row} Row */
 /** @typedef {import('./context.js').Property} Property */
@@ -16,59 +17,120 @@ const ROW_H = 34;
 const TITLE_W = 280;
 const COL_W = 180;
 const END_W = 40;
+/** The leading column of select boxes. */
+const SELECT_W = 30;
+
+/** Types a table can be grouped by. */
+export const GROUPABLE = new Set(['select', 'multi_select', 'checkbox', 'relation']);
+/** Drag data: the table group a row is dragged out of (its value, JSON). */
+const GROUP_DRAG = 'application/x-papier-group';
 
 /**
  * Rows as a spreadsheet-like table. A full-page table is virtualized and loads
  * more as you scroll; an inline one loads a page at a time behind "Load more".
- * @param {{ newRowId: string | null, onNewRow: () => void }} props
+ * Grouped (`groupBy`), it shows one collapsible section per value instead,
+ * each with its own paged query.
+ * @param {{ newRowId: string | null, onNewRow: (values?: Record<string, unknown>) => void }} props
  */
 export function TableView({ newRowId, onNewRow }) {
-  const { dbId, properties, view, inline } = useDb();
+  const { dbId, properties, view, inline, openRow } = useDb();
   const { sorts, filters } = view.config;
-  const q = useRows(dbId, { sorts, filters, limit: inline ? 25 : 100 });
-  const rows = q.data?.pages.flatMap((p) => p.rows) ?? [];
+  const groupProp = properties.find((p) => p.id === view.config.groupBy && GROUPABLE.has(p.type)) ?? null;
+  const groups = useGroups(groupProp);
+  const q = useRows(dbId, { sorts, filters, limit: inline ? 25 : 100 }, { enabled: !groupProp });
+  const flat = useMemo(() => q.data?.pages.flatMap((p) => p.rows) ?? [], [q.data]);
+  // Grouped: each section reports its loaded rows; selection and fill see them in display order.
+  const [groupRows, setGroupRows] = useState(/** @type {Record<string, Row[]>} */ ({}));
+  const rows = groupProp ? groups.flatMap((g) => groupRows[g.key] ?? []) : flat;
   const total = q.data?.pages[0]?.total ?? 0;
+  /** @param {number} i */
+  const offsetOf = (i) => groups.slice(0, i).reduce((n, g) => n + (groupRows[g.key]?.length ?? 0), 0);
 
   const columns = visibleColumns(properties, view.config);
   const [liveWidths, setLiveWidths] = useState(/** @type {Record<string, number>} */ ({}));
   /** @param {string} id */
   const widthOf = (id) => liveWidths[id] ?? view.config.widths[id] ?? (id === 'title' ? TITLE_W : COL_W);
-  const tableWidth = widthOf('title') + columns.reduce((w, c) => w + widthOf(c.id), 0) + END_W;
+  const tableWidth = SELECT_W + widthOf('title') + columns.reduce((w, c) => w + widthOf(c.id), 0) + END_W;
 
   const rowDnd = useRowDnd(rows);
+  const selection = useSelection(rows, [view.id, sorts, filters]);
+  const { fill, startFill } = useFill(rows);
+  const transfer = useTransfer();
+  const [menu, setMenu] = useState(/** @type {{ row: Row, at: HTMLElement | { x: number, y: number } } | null} */ (null));
+  const tools = {
+    selected: selection.selected,
+    toggle: selection.toggle,
+    fill,
+    startFill,
+    openMenu: (/** @type {Row} */ row, /** @type {HTMLElement | { x: number, y: number }} */ at) => setMenu({ row, at }),
+  };
+  const selectedIds = [...selection.selected];
+  // The menu acts on the selection when the clicked row is part of it.
+  const menuIds = menu ? (selection.selected.has(menu.row.id) && selection.selected.size > 1 ? selectedIds : [menu.row.id]) : [];
 
   return (
-    <div className="-mx-1 overflow-x-auto px-1 pb-2">
-      <div style={{ width: tableWidth, minWidth: '100%' }} className="text-[14px]">
-        <Header columns={columns} widthOf={widthOf} onResize={setLiveWidths} />
-        <Body rows={rows} columns={columns} widthOf={widthOf} newRowId={newRowId} dnd={rowDnd} query={q} virtual={!inline} />
-        <button
-          type="button"
-          onClick={onNewRow}
-          className="flex h-[34px] w-full items-center gap-1.5 border-b border-line px-2 text-left text-[14px] text-faint hover:bg-white/[0.03] hover:text-muted"
-        >
-          <Icon path={ICONS.plus} /> New
-        </button>
-        <div className="flex h-8 items-center gap-3 px-2 text-[12px] text-faint">
-          <span>
-            {total} {total === 1 ? 'row' : 'rows'}
-          </span>
-          {inline && q.hasNextPage && (
-            <button type="button" onClick={() => q.fetchNextPage()} disabled={q.isFetchingNextPage} className="text-muted hover:text-fg">
-              Load {Math.min(25, total - rows.length)} more
-            </button>
+    <TableCtx.Provider value={tools}>
+      <div className="-mx-1 overflow-x-auto px-1 pb-2">
+        {selectedIds.length > 0 && <BulkBar ids={selectedIds} onClear={selection.clear} onTransfer={transfer.open} />}
+        <div style={{ width: tableWidth, minWidth: '100%' }} className="text-[14px]">
+          <Header
+            columns={columns}
+            widthOf={widthOf}
+            onResize={setLiveWidths}
+            allSelected={rows.length > 0 && selection.selected.size === rows.length}
+            onSelectAll={selection.setAll}
+          />
+          {groupProp ? (
+            groups.map((g, i) => (
+              <GroupSection
+                key={g.key}
+                group={g}
+                prop={groupProp}
+                offset={offsetOf(i)}
+                columns={columns}
+                widthOf={widthOf}
+                newRowId={newRowId}
+                allRows={rows}
+                onRows={(key, list) => setGroupRows((prev) => (prev[key] === list ? prev : { ...prev, [key]: list }))}
+                onNewRow={onNewRow}
+              />
+            ))
+          ) : (
+            <>
+              <Body rows={rows} columns={columns} widthOf={widthOf} newRowId={newRowId} dnd={rowDnd} query={q} virtual={!inline} />
+              <button
+                type="button"
+                onClick={() => onNewRow()}
+                className="flex h-[34px] w-full items-center gap-1.5 border-b border-line px-2 text-left text-[14px] text-faint hover:bg-white/[0.03] hover:text-muted"
+              >
+                <Icon path={ICONS.plus} /> New
+              </button>
+              <div className="flex h-8 items-center gap-3 px-2 text-[12px] text-faint">
+                <span>
+                  {total} {total === 1 ? 'row' : 'rows'}
+                </span>
+                {inline && q.hasNextPage && (
+                  <button type="button" onClick={() => q.fetchNextPage()} disabled={q.isFetchingNextPage} className="text-muted hover:text-fg">
+                    Load {Math.min(25, total - rows.length)} more
+                  </button>
+                )}
+              </div>
+            </>
           )}
         </div>
+        {menu && <RowMenu ids={menuIds} anchor={menu.at} onClose={() => setMenu(null)} onOpen={openRow} onTransfer={transfer.open} onDone={selection.clear} />}
+        {transfer.dialog({ sourceId: dbId, onDone: selection.clear })}
       </div>
-    </div>
+    </TableCtx.Provider>
   );
 }
 
 /**
  * @param {{ columns: Property[], widthOf: (id: string) => number,
- *   onResize: import('react').Dispatch<import('react').SetStateAction<Record<string, number>>> }} props
+ *   onResize: import('react').Dispatch<import('react').SetStateAction<Record<string, number>>>,
+ *   allSelected: boolean, onSelectAll: (on: boolean) => void }} props
  */
-function Header({ columns, widthOf, onResize }) {
+function Header({ columns, widthOf, onResize, allSelected, onSelectAll }) {
   const { view, setConfig, properties, m } = useDb();
   const [menu, setMenu] = useState(/** @type {{ prop: Property, el: HTMLElement } | null} */ (null));
   const [adding, setAdding] = useState(/** @type {HTMLElement | null} */ (null));
@@ -160,7 +222,16 @@ function Header({ columns, widthOf, onResize }) {
   };
 
   return (
-    <div role="row" className="flex border-y border-line">
+    <div role="row" className="group/head flex border-y border-line">
+      <div role="columnheader" style={{ width: SELECT_W }} className="flex shrink-0 items-center justify-center">
+        <input
+          type="checkbox"
+          aria-label="Select all rows"
+          checked={allSelected}
+          onChange={(e) => onSelectAll(e.target.checked)}
+          className={`accent-[var(--p-accent)] ${allSelected ? '' : 'opacity-0 group-hover/head:opacity-100 focus-visible:opacity-100'}`}
+        />
+      </div>
       {cell(TITLE)}
       {columns.map(cell)}
       <button
@@ -247,18 +318,18 @@ function Body({ rows, columns, widthOf, newRowId, dnd, query, virtual }) {
     if (virtual && last && last.index >= rows.length - 20 && query.hasNextPage && !query.isFetchingNextPage) query.fetchNextPage();
   }, [virtual, last, rows.length, query]);
 
-  /** @param {Row} row @param {import('react').CSSProperties} [style] */
-  const renderRow = (row, style) => (
-    <TableRow key={row.id} row={row} columns={columns} widthOf={widthOf} editTitle={row.id === newRowId} dnd={dnd} style={style} />
+  /** @param {Row} row @param {number} index @param {import('react').CSSProperties} [style] */
+  const renderRow = (row, index, style) => (
+    <TableRow key={row.id} row={row} index={index} columns={columns} widthOf={widthOf} editTitle={row.id === newRowId} dnd={dnd} style={style} />
   );
 
-  if (!virtual) return <div ref={ref}>{rows.map((r) => renderRow(r))}</div>;
+  if (!virtual) return <div ref={ref}>{rows.map((r, i) => renderRow(r, i))}</div>;
 
   return (
     <div ref={ref} style={{ height: v.getTotalSize(), position: 'relative' }}>
       {items.map((it) => {
         const row = rows[it.index];
-        return row ? renderRow(row, { position: 'absolute', top: 0, left: 0, right: 0, transform: `translateY(${it.start - margin}px)` }) : null;
+        return row ? renderRow(row, it.index, { position: 'absolute', top: 0, left: 0, right: 0, transform: `translateY(${it.start - margin}px)` }) : null;
       })}
     </div>
   );
@@ -274,25 +345,52 @@ function scrollParent(el) {
 }
 
 /**
- * @param {{ row: Row, columns: Property[], widthOf: (id: string) => number, editTitle: boolean,
+ * @param {{ row: Row, index: number, columns: Property[], widthOf: (id: string) => number, editTitle: boolean,
  *   dnd: ReturnType<typeof useRowDnd>, style?: import('react').CSSProperties }} props
  */
-function TableRow({ row, columns, widthOf, editTitle, dnd, style }) {
+function TableRow({ row, index, columns, widthOf, editTitle, dnd, style }) {
   const { m, addOption } = useDb();
+  const tools = useTableTools();
   const drop = dnd.drop?.id === row.id ? dnd.drop.where : null;
+  const selected = tools.selected.has(row.id);
+  const fill = tools.fill;
+  const inFill = fill && index >= Math.min(fill.from, fill.to) && index <= Math.max(fill.from, fill.to);
   return (
     <div
       role="row"
       data-row-id={row.id}
+      data-row-index={index}
+      aria-selected={selected}
       style={style}
       onDragOver={(e) => dnd.over(e, row)}
       onDrop={(e) => dnd.commit(e)}
-      className={`group/row relative flex h-[34px] border-b border-line hover:bg-white/[0.02] ${dnd.dragging === row.id ? 'opacity-50' : ''}`}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        tools.openMenu(row, { x: e.clientX, y: e.clientY });
+      }}
+      className={`group/row relative flex h-[34px] border-b border-line ${selected ? 'bg-accent-soft' : 'hover:bg-white/[0.02]'} ${dnd.dragging === row.id ? 'opacity-50' : ''}`}
     >
       {drop && <span className={`pointer-events-none absolute right-0 left-0 z-10 h-[2px] bg-accent ${drop === 'before' ? '-top-px' : '-bottom-px'}`} />}
+      <div role="cell" style={{ width: SELECT_W }} className="flex shrink-0 items-center justify-center">
+        <input
+          type="checkbox"
+          aria-label={`Select ${row.title || 'Untitled'}`}
+          checked={selected}
+          onChange={() => {}}
+          onClick={(e) => tools.toggle(row.id, e)}
+          className={`accent-[var(--p-accent)] ${selected || tools.selected.size ? '' : 'opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100'}`}
+        />
+      </div>
       <TitleCell row={row} width={widthOf('title')} startEditing={editTitle} />
       {columns.map((p) => (
-        <div key={p.id} role="cell" data-col={p.id} style={{ width: widthOf(p.id) }} className="flex shrink-0 border-r border-line last:border-r-0">
+        <div
+          key={p.id}
+          role="cell"
+          data-col={p.id}
+          style={{ width: widthOf(p.id) }}
+          className={`group/cell relative flex shrink-0 border-r border-line last:border-r-0 ${inFill && fill?.propId === p.id ? 'bg-accent-soft outline outline-1 -outline-offset-1 outline-accent' : ''}`}
+        >
+          <FillHandle index={index} prop={p} value={row.props[p.id]} />
           <ValueCell
             prop={p}
             value={row.props[p.id]}
@@ -346,6 +444,7 @@ function TitleCell({ row, width, startEditing }) {
           onClick={() => setEditing(true)}
           className={`h-full min-w-0 flex-1 truncate px-2 text-left font-medium ${row.title ? 'text-fg-strong' : 'text-faint'}`}
         >
+          {row.icon && <span className="mr-1.5">{row.icon}</span>}
           <TitleText title={row.title} titleContent={row.titleContent} />
         </button>
       )}
@@ -362,10 +461,9 @@ function TitleCell({ row, width, startEditing }) {
   );
 }
 
-/** Trailing cell: drag to reorder (manual order only), click for Open / Delete. @param {{ row: Row, dnd: ReturnType<typeof useRowDnd> }} props */
+/** Trailing cell: drag to reorder (manual order only), click for the row menu. @param {{ row: Row, dnd: ReturnType<typeof useRowDnd> }} props */
 function RowEnd({ row, dnd }) {
-  const { m, openRow } = useDb();
-  const [menu, setMenu] = useState(/** @type {HTMLElement | null} */ (null));
+  const tools = useTableTools();
   return (
     <div style={{ width: END_W }} className="flex shrink-0 items-center justify-center">
       <button
@@ -375,29 +473,139 @@ function RowEnd({ row, dnd }) {
         draggable={dnd.enabled}
         onDragStart={(e) => dnd.start(e, row)}
         onDragEnd={dnd.end}
-        onClick={(e) => setMenu(e.currentTarget)}
+        onClick={(e) => tools.openMenu(row, e.currentTarget)}
         className={`flex size-6 items-center justify-center rounded text-faint opacity-0 group-hover/row:opacity-100 hover:bg-hover hover:text-fg focus-visible:opacity-100 ${dnd.enabled ? 'cursor-grab' : ''}`}
       >
         <Icon path={dnd.enabled ? ICONS.grip : ICONS.dots} />
       </button>
-      {menu && (
-        <Popover anchor={menu} onClose={() => setMenu(null)} width={180} align="end">
-          <button type="button" className={menuItem} onClick={() => openRow(row.id)}>
-            <Icon path={ICONS.open} /> Open
-          </button>
-          <button
-            type="button"
-            className={menuItem}
-            onClick={() => {
-              setMenu(null);
-              m.deleteRow(row.id);
-            }}
-          >
-            <Icon path={ICONS.trash} /> Delete
-          </button>
-        </Popover>
-      )}
     </div>
+  );
+}
+
+/**
+ * @typedef {{ key: string, value: string | null, label: string, icon?: string | null }} Group
+ */
+
+/**
+ * The groups of a grouped table, in order: "No X" first, then each option
+ * (select), Checked/Unchecked (checkbox), or each row of the related database
+ * (relation, the first 50).
+ * @param {Property | null} prop
+ * @returns {Group[]}
+ */
+function useGroups(prop) {
+  const target = prop?.type === 'relation' ? (prop.config.databaseId ?? null) : null;
+  const related = useRows(target ?? '', { limit: 50 }, { enabled: Boolean(target) });
+  if (!prop) return [];
+  const none = { key: 'none', value: null, label: `No ${prop.name}` };
+  if (prop.type === 'checkbox') return [{ key: 'true', value: 'true', label: 'Checked' }, { key: 'none', value: null, label: 'Unchecked' }];
+  if (prop.type === 'relation') {
+    const rows = related.data?.pages.flatMap((p) => p.rows) ?? [];
+    return [none, ...rows.map((r) => ({ key: r.id, value: r.id, label: r.title || 'Untitled', icon: r.icon }))];
+  }
+  return [none, ...(prop.config.options ?? []).map((o) => ({ key: o.id, value: o.id, label: o.name }))];
+}
+
+/** Values that put a new row in a group. @param {Property} prop @param {string | null} value */
+function groupValues(prop, value) {
+  if (value === null) return {};
+  if (prop.type === 'checkbox') return { [prop.id]: true };
+  if (prop.type === 'select') return { [prop.id]: value };
+  return { [prop.id]: [value] };
+}
+
+/**
+ * A row's value after dragging it from one group to another: the old group's
+ * value swapped for the new one (other tags / links stay).
+ * @param {Property} prop @param {unknown} current @param {string | null} from @param {string | null} to
+ */
+function regroup(prop, current, from, to) {
+  if (prop.type === 'select') return to;
+  if (prop.type === 'checkbox') return to === 'true' ? true : null;
+  const ids = Array.isArray(current) ? current.filter((x) => x !== from) : [];
+  const next = to === null ? ids : [...new Set([...ids, to])];
+  return next.length ? next : null;
+}
+
+/**
+ * One group of a grouped table: a header (collapse, name, count), its rows
+ * (paged), "New" in the group. Drop a row from another group to move it here.
+ * @param {{ group: Group, prop: Property, offset: number, columns: Property[], widthOf: (id: string) => number, newRowId: string | null,
+ *   allRows: Row[], onRows: (key: string, rows: Row[]) => void, onNewRow: (values?: Record<string, unknown>) => void }} props
+ */
+function GroupSection({ group, prop, offset, columns, widthOf, newRowId, allRows, onRows, onNewRow }) {
+  const { dbId, view, m } = useDb();
+  const { sorts, filters } = view.config;
+  const q = useRows(dbId, { sorts, filters, group: { propId: prop.id, value: group.value }, limit: 25 });
+  const rows = useMemo(() => q.data?.pages.flatMap((p) => p.rows) ?? [], [q.data]);
+  const total = q.data?.pages[0]?.total ?? 0;
+  const [open, setOpen] = useState(true);
+  const [over, setOver] = useState(false);
+  const dnd = useRowDnd(rows);
+  useEffect(() => onRows(group.key, rows), [rows]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (view.config.hideEmptyGroups && q.data && total === 0) return null;
+
+  /** A row dragged in from another group (not one of ours). @param {import('react').DragEvent} e */
+  const foreign = (e) => e.dataTransfer.types.includes(GROUP_DRAG) && !dnd.dragging;
+
+  return (
+    <section
+      aria-label={group.label}
+      onDragStartCapture={(e) => e.dataTransfer.setData(GROUP_DRAG, JSON.stringify(group.value))}
+      onDragOver={(e) => {
+        if (!foreign(e)) return;
+        e.preventDefault();
+        setOver(true);
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(/** @type {Node | null} */ (e.relatedTarget))) setOver(false);
+      }}
+      onDrop={(e) => {
+        setOver(false);
+        if (!foreign(e)) return;
+        e.preventDefault();
+        const rowId = e.dataTransfer.getData(DB_DRAG_TYPE);
+        const from = /** @type {string | null} */ (JSON.parse(e.dataTransfer.getData(GROUP_DRAG) || 'null'));
+        const row = allRows.find((r) => r.id === rowId);
+        if (row && from !== group.value) m.setProps(row.id, { [prop.id]: regroup(prop, row.props[prop.id], from, group.value) });
+      }}
+      className={over ? 'rounded-md outline outline-1 outline-accent' : ''}
+    >
+      <div className="flex h-10 items-end gap-2 border-b border-line px-1 pb-1.5 text-[13px]">
+        <button
+          type="button"
+          aria-label={`${open ? 'Collapse' : 'Expand'} ${group.label}`}
+          aria-expanded={open}
+          onClick={() => setOpen((o) => !o)}
+          className="flex size-5 items-center justify-center rounded text-muted hover:bg-hover"
+        >
+          <span className={`inline-block text-[10px] transition-transform ${open ? 'rotate-90' : ''}`}>▶</span>
+        </button>
+        <span className={`font-medium ${group.value === null ? 'text-muted' : 'text-fg-strong'}`}>
+          {group.icon && <span className="mr-1">{group.icon}</span>}
+          {group.label}
+        </span>
+        <span className="text-faint">{total}</span>
+      </div>
+      {open && (
+        <>
+          {rows.map((r, i) => (
+            <TableRow key={r.id} row={r} index={offset + i} columns={columns} widthOf={widthOf} editTitle={r.id === newRowId} dnd={dnd} />
+          ))}
+          <div className="flex h-[30px] items-center gap-3 border-b border-line px-2 text-[13px] text-faint">
+            <button type="button" onClick={() => onNewRow(groupValues(prop, group.value))} className="flex items-center gap-1.5 hover:text-muted">
+              <Icon path={ICONS.plus} /> New
+            </button>
+            {q.hasNextPage && (
+              <button type="button" onClick={() => q.fetchNextPage()} disabled={q.isFetchingNextPage} className="text-muted hover:text-fg">
+                Load {Math.min(25, total - rows.length)} more
+              </button>
+            )}
+          </div>
+        </>
+      )}
+    </section>
   );
 }
 

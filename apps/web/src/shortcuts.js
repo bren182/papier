@@ -14,7 +14,7 @@ export const SHORTCUTS = [
   {
     group: 'General',
     items: [
-      { keys: ['Mod', 'K'], label: 'Search pages' },
+      { keys: ['Mod', 'K'], label: 'Search and commands (type > for commands)' },
       { keys: ['Mod', '\\'], label: 'Show / hide the sidebar' },
       { keys: ['Mod', '/'], label: 'Keyboard shortcuts' },
       { keys: ['Esc'], label: 'Close a menu or dialog' },
@@ -56,7 +56,8 @@ export const SHORTCUTS = [
       { keys: ['-', 'Space'], label: 'Bulleted list (or *)', typed: true },
       { keys: ['1.', 'Space'], label: 'Numbered list', typed: true },
       { keys: ['[]', 'Space'], label: 'To-do ([x] starts it checked)', typed: true },
-      { keys: ['>', 'Space'], label: 'Quote', typed: true },
+      { keys: ['>', 'Space'], label: 'Toggle', typed: true },
+      { keys: ['"', 'Space'], label: 'Quote', typed: true },
       { keys: ['```'], label: 'Code block', typed: true },
       { keys: ['---'], label: 'Divider', typed: true },
     ],

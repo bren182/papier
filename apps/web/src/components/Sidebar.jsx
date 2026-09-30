@@ -41,9 +41,10 @@ const navButton =
 
 /**
  * @param {{ selectedId: string | null, onSelect: (id: string | null) => void, onSearch: () => void,
- *   onTemplates: () => void, onShortcuts: () => void, onCollapse: () => void }} props
+ *   onTemplates: () => void, onShortcuts: () => void, onCollapse: () => void,
+ *   onSettings: (anchor: HTMLElement) => void, onTrash: () => void }} props
  */
-export function Sidebar({ selectedId, onSelect, onSearch, onTemplates, onShortcuts, onCollapse }) {
+export function Sidebar({ selectedId, onSelect, onSearch, onTemplates, onShortcuts, onCollapse, onSettings, onTrash }) {
   const [isExpanded, setExpanded] = useExpandedSet();
   const createPage = useCreatePage();
   const archivePage = useArchivePage();
@@ -116,7 +117,7 @@ export function Sidebar({ selectedId, onSelect, onSearch, onTemplates, onShortcu
         <TemplateIcon />
         <span>Templates</span>
       </button>
-      <button type="button" className={navButton}>
+      <button type="button" className={navButton} data-settings-anchor="" onClick={(e) => onSettings(e.currentTarget)}>
         <GearIcon />
         <span>Settings</span>
       </button>
@@ -142,7 +143,7 @@ export function Sidebar({ selectedId, onSelect, onSearch, onTemplates, onShortcu
         <PageList parentId={null} depth={0} path={[]} ctx={ctx} />
       </div>
 
-      <button type="button" className={navButton}>
+      <button type="button" className={navButton} onClick={onTrash}>
         <TrashIcon />
         <span>Trash</span>
       </button>
@@ -292,7 +293,13 @@ function TreeItem({ page, depth, path, ctx }) {
           onClick={() => ctx.onSelect(page.id)}
           className="flex h-full min-w-0 flex-1 items-center gap-1.5 text-left"
         >
-          {isDatabase ? <DatabaseIcon /> : <PageIcon />}
+          {page.icon ? (
+            <span className="flex w-4 shrink-0 justify-center text-[14px] leading-none">{page.icon}</span>
+          ) : isDatabase ? (
+            <DatabaseIcon />
+          ) : (
+            <PageIcon />
+          )}
           <span className={`truncate ${page.title ? '' : 'text-faint'}`}>
             <TitleText title={page.title} titleContent={page.titleContent} />
           </span>

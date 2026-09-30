@@ -231,6 +231,7 @@ function Card({ row, props, editTitle, dragging, onDragStart, onDragEnd }) {
       className={`flex cursor-pointer flex-col gap-1.5 rounded-md border border-line bg-s-sidebar p-2.5 text-left shadow-sm hover:border-white/15 hover:bg-hover ${dragging ? 'opacity-40' : ''}`}
     >
       <span className={`text-[14px] leading-5 font-medium ${row.title ? 'text-fg-strong' : 'text-faint'}`}>
+        {row.icon && <span className="mr-1.5">{row.icon}</span>}
         <TitleText title={row.title} titleContent={row.titleContent} />
       </span>
       {values.map((p) => (

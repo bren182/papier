@@ -5,7 +5,7 @@ import { blockAt, insertBlockAfter, setBlockType } from './blockOps.js';
  * Markdown-style shortcuts typed at the start of a text block. They change the
  * block's type in place, so its id, indent and children are kept.
  *   "# " "## " "### "  headings      "- " "* "  bullet      "1. "  numbered
- *   "[] " "[ ] " "[x] " to-do         "> "       quote       "```"  code
+ *   "[] " "[ ] " "[x] " to-do         "> "       toggle      '" '     quote       "```"  code
  *   "---"               divider
  * (Inline marks — **bold**, *italic*, `code`, ~~strike~~ — come with the mark extensions.)
  */
@@ -16,7 +16,8 @@ const RULES = [
   [/^[-*]\s$/, 'bulletItem', () => ({})],
   [/^1[.)]\s$/, 'numberedItem', () => ({})],
   [/^\[( |x)?\]\s$/, 'todo', (m) => ({ checked: m[1] === 'x' })],
-  [/^>\s$/, 'quote', () => ({})],
+  [/^>\s$/, 'toggle', () => ({})],
+  [/^["“”]\s$/, 'quote', () => ({})],
   [/^```$/, 'codeBlock', () => ({})],
 ];
 

@@ -5,9 +5,11 @@ import { useSelectedPage } from './useSelectedPage.js';
 import { Sidebar } from './components/Sidebar.jsx';
 import { Topbar } from './components/Topbar.jsx';
 import { Page } from './components/Page.jsx';
-import { SearchDialog } from './components/SearchDialog.jsx';
+import { CommandPalette } from './components/CommandPalette.jsx';
+import { SettingsMenu } from './components/SettingsMenu.jsx';
 import { ShortcutsDialog } from './components/ShortcutsDialog.jsx';
 import { TemplateLibrary } from './components/TemplateLibrary.jsx';
+import { TrashDialog } from './components/TrashDialog.jsx';
 import { Toaster } from './components/Toaster.jsx';
 
 export function App() {
@@ -16,6 +18,9 @@ export function App() {
   const [searching, setSearching] = useState(false);
   const [shortcuts, setShortcuts] = useState(false);
   const [library, setLibrary] = useState(/** @type {import('./components/Page.jsx').LibraryTarget | null} */ (null));
+  const [trash, setTrash] = useState(false);
+  // Settings opens from the sidebar button, or from the palette (then anchored on the sidebar's).
+  const [settings, setSettings] = useState(/** @type {HTMLElement | null | false} */ (false));
 
   // Ctrl/Cmd-K anywhere opens search — unless something already used it
   // (over a text selection in the editor it makes a link).
@@ -57,13 +62,36 @@ export function App() {
           onTemplates={() => setLibrary({ parentId: null })}
           onShortcuts={() => setShortcuts(true)}
           onCollapse={() => updatePrefs({ sidebar: false })}
+          onSettings={(el) => setSettings(el)}
+          onTrash={() => setTrash(true)}
         />
       </div>
       <main className="relative flex min-w-0 flex-1 flex-col">
         <Topbar selectedId={selectedId} onSelect={select} prefs={prefs} onChange={updatePrefs} />
         <Page selectedId={selectedId} onSelect={select} onTemplates={setLibrary} />
       </main>
-      {searching && <SearchDialog onClose={() => setSearching(false)} onOpen={select} />}
+      {searching && (
+        <CommandPalette
+          onClose={() => setSearching(false)}
+          onSelect={select}
+          selectedId={selectedId}
+          prefs={prefs}
+          onPrefs={updatePrefs}
+          onTrash={() => setTrash(true)}
+          onTemplates={() => setLibrary({ parentId: null })}
+          onShortcuts={() => setShortcuts(true)}
+          onSettings={() => setSettings(null)}
+        />
+      )}
+      {trash && <TrashDialog onClose={() => setTrash(false)} onOpen={select} />}
+      {settings !== false && (
+        <SettingsMenu
+          anchor={settings ?? document.querySelector('[data-settings-anchor]')}
+          onClose={() => setSettings(false)}
+          prefs={prefs}
+          onChange={updatePrefs}
+        />
+      )}
       {shortcuts && <ShortcutsDialog onClose={() => setShortcuts(false)} />}
       {library && <TemplateLibrary target={library} onClose={() => setLibrary(null)} onOpen={select} />}
       <Toaster />

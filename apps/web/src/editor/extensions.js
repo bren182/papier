@@ -14,7 +14,7 @@ import { DatabaseBlock } from './DatabaseBlock.jsx';
 import { BlockInputRules } from './inputRules.js';
 import { BlockKeymap } from './keymap.js';
 import { dateItems, slashItems } from './menuItems.js';
-import { BLOCK_NODES, ListNumbering, PapierDocument, Text, TreeInvariants } from './schema.js';
+import { BLOCK_NODES, ListNumbering, Outline, PapierDocument, Text, TreeInvariants } from './schema.js';
 import { suggestionMenu } from './SuggestionMenu.jsx';
 
 /** @typedef {import('@tiptap/pm/model').Node} PMNode */
@@ -52,6 +52,10 @@ function placeholderFor(node) {
       return 'To-do';
     case 'quote':
       return 'Quote';
+    case 'toggle':
+      return 'Toggle';
+    case 'callout':
+      return 'Callout';
     case 'paragraph':
       return 'Write, or press ‘/’ for blocks and ‘@’ for dates…';
     default:
@@ -62,15 +66,15 @@ function placeholderFor(node) {
 /**
  * Everything the page body editor is made of.
  * @param {{ pages?: Partial<import('./PageBlock.js').PageBlockOptions>, databases?: Partial<import('./DatabaseBlock.jsx').DatabaseBlockOptions>,
- *   buttons?: Partial<import('./ButtonBlock.jsx').ButtonBlockOptions>, template?: boolean }} [opts]
- *   page, database and button blocks' data and views (none in tests); template: a template page
+ *   buttons?: Partial<import('./ButtonBlock.jsx').ButtonBlockOptions>, callouts?: Partial<import('./schema.js').CalloutOptions>, template?: boolean }} [opts]
+ *   page, database and button blocks' data and views, the callout icon picker (none in tests); template: a template page
  */
-export function bodyExtensions({ pages = {}, databases = {}, buttons = {}, template = false } = {}) {
+export function bodyExtensions({ pages = {}, databases = {}, buttons = {}, callouts = {}, template = false } = {}) {
   return [
     TemplateMode.configure({ enabled: template }),
     PapierDocument,
     Text,
-    ...BLOCK_NODES,
+    ...BLOCK_NODES.map((node) => (node.name === 'callout' ? node.configure(callouts) : node)),
     PageBlock.configure(pages),
     DatabaseBlock.configure(databases),
     ButtonBlock.configure(buttons),
@@ -89,6 +93,7 @@ export function bodyExtensions({ pages = {}, databases = {}, buttons = {}, templ
     }),
     TreeInvariants,
     ListNumbering,
+    Outline,
     BlockKeymap.extend({ priority: 200 }),
     BlockInputRules,
     UndoRedo,

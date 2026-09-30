@@ -101,6 +101,84 @@ body {
   content: attr(data-number) '.';
   font-variant-numeric: tabular-nums;
 }
+/* toggle: an arrow in the lead column; its children fold away (Outline plugin: .pb-hidden) */
+.papier-editor .pb[data-type='toggle'] {
+  --lead: 1.625rem;
+}
+.papier-editor .pb-toggle {
+  position: absolute;
+  left: calc(var(--indent, 0) * var(--step) + 0.15rem);
+  top: calc(2px + (1.625em - 1.25rem) / 2);
+  width: 1.25rem;
+  height: 1.25rem;
+  display: grid;
+  place-content: center;
+  border-radius: 4px;
+  color: var(--p-muted);
+  cursor: pointer;
+  transition: transform 120ms ease;
+  transform: rotate(90deg);
+}
+.papier-editor .pb-toggle:hover {
+  background: var(--s-active);
+  color: var(--p-text);
+}
+.papier-editor .pb[data-type='toggle'][data-collapsed='true'] .pb-toggle {
+  transform: none;
+}
+.papier-editor .pb.pb-hidden {
+  display: none;
+}
+
+/*
+ * callout: a boxed note with an icon; blocks indented under it sit inside the
+ * box (Outline plugin: .in-callout with --callout-indent, .in-callout-end closes it).
+ * Grayscale surface, like everything you read.
+ */
+.papier-editor .pb[data-type='callout'] {
+  --lead: 2rem;
+  margin-top: 4px;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  padding-right: 14px;
+  background: linear-gradient(to right, transparent calc(var(--indent, 0) * var(--step)), var(--s-callout) 0);
+  border-radius: 6px;
+}
+.papier-editor .pb[data-type='callout'] .pb-c {
+  padding-left: 0.5rem;
+}
+.papier-editor .pb[data-type='callout'].callout-open {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  padding-bottom: 2px;
+}
+.papier-editor .pb.in-callout {
+  padding-right: 14px;
+  background: linear-gradient(to right, transparent calc(var(--callout-indent, 0) * var(--step)), var(--s-callout) 0);
+}
+.papier-editor .pb.in-callout-end {
+  padding-bottom: 10px;
+  margin-bottom: 4px;
+  border-bottom-left-radius: 6px;
+  border-bottom-right-radius: 6px;
+}
+.papier-editor .pb-callout-icon {
+  position: absolute;
+  left: calc(var(--indent, 0) * var(--step) + 0.55rem);
+  top: 10px;
+  width: 1.5rem;
+  height: 1.625em;
+  display: grid;
+  place-content: center;
+  border-radius: 4px;
+  font-size: 1.1em;
+  line-height: 1;
+  cursor: pointer;
+}
+.papier-editor .pb-callout-icon:hover {
+  background: var(--s-active);
+}
+
 .papier-editor .pb-check {
   position: absolute;
   left: calc(var(--indent, 0) * var(--step) + 0.3rem);
@@ -205,6 +283,12 @@ body {
 .papier-editor .pb-page:hover {
   background: var(--s-active);
 }
+.papier-editor .pb-page-emoji {
+  width: 18px;
+  text-align: center;
+  font-size: 16px;
+  line-height: 1;
+}
 .papier-editor .pb-page-title {
   color: var(--p-strong);
   font-weight: 500;
@@ -261,6 +345,10 @@ body {
   color: var(--p-faint);
   pointer-events: none;
   white-space: nowrap;
+}
+.papier-editor .pb[data-type='callout'].is-empty::after {
+  top: 10px;
+  left: calc(var(--indent, 0) * var(--step) + var(--lead) + 0.5rem);
 }
 
 /* suggestion "/" and "@" queries while typing */
@@ -350,3 +438,17 @@ body {
     animation-duration: 0.01s;
   }
 }
+
+/* page covers: colour behind the glass, desaturated with the backdrop in grayscale mode */
+.page-cover {
+  background-size: cover;
+  filter: var(--s-backdrop-filter);
+  opacity: 0.9;
+}
+
+/* page layout options (Customise): small text, and the page's font */
+.page-small .papier-editor { font-size: 14px; }
+.page-font-serif .papier-editor,
+.page-font-serif .page-title { font-family: var(--p-font-display); }
+.page-font-mono .papier-editor,
+.page-font-mono .page-title { font-family: var(--p-font-mono); }

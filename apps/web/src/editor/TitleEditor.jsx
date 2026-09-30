@@ -83,7 +83,7 @@ export function TitleEditor({ page, onEnter, template = false }) {
       type: 'doc',
       content: [{ type: 'titleLine', content: inlineToPM(page.titleContent ?? (page.title ? [{ type: 'text', text: page.title }] : [])) }],
     },
-    autofocus: page.title ? false : 'end',
+    autofocus: false,
     immediatelyRender: true,
     shouldRerenderOnTransaction: false,
     editorProps: {
@@ -103,6 +103,16 @@ export function TitleEditor({ page, onEnter, template = false }) {
 
   // Save anything still pending when switching pages.
   useEffect(() => () => flushRef.current(), []);
+
+  // A new, untitled page starts in its title — unless a dialog (the palette, search) is
+  // open by the time it's ready: stealing focus from it would type into the title.
+  useEffect(() => {
+    if (page.title) return;
+    const frame = requestAnimationFrame(() => {
+      if (!editor.isDestroyed && !document.querySelector('[role=dialog][aria-modal=true]')) editor.commands.focus('end');
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [editor]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return <EditorContent editor={editor} />;
 }

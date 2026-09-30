@@ -3,6 +3,7 @@ import { DYNAMIC_TODAY, filterOps, rollupResultType, VALUELESS_OPS } from '@papi
 import { useAutomations } from '../../api/automations.js';
 import { AutomationsPanel } from './AutomationsPanel.jsx';
 import { RefChip, RelationPicker } from './cells.jsx';
+import { GROUPABLE } from './TableView.jsx';
 import { defaultTemplate, orderedProperties, TITLE, useDb } from './context.js';
 import { Icon, ICONS, OP_LABELS, TypeIcon } from './meta.jsx';
 import { field, menuItem, menuLabel, Popover } from './Popover.jsx';
@@ -16,8 +17,9 @@ const activeTool = 'text-accent-text hover:text-accent-text';
  */
 export function Toolbar({ onNew }) {
   const { view, dbId } = useDb();
-  const [open, setOpen] = useState(/** @type {'sort' | 'filter' | 'props' | 'new' | 'auto' | null} */ (null));
-  const refs = { sort: useRef(null), filter: useRef(null), props: useRef(null), new: useRef(null), auto: useRef(null) };
+  const [open, setOpen] = useState(/** @type {'sort' | 'filter' | 'props' | 'new' | 'auto' | 'group' | null} */ (null));
+  const refs = { sort: useRef(null), filter: useRef(null), props: useRef(null), new: useRef(null), auto: useRef(null), group: useRef(null) };
+  const grouped = view.type === 'table' && Boolean(view.config.groupBy);
   const close = () => setOpen(null);
   const { sorts, filters } = view.config;
   const running = (useAutomations(dbId).data ?? []).filter((a) => a.enabled).length;
@@ -35,6 +37,12 @@ export function Toolbar({ onNew }) {
         <Icon path={ICONS.bolt} />
         {running ? running : null}
       </button>
+      {view.type === 'table' && (
+        <button ref={refs.group} type="button" className={`${toolButton} ${grouped ? activeTool : ''}`} onClick={() => setOpen('group')}>
+          <Icon path={ICONS.group} />
+          Group
+        </button>
+      )}
       <button ref={refs.filter} type="button" className={`${toolButton} ${filters.length ? activeTool : ''}`} onClick={() => setOpen('filter')}>
         <Icon path={ICONS.filter} />
         Filter{filters.length ? ` · ${filters.length}` : ''}
@@ -63,7 +71,44 @@ export function Toolbar({ onNew }) {
       {open === 'props' && <PropertiesMenu anchor={refs.props.current} onClose={close} />}
       {open === 'new' && <NewMenu anchor={refs.new.current} onClose={close} onNew={onNew} />}
       {open === 'auto' && <AutomationsPanel anchor={refs.auto.current} onClose={close} />}
+      {open === 'group' && <GroupMenu anchor={refs.group.current} onClose={close} />}
     </div>
+  );
+}
+
+/**
+ * Group a table by a select, multi-select, checkbox or relation; optionally hide empty groups.
+ * @param {{ anchor: HTMLElement | null, onClose: () => void }} props
+ */
+function GroupMenu({ anchor, onClose }) {
+  const { properties, view, setConfig } = useDb();
+  const options = properties.filter((p) => GROUPABLE.has(p.type));
+  const current = view.config.groupBy;
+  return (
+    <Popover anchor={anchor} onClose={onClose} width={240}>
+      <div className={menuLabel}>Group by</div>
+      <button type="button" className={menuItem} onClick={() => setConfig({ groupBy: null })}>
+        <span className="flex-1">None</span>
+        {!current && <span className="text-accent">✓</span>}
+      </button>
+      {options.map((p) => (
+        <button key={p.id} type="button" className={menuItem} onClick={() => setConfig({ groupBy: p.id })}>
+          <TypeIcon type={p.type} />
+          <span className="flex-1">{p.name}</span>
+          {current === p.id && <span className="text-accent">✓</span>}
+        </button>
+      ))}
+      {!options.length && <div className="px-2 py-1 text-[12px] text-muted">Add a select, checkbox or relation to group by.</div>}
+      {current && (
+        <>
+          <div className="my-1 h-px bg-line" />
+          <button type="button" className={menuItem} onClick={() => setConfig({ hideEmptyGroups: !view.config.hideEmptyGroups })}>
+            <span className="flex-1">Hide empty groups</span>
+            {view.config.hideEmptyGroups && <span className="text-accent">✓</span>}
+          </button>
+        </>
+      )}
+    </Popover>
   );
 }
 

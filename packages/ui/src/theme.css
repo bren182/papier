@@ -98,3 +98,69 @@
 @media (prefers-reduced-motion: reduce) {
   :is(.p-drift, .p-drift-slow, .p-sway, .p-sway-slow, .p-mote) { animation: none; }
 }
+
+/*
+ * Colour themes (themes.js): each swaps the backdrop palette and the accent.
+ * <html data-theme> is the app's theme, or the open page's mood. Registered as
+ * colours so a change of theme fades rather than jumps.
+ */
+@property --p-walnut { syntax: '<color>'; inherits: true; initial-value: #46351d; }
+@property --p-olive { syntax: '<color>'; inherits: true; initial-value: #646f4b; }
+@property --p-steel { syntax: '<color>'; inherits: true; initial-value: #839d9a; }
+@property --p-sky { syntax: '<color>'; inherits: true; initial-value: #7bb2d9; }
+@property --p-ash { syntax: '<color>'; inherits: true; initial-value: #bfd2bf; }
+
+:root {
+  transition: --p-walnut 900ms ease, --p-olive 900ms ease, --p-steel 900ms ease, --p-sky 900ms ease, --p-ash 900ms ease;
+}
+
+[data-theme='dusk'] {
+  --p-walnut: #3b2238;
+  --p-olive: #6b3f5c;
+  --p-steel: #a27a9a;
+  --p-sky: #d99ab4;
+  --p-ash: #f0cfd6;
+  --p-accent: #d99ab4;
+  --p-accent-soft: rgb(217 154 180 / 0.16);
+  --p-accent-text: #ecc3d3;
+}
+[data-theme='ocean'] {
+  --p-walnut: #10303a;
+  --p-olive: #1f5560;
+  --p-steel: #4f8f9a;
+  --p-sky: #6cc3d5;
+  --p-ash: #bfe6ea;
+  --p-accent: #6cc3d5;
+  --p-accent-soft: rgb(108 195 213 / 0.16);
+  --p-accent-text: #a8e0ea;
+}
+[data-theme='ember'] {
+  --p-walnut: #4a2414;
+  --p-olive: #7a3b1c;
+  --p-steel: #b0703f;
+  --p-sky: #e8a45c;
+  --p-ash: #f2d3a8;
+  --p-accent: #e8a45c;
+  --p-accent-soft: rgb(232 164 92 / 0.16);
+  --p-accent-text: #f2c690;
+}
+[data-theme='meadow'] {
+  --p-walnut: #3d3a17;
+  --p-olive: #5f6b2b;
+  --p-steel: #9aa56a;
+  --p-sky: #cdbb62;
+  --p-ash: #e3e8c2;
+  --p-accent: #cdbb62;
+  --p-accent-soft: rgb(205 187 98 / 0.16);
+  --p-accent-text: #e6d894;
+}
+[data-theme='frost'] {
+  --p-walnut: #26303d;
+  --p-olive: #3e5166;
+  --p-steel: #8aa3bd;
+  --p-sky: #a9c8ea;
+  --p-ash: #e6eef7;
+  --p-accent: #a9c8ea;
+  --p-accent-soft: rgb(169 200 234 / 0.16);
+  --p-accent-text: #cfe1f5;
+}

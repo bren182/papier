@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { useDatabase, useDatabaseMutations } from '../../api/databases.js';
 import { DbCtx, defaultTemplate, useDb } from './context.js';
 import { BoardView } from './BoardView.jsx';
+import { CalendarView } from './CalendarView.jsx';
 import { Icon, ICONS } from './meta.jsx';
 import { field, menuItem, Popover } from './Popover.jsx';
 import { TableView } from './TableView.jsx';
@@ -51,10 +52,14 @@ export function DatabaseView({ databaseId, inline = false, viewId, onViewChange,
   if (isPending) return <div className="h-24" />;
   if (isError || !ctx || !view) return <p className="text-[14px] text-muted">Couldn’t load this database.</p>;
 
-  /** A new row: from `templateId`, else the view's default template, else blank (null = blank). @param {string | null} [templateId] */
-  const newRow = async (templateId) => {
+  /**
+   * A new row: from `templateId`, else the view's default template, else blank (null = blank).
+   * `values` start it in a group (a table group's "New").
+   * @param {string | null} [templateId] @param {Record<string, unknown>} [values]
+   */
+  const newRow = async (templateId, values = {}) => {
     const template = templateId === undefined ? defaultTemplate(view, data.templates ?? []) : templateId;
-    const row = await m.addRow({ props: prefill(view, data.properties), templateId: template });
+    const row = await m.addRow({ props: { ...prefill(view, data.properties), ...values }, templateId: template });
     // A templated row already has its title and content: open it rather than rename in place.
     if (template) onOpenRow(row.id);
     else setNewRowId(row.id);
@@ -68,7 +73,13 @@ export function DatabaseView({ databaseId, inline = false, viewId, onViewChange,
           <ViewTabs views={views} active={view} onChoose={choose} />
           <Toolbar onNew={newRow} />
         </div>
-        {view.type === 'board' ? <BoardView /> : <TableView newRowId={newRowId} onNewRow={() => newRow()} />}
+        {view.type === 'board' ? (
+          <BoardView />
+        ) : view.type === 'calendar' ? (
+          <CalendarView onNewRow={(values) => newRow(undefined, values)} />
+        ) : (
+          <TableView newRowId={newRowId} onNewRow={(values) => newRow(undefined, values)} />
+        )}
       </div>
     </DbCtx.Provider>
   );
@@ -113,7 +124,7 @@ function ViewTabs({ views, active, onChoose }) {
             v.id === active.id ? 'bg-hover font-medium text-fg-strong' : 'text-muted hover:bg-hover hover:text-fg'
           }`}
         >
-          <Icon path={v.type === 'board' ? ICONS.board : ICONS.table} />
+          <Icon path={LAYOUTS[v.type]?.icon ?? ICONS.table} />
           {v.name}
         </button>
       ))}
@@ -130,23 +141,30 @@ function ViewTabs({ views, active, onChoose }) {
   );
 }
 
+/** The view layouts, with their names and icons. */
+const LAYOUTS = /** @type {Record<'table' | 'board' | 'calendar', { name: string, icon: string }>} */ ({
+  table: { name: 'Table', icon: ICONS.table },
+  board: { name: 'Board', icon: ICONS.board },
+  calendar: { name: 'Calendar', icon: ICONS.calendar },
+});
+const LAYOUT_TYPES = /** @type {const} */ (['table', 'board', 'calendar']);
+
 /** @param {{ anchor: HTMLElement | null, onClose: () => void, onAdded: (id: string) => void }} props */
 function AddViewMenu({ anchor, onClose, onAdded }) {
   const { m } = useDb();
-  /** @param {'table' | 'board'} type */
+  /** @param {'table' | 'board' | 'calendar'} type */
   const add = async (type) => {
     onClose();
-    const view = await m.addView({ name: type === 'board' ? 'Board' : 'Table', type });
+    const view = await m.addView({ name: LAYOUTS[type].name, type });
     onAdded(view.id);
   };
   return (
     <Popover anchor={anchor} onClose={onClose} width={180}>
-      <button type="button" className={menuItem} onClick={() => add('table')}>
-        <Icon path={ICONS.table} /> Table
-      </button>
-      <button type="button" className={menuItem} onClick={() => add('board')}>
-        <Icon path={ICONS.board} /> Board
-      </button>
+      {LAYOUT_TYPES.map((t) => (
+        <button key={t} type="button" className={menuItem} onClick={() => add(t)}>
+          <Icon path={LAYOUTS[t].icon} /> {LAYOUTS[t].name}
+        </button>
+      ))}
     </Popover>
   );
 }
@@ -181,10 +199,10 @@ function ViewMenu({ view, anchor, canDelete, onClose, onDeleted }) {
           className={field}
         />
       </div>
-      {(/** @type {const} */ (['table', 'board'])).map((t) => (
+      {LAYOUT_TYPES.map((t) => (
         <button key={t} type="button" className={menuItem} onClick={() => m.updateView(view, { type: t })}>
-          <Icon path={t === 'board' ? ICONS.board : ICONS.table} />
-          <span className="flex-1">{t === 'board' ? 'Board' : 'Table'}</span>
+          <Icon path={LAYOUTS[t].icon} />
+          <span className="flex-1">{LAYOUTS[t].name}</span>
           {view.type === t && <span className="text-accent">✓</span>}
         </button>
       ))}

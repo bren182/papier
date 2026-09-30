@@ -50,6 +50,7 @@ export function Topbar({ selectedId, onSelect, prefs, onChange }) {
                   aria-current={last ? 'page' : undefined}
                   className={`max-w-[220px] truncate rounded px-1.5 py-0.5 hover:bg-s-active ${last ? 'text-fg' : 'text-muted'}`}
                 >
+                  {crumb.icon && <span className="mr-1">{crumb.icon}</span>}
                   <TitleText title={crumb.title} titleContent={crumb.titleContent} />
                 </button>
               </span>
@@ -78,7 +79,7 @@ export function Topbar({ selectedId, onSelect, prefs, onChange }) {
       <button type="button" className={toggle} onClick={() => onChange({ motion: !prefs.motion })}>
         {prefs.motion ? 'Pause motion' : 'Play motion'}
       </button>
-      {data && <PageMenu page={data.page} isRow={Boolean(data.database)} onSelect={onSelect} />}
+      {data && <PageMenu page={data.page} databaseId={data.database?.id ?? null} onSelect={onSelect} />}
     </header>
   );
 }

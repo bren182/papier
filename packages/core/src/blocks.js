@@ -13,6 +13,8 @@ export const BLOCK_TYPES = /** @type {const} */ ([
   'bulleted_list',
   'numbered_list',
   'todo',
+  'toggle', // props.collapsed: its indented children are folded away
+  'callout', // props.icon: a boxed note; its indented children sit inside the box
   'quote',
   'code',
   'divider',

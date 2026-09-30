@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
+import { DEFAULT_THEME } from '@papier/ui';
+import { setAppTheme } from './theme.js';
 
 /**
- * @typedef {{ mode: 'ambient' | 'grayscale', glass: 'frosted' | 'clear', motion: boolean, sidebar: boolean }} Prefs
+ * @typedef {{ mode: 'ambient' | 'grayscale', glass: 'frosted' | 'clear', motion: boolean, sidebar: boolean, theme: string }} Prefs
+ *   theme: a colour theme id (@papier/ui THEMES)
  */
 
 const KEY = 'papier.prefs';
 
 /** @type {Prefs} */
-const DEFAULTS = { mode: 'ambient', glass: 'frosted', motion: true, sidebar: true };
+const DEFAULTS = { mode: 'ambient', glass: 'frosted', motion: true, sidebar: true, theme: DEFAULT_THEME };
 
 /** @returns {Prefs} */
 function load() {
@@ -21,7 +24,8 @@ function load() {
 
 /**
  * Display preferences, persisted per device and mirrored onto <html> as
- * data-mode / data-glass / data-motion so the theme tokens can react.
+ * data-mode / data-glass / data-motion (and data-theme, via theme.js) so the
+ * theme tokens can react.
  */
 export function usePrefs() {
   const [prefs, setPrefs] = useState(load);
@@ -31,6 +35,7 @@ export function usePrefs() {
     root.dataset.mode = prefs.mode;
     root.dataset.glass = prefs.glass;
     root.dataset.motion = prefs.motion ? 'on' : 'off';
+    setAppTheme(prefs.theme);
     try {
       localStorage.setItem(KEY, JSON.stringify(prefs));
     } catch {

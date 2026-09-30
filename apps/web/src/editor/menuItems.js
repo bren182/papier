@@ -46,7 +46,9 @@ export const BLOCK_TYPES = [
   { title: 'Bulleted list', icon: '•', aliases: ['ul', 'bullet', 'list'], type: 'bulletItem' },
   { title: 'Numbered list', icon: '1.', aliases: ['ol', 'number', 'ordered'], type: 'numberedItem' },
   { title: 'To-do list', icon: '☐', aliases: ['todo', 'task', 'check', 'checkbox'], type: 'todo' },
+  { title: 'Toggle', icon: '▸', aliases: ['toggle list', 'collapse', 'fold', 'details'], type: 'toggle' },
   { title: 'Quote', icon: '❝', aliases: ['blockquote', 'citation'], type: 'quote' },
+  { title: 'Callout', icon: '💡', aliases: ['note', 'tip', 'info', 'aside', 'box'], type: 'callout' },
   { title: 'Code', icon: '</>', aliases: ['codeblock', 'snippet', 'pre'], type: 'codeBlock' },
   { title: 'Divider', icon: '—', aliases: ['hr', 'line', 'separator', 'rule'], type: 'divider' },
 ];

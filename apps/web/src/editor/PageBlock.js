@@ -11,7 +11,7 @@ import { formatDateMention } from './dates.js';
  * works headless (tests) too.
  */
 
-/** @typedef {{ title: string, titleContent: import('@papier/core').InlineContent | null, kind?: string } | null} PageInfo  null = deleted / missing */
+/** @typedef {{ title: string, titleContent: import('@papier/core').InlineContent | null, kind?: string, icon?: string | null } | null} PageInfo  null = deleted / missing */
 /**
  * @typedef {{
  *   watchPage: ((pageId: string, onChange: (page: PageInfo | undefined) => void) => () => void) | null,
@@ -84,7 +84,8 @@ export const PageBlock = Node.create({
       inner.className = 'pb-c pb-page';
       inner.contentEditable = 'false';
       inner.innerHTML = PAGE_ICON;
-      let isDatabase = false;
+      /** Which icon shows: the page's emoji, or the page/database glyph. */
+      let shown = 'page';
       const label = document.createElement('span');
       label.className = 'pb-page-title';
       inner.append(label);
@@ -97,10 +98,17 @@ export const PageBlock = Node.create({
         const text = page === undefined ? '' : page === null ? 'Deleted page' : titleOf(page) || 'Untitled';
         label.textContent = text;
         label.classList.toggle('is-muted', !page || !titleOf(page));
-        // A full-page database shows a table icon.
-        if (Boolean(page?.kind === 'database') !== isDatabase) {
-          isDatabase = !isDatabase;
-          /** @type {Element} */ (inner.firstElementChild).outerHTML = isDatabase ? DATABASE_ICON : PAGE_ICON;
+        // The page's emoji, else a table icon for a full-page database, else a page icon.
+        const want = page?.icon ? `emoji:${page.icon}` : page?.kind === 'database' ? 'database' : 'page';
+        if (want !== shown) {
+          shown = want;
+          const first = /** @type {Element} */ (inner.firstElementChild);
+          if (page?.icon) {
+            const emoji = document.createElement('span');
+            emoji.className = 'pb-page-emoji';
+            emoji.textContent = page.icon;
+            first.replaceWith(emoji);
+          } else first.outerHTML = want === 'database' ? DATABASE_ICON : PAGE_ICON;
         }
       };
 

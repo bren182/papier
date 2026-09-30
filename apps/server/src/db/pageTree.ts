@@ -21,8 +21,11 @@ const owning = sql`(${sql.join(OWNING_BLOCKS.map((t) => sql`${t}`), sql`, `)})`;
 type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 type Conn = Db | Tx;
 
-/** Append a page block for `pageId` at the end of `parentId`'s top-level content. */
-export function appendPageBlock(db: Conn, parentId: string, pageId: string) {
+/**
+ * Append a block owning `pageId` at the end of `parentId`'s top-level content:
+ * a page block, or a database block for an inline database (restored from the trash).
+ */
+export function appendPageBlock(db: Conn, parentId: string, pageId: string, type: 'page' | 'database' = 'page') {
   const last = db
     .select({ orderKey: blocks.orderKey })
     .from(blocks)
@@ -36,7 +39,7 @@ export function appendPageBlock(db: Conn, parentId: string, pageId: string) {
       id: randomUUID(),
       pageId: parentId,
       parentId: null,
-      type: 'page',
+      type,
       orderKey: orderBetween(last?.orderKey ?? null, null),
       props: { pageId },
       content: [],

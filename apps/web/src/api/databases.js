@@ -6,8 +6,9 @@ import { today } from './templates.js';
 /**
  * @typedef {import('@papier/core/props').PropertyDef & { order: string }} Property
  * @typedef {{ sorts: { propId: string, dir: 'asc' | 'desc' | 'upcoming' }[], filters: { propId: string, op: string, value?: string | number | boolean | null }[],
- *   hidden: string[], widths: Record<string, number>, propOrder: string[], groupBy: string | null, template: string | null }} ViewConfig
- * @typedef {{ id: string, name: string, type: 'table' | 'board', config: ViewConfig, order: string }} View
+ *   hidden: string[], widths: Record<string, number>, propOrder: string[], groupBy: string | null, template: string | null,
+ *   hideEmptyGroups?: boolean, dateBy?: string | null }} ViewConfig
+ * @typedef {{ id: string, name: string, type: 'table' | 'board' | 'calendar', config: ViewConfig, order: string }} View
  * @typedef {{ id: string, title: string, titleContent: import('@papier/core').InlineContent | null, icon: string | null }} RowTemplate
  * @typedef {{ id: string, properties: Property[], views: View[], templates: RowTemplate[] }} DatabaseSchema
  * @typedef {{ id: string, title: string, titleContent: import('@papier/core').InlineContent | null, icon: string | null,
@@ -15,7 +16,7 @@ import { today } from './templates.js';
  * @typedef {{ sorts?: ViewConfig['sorts'], filters?: ViewConfig['filters'], group?: { propId: string, value: string | null }, limit?: number }} RowQuery
  * @typedef {{ title: string, titleContent: import('@papier/core').InlineContent | null, icon: string | null }} Ref  a row a relation links to
  * @typedef {{ rows: Row[], total: number, refs: Record<string, Ref> }} RowPage
- * @typedef {{ id: string, title: string, titleContent: import('@papier/core').InlineContent | null, icon: string | null }} DatabaseSummary
+ * @typedef {{ id: string, title: string, titleContent: import('@papier/core').InlineContent | null, icon: string | null, path: string[] }} DatabaseSummary
  */
 
 /**
@@ -67,10 +68,12 @@ export function useDatabase(id) {
  * Rows for a view, a page at a time; filtering and sorting happen on the server.
  * @param {string} id
  * @param {RowQuery} q
+ * @param {{ enabled?: boolean }} [opts]  false: don't fetch (e.g. a grouped table fetches per group)
  */
-export function useRows(id, q) {
+export function useRows(id, q, { enabled = true } = {}) {
   const limit = q.limit ?? 50;
   return useInfiniteQuery({
+    enabled,
     queryKey: dbKeys.query(id, q),
     queryFn: async ({ pageParam }) => {
       const page = /** @type {RowPage} */ (
@@ -116,6 +119,9 @@ export function useDatabaseMutations(dbId) {
   const patchSchema = (fn) => qc.setQueryData(dbKeys.schema(dbId), (/** @type {DatabaseSchema | undefined} */ s) => s && fn(s));
 
   return {
+    /** Re-query every database's rows (after changes made elsewhere: restores, duplicates). */
+    refresh: () => qc.invalidateQueries(allRows),
+
     /** @param {{ name: string, type: string, config?: object, afterId?: string }} body */
     addProperty: async (body) => {
       const prop = /** @type {Property} */ (await api(`/databases/${dbId}/properties`, { method: 'POST', body }));
@@ -146,7 +152,7 @@ export function useDatabaseMutations(dbId) {
       refreshAll();
     },
 
-    /** @param {{ name: string, type: 'table' | 'board', config?: Partial<ViewConfig> }} body */
+    /** @param {{ name: string, type: 'table' | 'board' | 'calendar', config?: Partial<ViewConfig> }} body */
     addView: async (body) => {
       const view = /** @type {View} */ (await api(`/databases/${dbId}/views`, { method: 'POST', body }));
       patchSchema((s) => ({ ...s, views: [...s.views, view] }));
@@ -226,7 +232,50 @@ export function useDatabaseMutations(dbId) {
       await api(`/pages/${rowId}`, { method: 'DELETE' });
       refreshRows();
     },
+
+    /**
+     * The same values on many rows (fill down, bulk "set"). Optimistic, like setProps.
+     * @param {string[]} rowIds @param {Record<string, unknown>} values
+     */
+    setMany: async (rowIds, values) => {
+      for (const id of rowIds) patchCachedRow(qc, dbId, id, (r) => ({ ...r, props: withValues(r.props, values) }));
+      try {
+        await api(`/databases/${dbId}/rows/props`, { method: 'PATCH', body: { rowIds, values } });
+      } finally {
+        qc.invalidateQueries(allRows);
+      }
+    },
+
+    /** Trash many rows; returns the ids trashed. @param {string[]} rowIds */
+    deleteRows: async (rowIds) => {
+      const res = /** @type {{ rows: string[] }} */ (await api(`/databases/${dbId}/rows/delete`, { method: 'POST', body: { rowIds } }));
+      refreshRows();
+      qc.invalidateQueries({ queryKey: ['trash'] });
+      return res.rows;
+    },
   };
+}
+
+/**
+ * How a database's properties land in another one (for the move/copy dialog).
+ * @typedef {{ id: string, name: string, type: string }} PropSummary
+ * @typedef {{ mapped: { from: PropSummary, to: PropSummary, convert: boolean }[], dropped: PropSummary[] }} TransferMapping
+ * @param {string} sourceId @param {string | null} targetId
+ */
+export function useTransferPreview(sourceId, targetId) {
+  return useQuery({
+    queryKey: ['db', sourceId, 'transfer', targetId],
+    queryFn: () => /** @type {Promise<TransferMapping>} */ (api(`/databases/${sourceId}/transfer-preview?targetId=${targetId}`)),
+    enabled: Boolean(targetId),
+  });
+}
+
+/**
+ * Move or copy rows to another database; values follow property names.
+ * @param {string} sourceId @param {{ rowIds: string[], targetId: string, mode: 'move' | 'copy', addMissing: boolean }} body
+ */
+export function transferRows(sourceId, body) {
+  return /** @type {Promise<TransferMapping & { rows: string[] }>} */ (api(`/databases/${sourceId}/rows/transfer`, { method: 'POST', body: { ...body, today: today() } }));
 }
 
 /** @param {Record<string, unknown>} props @param {Record<string, unknown>} values */

@@ -3,8 +3,10 @@ import { useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client.js';
 import { ApiError } from '../api/client.js';
 import { useContentVersion } from '../api/blocks.js';
-import { pageKeys, useCreatePage, usePage } from '../api/pages.js';
+import { pageKeys, useCreatePage, usePage, useRestorePage } from '../api/pages.js';
 import { useDuplicatePage } from '../api/templates.js';
+import { rememberRecent } from '../recentPages.js';
+import { layoutClasses, PageCover, PageDecor, usePageMood } from './PageHeader.jsx';
 import { TitleText } from './TitleText.jsx';
 
 /** @typedef {import('@papier/core').Page} PageData */
@@ -21,7 +23,7 @@ const loadDatabases = () => import('./database/index.js');
 const DatabaseView = lazy(() => loadDatabases().then((m) => ({ default: m.DatabaseView })));
 const RowProperties = lazy(() => loadDatabases().then((m) => ({ default: m.RowProperties })));
 
-const titleClass = 'font-display text-[40px] leading-[48px] font-semibold tracking-[-0.01em] text-fg-strong';
+const titleClass = 'page-title font-display text-[40px] leading-[48px] font-semibold tracking-[-0.01em] text-fg-strong';
 
 /**
  * @param {{ selectedId: string | null, onSelect: (id: string | null) => void,
@@ -38,25 +40,32 @@ export function Page({ selectedId, onSelect, onTemplates }) {
   useEffect(() => setEmpty(false), [selectedId]);
   // A brand-new page can still become a database instead.
   const canStartAs = Boolean(data && empty && !isDatabase && !data.database && !data.page.hasChildren);
+  const look = data?.page.appearance;
+  usePageMood(data?.page);
+  useEffect(() => {
+    if (data?.page) rememberRecent(data.page);
+  }, [data?.page]);
+  const width = look?.fullWidth ? 'max-w-none' : isDatabase ? 'max-w-[1240px]' : 'max-w-[784px]';
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
-      {/* the cover: a clear window onto the backdrop */}
-      <div className="h-[170px]" />
+      {/* the cover: a clear window onto the backdrop, or a gradient cover */}
+      <PageCover page={data?.page} />
 
       <div className="p-glass min-h-[calc(100%-170px)] border-t border-white/5 bg-s-page pb-24">
         {/* px-14: room for the block handles, inside the column */}
-        <article className={`mx-auto flex w-full flex-col px-14 pt-10 ${isDatabase ? 'max-w-[1240px]' : 'max-w-[784px]'}`}>
+        <article className={`mx-auto flex w-full flex-col px-14 pt-10 ${width} ${layoutClasses(look)}`}>
           {!selectedId ? (
             <EmptyState onSelect={onSelect} />
           ) : error ? (
-            <Message>
-              {error instanceof ApiError && error.status === 404
-                ? 'This page is in the trash or doesn’t exist.'
-                : 'Couldn’t load this page.'}
-            </Message>
+            error instanceof ApiError && error.status === 404 && error.data.trashed ? (
+              <Trashed id={selectedId} onSelect={onSelect} />
+            ) : (
+              <Message>{error instanceof ApiError && error.status === 404 ? 'This page doesn’t exist.' : 'Couldn’t load this page.'}</Message>
+            )
           ) : isPending ? null : (
             <>
+              <PageDecor page={data.page} />
               {(data.page.isTemplate || data.inTemplate) && (
                 <TemplateBanner page={data.page} database={data.database} inTemplate={data.inTemplate} onSelect={onSelect} />
               )}
@@ -197,6 +206,28 @@ function EmptyState({ onSelect }) {
       >
         New page
       </button>
+    </div>
+  );
+}
+
+/**
+ * An open page that's in the trash (it, or a page above it): offer it back.
+ * @param {{ id: string, onSelect: (id: string | null) => void }} props
+ */
+function Trashed({ id, onSelect }) {
+  const restore = useRestorePage();
+  return (
+    <div className="flex flex-col items-start gap-3">
+      <Message>This page is in the trash.</Message>
+      <button
+        type="button"
+        disabled={restore.isPending}
+        onClick={() => restore.mutate(id, { onSuccess: () => onSelect(id) })}
+        className="h-8 rounded-md border border-line px-3 text-[13px] text-fg hover:bg-hover disabled:opacity-50"
+      >
+        Restore
+      </button>
+      {restore.error && <Message>{restore.error.message}</Message>}
     </div>
   );
 }

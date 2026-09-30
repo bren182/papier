@@ -81,6 +81,7 @@ function copyPage(ctx: Ctx, sourceId: string, target: Target): Copied {
       title,
       titleContent,
       icon: src.icon,
+      appearance: src.appearance,
       kind: src.kind,
       isTemplate: target.isTemplate,
       orderKey: target.orderKey,
@@ -145,6 +146,7 @@ function copyDatabase(ctx: Ctx, fromId: string, toId: string): Map<string, strin
       propOrder: c.propOrder.map(mapProp),
       widths: Object.fromEntries(Object.entries(c.widths).map(([p, w]) => [mapProp(p), w])),
       groupBy: c.groupBy && mapProp(c.groupBy),
+      dateBy: c.dateBy && mapProp(c.dateBy),
       template: c.template && (pageMap.get(c.template) ?? null),
     };
     const newId = randomUUID();

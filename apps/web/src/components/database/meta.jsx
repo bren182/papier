@@ -151,4 +151,8 @@ export const ICONS = {
   board: 'M4 5h4v14H4zM10 5h4v9h-4zM16 5h4v11h-4z',
   grip: 'M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01',
   bolt: 'M13 3L5 14h6l-1 7 8-11h-6l1-7z',
+  copy: 'M9 9h10v10H9zM5 15V5h10',
+  move: 'M5 12h14M13 6l6 6-6 6',
+  group: 'M4 6h16M4 12h10M4 18h13M17 10l3 2-3 2',
+  calendar: 'M4 5h16v15H4zM4 10h16M9 3v4M15 3v4',
 };

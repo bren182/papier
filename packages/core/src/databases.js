@@ -96,7 +96,7 @@ export const PropertyUpdate = z
   .partial()
   .refine((v) => Object.keys(v).length > 0, 'Nothing to update');
 
-export const VIEW_TYPES = /** @type {const} */ (['table', 'board']);
+export const VIEW_TYPES = /** @type {const} */ (['table', 'board', 'calendar']);
 export const ViewType = z.enum(VIEW_TYPES);
 
 /**
@@ -160,8 +160,12 @@ export const ViewConfig = z.object({
   widths: z.record(PropertyId, z.number().int().min(60).max(1200)).default({}),
   /** Column order (property ids); unlisted properties follow in schema order. */
   propOrder: z.array(PropertyId).max(500).default([]),
-  /** Board: the select property that defines the columns. */
+  /** Board columns / table groups: the property the rows are grouped by. */
   groupBy: PropertyId.nullable().default(null),
+  /** Tables: leave out groups with no rows. */
+  hideEmptyGroups: z.boolean().default(false),
+  /** Calendar: the date the rows sit on (a date, created/edited time, or date rollup). */
+  dateBy: PropertyId.nullable().default(null),
   /** Template that "New" uses in this view (null = an empty row). */
   template: z.string().min(1).max(64).nullable().default(null),
 });
@@ -214,6 +218,26 @@ export const RowCreate = z.object({
 export const RowMove = z
   .object({ beforeId: z.string().min(1).max(64).optional(), afterId: z.string().min(1).max(64).optional() })
   .refine((v) => !(v.beforeId && v.afterId), 'Give beforeId or afterId, not both');
+
+const RowIds = z.array(z.string().min(1).max(64)).min(1).max(500);
+
+/** The same values on many rows (fill down, bulk "set"). */
+export const RowsPatch = z.object({ rowIds: RowIds, values: z.record(PropertyId, z.unknown()).refine((v) => Object.keys(v).length > 0, 'Nothing to update') });
+
+/** Trash many rows. */
+export const RowsDelete = z.object({ rowIds: RowIds });
+
+/**
+ * Move or copy rows to another database; values follow property names.
+ * `addMissing` first gives the target the properties it lacks.
+ */
+export const RowsTransfer = z.object({
+  rowIds: z.array(z.string().min(1).max(64)).min(1).max(200),
+  targetId: z.string().min(1).max(64),
+  mode: z.enum(['move', 'copy']),
+  addMissing: z.boolean().default(false),
+  today: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
 
 /**
  * Deep-copy a page (content, sub-pages, a database's schema and rows):

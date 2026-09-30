@@ -13,6 +13,9 @@ import {
   PropsPatch,
   RowCreate,
   RowMove,
+  RowsDelete,
+  RowsPatch,
+  RowsTransfer,
   splitNames,
   valueToText,
   ViewConfig,
@@ -29,6 +32,7 @@ import { firePropsChanged, fireRowAdded } from '../db/automations.ts';
 import { alias, filterSql, likeEscape, queryCtx, rowsFrom, sortSql } from '../db/query.ts';
 import { handOverLinks, Relations, rowValues } from '../db/relations.ts';
 import { createRow, placeKey, writeValues } from '../db/rows.ts';
+import { mapProperties, setManyRows, transferRows, trashRows } from '../db/transfer.ts';
 import { indexTitle, reindexProp } from '../db/search.ts';
 import { blocks, dbProperties, dbViews, pageProps, pages, propertyLinks } from '../db/schema.ts';
 import { rowDatabase } from './pages.ts';
@@ -115,7 +119,14 @@ export function databaseRoutes(app: FastifyInstance, db: Db) {
       order by title = '', lower(title), id
       limit ${limit}
     `);
-    return rows.map((r) => ({ id: r.id, title: r.title, titleContent: r.title_content === null ? null : JSON.parse(r.title_content), icon: r.icon }));
+    return rows.map((r) => ({
+      id: r.id,
+      title: r.title,
+      titleContent: r.title_content === null ? null : JSON.parse(r.title_content),
+      icon: r.icon,
+      // Where it lives ("Cloudsmiths › Standups"), to tell same-named databases apart.
+      path: (liveLineage(db, r.id) ?? []).slice(0, -1).map((c) => c.title || 'Untitled'),
+    }));
   });
 
   app.get<{ Params: { id: string } }>('/api/databases/:id', async (req, reply) => {
@@ -353,12 +364,21 @@ export function databaseRoutes(app: FastifyInstance, db: Db) {
       if (pred) where.push(pred);
     }
     if (q.group) {
+      // One board column / table group: rows whose value is `value` (null: no value).
       const prop = ctx.props.get(q.group.propId);
       if (!prop) return reply.code(400).send({ error: 'Unknown group property' });
-      const a = alias(ctx, prop.id);
-      if (q.group.value === null) where.push(sql`${a}.page_id is null`);
-      else if (prop.type === 'multi_select') where.push(sql`exists (select 1 from json_each(${a}.value) where json_each.value = ${q.group.value})`);
-      else where.push(sql`${a}.sort_text = ${q.group.value}`);
+      const value = q.group.value;
+      if (prop.type === 'relation') {
+        // Grouped by linked row: rows linking to it (null: linking to nothing).
+        const has = ctx.rel.hasLink(prop, sql`p.id`, value ?? undefined);
+        where.push(value === null ? sql`not ${has}` : has);
+      } else {
+        const a = alias(ctx, prop.id);
+        if (value === null) where.push(sql`${a}.page_id is null`);
+        else if (prop.type === 'multi_select') where.push(sql`exists (select 1 from json_each(${a}.value) where json_each.value = ${value})`);
+        else if (prop.type === 'checkbox') where.push(sql`${a}.sort_num = 1`);
+        else where.push(sql`${a}.sort_text = ${value}`);
+      }
     }
     const order = (sorts ?? []).flatMap((s) => sortSql(ctx, s));
     order.push(sql`p.order_key`);
@@ -420,6 +440,45 @@ export function databaseRoutes(app: FastifyInstance, db: Db) {
       indexTitle(tx, templateId, '');
     });
     return reply.code(201).send(rowById(db, templateId));
+  });
+
+  // --- many rows at once ---
+
+  /** The same values on many rows (fill down, bulk "set property"). */
+  app.patch<{ Params: { id: string } }>('/api/databases/:id/rows/props', async (req, reply) => {
+    const input = RowsPatch.parse(req.body ?? {});
+    const id = liveDatabase(req.params.id);
+    if (!id) return reply.code(404).send({ error: 'Database not found' });
+    const rows = write(reply, (tx) => setManyRows(tx, id, input.rowIds, input.values));
+    if (!rows) return reply;
+    return { rows };
+  });
+
+  app.post<{ Params: { id: string } }>('/api/databases/:id/rows/delete', async (req, reply) => {
+    const input = RowsDelete.parse(req.body ?? {});
+    const id = liveDatabase(req.params.id);
+    if (!id) return reply.code(404).send({ error: 'Database not found' });
+    return { rows: db.transaction((tx) => trashRows(tx, id, input.rowIds)) };
+  });
+
+  /** How this database's properties would land in another one (the move/copy dialog's preview). */
+  app.get<{ Params: { id: string }; Querystring: { targetId?: string } }>('/api/databases/:id/transfer-preview', async (req, reply) => {
+    const id = liveDatabase(req.params.id);
+    const target = liveDatabase(String(req.query.targetId ?? ''));
+    if (!id || !target) return reply.code(404).send({ error: 'Database not found' });
+    const { pairs: _pairs, ...mapping } = mapProperties(properties(db, id), properties(db, target));
+    return mapping;
+  });
+
+  /** Move or copy rows to another database; values follow property names. */
+  app.post<{ Params: { id: string } }>('/api/databases/:id/rows/transfer', async (req, reply) => {
+    const input = RowsTransfer.parse(req.body ?? {});
+    const id = liveDatabase(req.params.id);
+    const target = liveDatabase(input.targetId);
+    if (!id || !target) return reply.code(404).send({ error: 'Database not found' });
+    const result = write(reply, (tx) => transferRows(tx, { ...input, sourceId: id, targetId: target }));
+    if (!result) return reply;
+    return result;
   });
 
   /** Manual reorder (board cards, table rows) within the database. */
@@ -569,6 +628,7 @@ function scrubViews(db: Conn, databaseId: string, propId: string, { keepDisplay 
           }),
     };
     if (next.groupBy === propId && !keepDisplay) next.groupBy = null;
+    if (next.dateBy === propId && !keepDisplay) next.dateBy = null;
     db.update(dbViews).set({ config: next }).where(eq(dbViews.id, view.id)).run();
   }
 }

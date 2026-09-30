@@ -1,4 +1,4 @@
-import { useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { QueryObserver, useQueryClient } from '@tanstack/react-query';
 import { EditorContent, useEditor } from '@tiptap/react';
 import { TextSelection } from '@tiptap/pm/state';
@@ -13,9 +13,12 @@ import { FormatToolbar } from './FormatToolbar.jsx';
 import { SideMenu } from './SideMenu.jsx';
 import { InlineDatabase } from '../components/database/InlineDatabase.jsx';
 import { ButtonBlockSettings } from '../components/database/ButtonBlockSettings.jsx';
+import { Popover } from '../components/database/Popover.jsx';
 import { useRunButton } from '../api/actions.js';
 
 /** @typedef {import('@papier/core').Block} Block */
+
+const EmojiPicker = lazy(() => import('../components/EmojiPicker.jsx').then((m) => ({ default: m.EmojiPicker })));
 /** @typedef {{ focusStart: () => void }} PageEditorHandle */
 /** @typedef {import('@papier/core').Page} Page */
 
@@ -45,6 +48,8 @@ function Editor({ pageId, rows, onOpenPage, onEmptyChange, template, editorRef }
   const { runBlock } = useRunButton();
   const runBlockRef = useRef(runBlock);
   runBlockRef.current = runBlock;
+  // A callout's icon picker, opened from its node view.
+  const [iconPick, setIconPick] = useState(/** @type {{ anchor: HTMLElement, onPick: (emoji: string) => void } | null} */ (null));
   const editor = useEditor({
     extensions: bodyExtensions({
       template,
@@ -66,6 +71,7 @@ function Editor({ pageId, rows, onOpenPage, onEmptyChange, template, editorRef }
         saveContent: (id, rows) => saveBlocks(id, { upserts: rows, deletes: [] }),
       },
       databases: { View: InlineDatabase, openPage: (id) => onOpenPage(id) },
+      callouts: { pickIcon: (anchor, _current, onPick) => setIconPick({ anchor, onPick }) },
       buttons: {
         Settings: ButtonBlockSettings,
         onRun: async (id) => {
@@ -168,6 +174,18 @@ function Editor({ pageId, rows, onOpenPage, onEmptyChange, template, editorRef }
     // column, so the scroll container can't clip it.
     <div ref={setContainer} className="relative -ml-14 pl-14">
       <EditorContent editor={editor} />
+      {iconPick && (
+        <Popover anchor={iconPick.anchor} onClose={() => setIconPick(null)} width={340}>
+          <Suspense fallback={<div className="h-10" />}>
+            <EmojiPicker
+              onPick={(emoji) => {
+                iconPick.onPick(emoji);
+                setIconPick(null);
+              }}
+            />
+          </Suspense>
+        </Popover>
+      )}
       {flash && (
         <div
           key={flash.key}

@@ -24,6 +24,8 @@ const TO_NODE = {
   bulleted_list: 'bulletItem',
   numbered_list: 'numberedItem',
   todo: 'todo',
+  toggle: 'toggle',
+  callout: 'callout',
   quote: 'quote',
   code: 'codeBlock',
   divider: 'divider',
@@ -43,6 +45,8 @@ const FROM_NODE = Object.fromEntries(Object.entries(TO_NODE).map(([ours, node]) 
 const PROPS = {
   heading: ['level'],
   todo: ['checked'],
+  toggle: ['collapsed'],
+  callout: ['icon'],
   code: ['language'],
   page: ['pageId'],
   database: ['pageId', 'viewId'],

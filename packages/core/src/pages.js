@@ -7,6 +7,21 @@ export const PageId = z.string().min(1).max(64);
 export const PAGE_KINDS = /** @type {const} */ (['page', 'database']);
 export const PageKind = z.enum(PAGE_KINDS);
 
+/**
+ * How a page looks: its cover (a preset id; image covers come with uploads),
+ * layout, and the backdrop mood (a theme id) it sets while it's open.
+ * Stored as one JSON object; patches merge into it (null clears a key).
+ */
+export const Appearance = z
+  .object({
+    cover: z.string().max(64).nullable(),
+    fullWidth: z.boolean().nullable(),
+    smallText: z.boolean().nullable(),
+    font: z.enum(['serif', 'sans', 'mono']).nullable(),
+    mood: z.string().max(32).nullable(),
+  })
+  .partial();
+
 /** A page as the sidebar and page view see it. */
 export const Page = z.object({
   id: PageId,
@@ -16,6 +31,7 @@ export const Page = z.object({
   /** Rich title (text + live date mentions); null for plain-text titles. */
   titleContent: InlineContent.nullable(),
   icon: z.string().nullable(),
+  appearance: Appearance,
   /** 'database' pages hold rows (their child pages) instead of sub-pages. */
   kind: PageKind,
   /** A template: kept out of lists, copied by "Use template". */
@@ -49,6 +65,8 @@ export const PageUpdate = z
     /** When given, the server derives `title` from it. A title-only patch clears it. */
     titleContent: InlineContent.max(200),
     icon: z.string().max(64).nullable(),
+    /** Merged into the page's appearance; a null value removes that key. */
+    appearance: Appearance,
   })
   .partial()
   .refine((v) => Object.keys(v).length > 0, 'Nothing to update');

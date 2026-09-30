@@ -75,7 +75,7 @@ export function TemplateLibrary({ onClose, onOpen, target = { parentId: null } }
           <ul className="min-h-0 overflow-y-auto p-1.5" aria-label="Your templates">
             {templates.map((t) => (
               <li key={t.id} className="group flex items-center gap-2 rounded-md px-3 py-2 hover:bg-hover">
-                <span className="text-faint">{t.kind === 'database' ? '▦' : '▤'}</span>
+                <span className="text-faint">{t.icon ?? (t.kind === 'database' ? '▦' : '▤')}</span>
                 <span className={`min-w-0 flex-1 truncate text-sm font-medium ${t.title ? 'text-fg-strong' : 'text-faint'}`}>
                   <TitleText title={t.title} titleContent={t.titleContent} />
                 </span>

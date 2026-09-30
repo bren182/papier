@@ -10,6 +10,8 @@ export const pages = sqliteTable(
     /** JSON inline content (text + date mentions); null = plain `title`. */
     titleContent: text('title_content', { mode: 'json' }).$type<Array<Record<string, unknown>>>(),
     icon: text('icon'),
+    /** JSON Appearance in @papier/core: cover, layout, mood. */
+    appearance: text('appearance', { mode: 'json' }).$type<Record<string, unknown>>().notNull().default({}),
     /** 'page' or 'database'. A database's child pages are its rows (no page blocks). */
     kind: text('kind').notNull().default('page'),
     /**

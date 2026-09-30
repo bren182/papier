@@ -1,6 +1,6 @@
 import { Extension } from '@tiptap/core';
 import { NodeSelection, TextSelection } from '@tiptap/pm/state';
-import { blockAt, insertBlockAfter, selectedRange, setBlockType, shiftIndent } from './blockOps.js';
+import { blockAt, insertBlockAfter, posOfIndex, selectedRange, setBlockType, shiftIndent, withDescendants } from './blockOps.js';
 import { CONTINUES } from './schema.js';
 
 /**
@@ -82,6 +82,23 @@ export const BlockKeymap = Extension.create({
             editor.view.dispatch(tr);
             return true;
           }
+        }
+
+        // At the end of a toggle: an open one gets a first child, a folded one a sibling after its children.
+        if (name === 'toggle' && $from.parentOffset === current.content.size) {
+          const para = state.schema.nodes.paragraph;
+          if (current.attrs.collapsed) {
+            const end = withDescendants(tr.doc, block.index, block.index);
+            const at = posOfIndex(tr.doc, end + 1);
+            tr.insert(at, /** @type {any} */ (para).create({ indent: current.attrs.indent }));
+            tr.setSelection(TextSelection.near(tr.doc.resolve(at + 1)));
+          } else {
+            const at = pos + current.nodeSize;
+            tr.insert(at, /** @type {any} */ (para).create({ indent: current.attrs.indent + 1 }));
+            tr.setSelection(TextSelection.near(tr.doc.resolve(at + 1)));
+          }
+          editor.view.dispatch(tr.scrollIntoView());
+          return true;
         }
 
         const nextType = CONTINUES.has(name) ? name : 'paragraph';

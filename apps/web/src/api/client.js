@@ -1,8 +1,9 @@
 export class ApiError extends Error {
-  /** @param {number} status @param {string} message */
-  constructor(status, message) {
+  /** @param {number} status @param {string} message @param {Record<string, unknown>} [data] the error body */
+  constructor(status, message, data = {}) {
     super(message);
     this.status = status;
+    this.data = data;
   }
 }
 
@@ -21,7 +22,7 @@ export async function api(path, { method = 'GET', body, keepalive } = {}) {
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
-    throw new ApiError(res.status, data.error ?? res.statusText);
+    throw new ApiError(res.status, data.error ?? res.statusText, data);
   }
   return res.status === 204 ? null : res.json();
 }

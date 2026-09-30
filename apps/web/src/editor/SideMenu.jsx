@@ -263,7 +263,9 @@ function locateDrop(view, container, d, x, y) {
   if (!target) return null;
   const dom = view.nodeDOM(target.pos);
   const box = dom instanceof HTMLElement ? dom.getBoundingClientRect() : null;
-  const gap = box && y > box.top + box.height / 2 ? target.index + 1 : target.index;
+  let gap = box && y > box.top + box.height / 2 ? target.index + 1 : target.index;
+  // Below a folded toggle means after its (hidden) children, not in among them.
+  if (gap === target.index + 1 && target.node.type.name === 'toggle' && target.node.attrs.collapsed) gap = withDescendants(doc, target.index, target.index) + 1;
 
   const step = INDENT_REM * (parseFloat(getComputedStyle(document.documentElement).fontSize) || 16);
   // A third of a step into a level selects it; the gutter means "as shallow as allowed".
@@ -273,9 +275,13 @@ function locateDrop(view, container, d, x, y) {
   const followIndex = plan.inPlace ? d.index : plan.gap;
   const outer = container.getBoundingClientRect();
   let top = rect.bottom;
-  if (followIndex < doc.childCount) {
-    const el = view.nodeDOM(posOfIndex(doc, followIndex));
-    if (el instanceof HTMLElement) top = el.getBoundingClientRect().top;
+  // The first block that will follow and is shown (folded blocks have no box).
+  for (let i = followIndex; i < doc.childCount; i++) {
+    const el = view.nodeDOM(posOfIndex(doc, i));
+    if (el instanceof HTMLElement && !el.classList.contains('pb-hidden')) {
+      top = el.getBoundingClientRect().top;
+      break;
+    }
   }
   const left = rect.left - outer.left + plan.level * step;
   return { ...plan, top: Math.round(top - outer.top - 1), left: Math.round(left), width: Math.round(rect.right - outer.left - left) };
