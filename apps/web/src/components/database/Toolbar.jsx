@@ -2,7 +2,9 @@ import { useRef, useState } from 'react';
 import { DYNAMIC_TODAY, filterOps, rollupResultType, VALUELESS_OPS } from '@papier/core/props';
 import { useAutomations } from '../../api/automations.js';
 import { AutomationsPanel } from './AutomationsPanel.jsx';
+import { formatDateLong } from '../../editor/dates.js';
 import { RefChip, RelationPicker } from './cells.jsx';
+import { MiniCalendar } from './MiniCalendar.jsx';
 import { GROUPABLE } from './TableView.jsx';
 import { defaultTemplate, orderedProperties, TITLE, useDb } from './context.js';
 import { Icon, ICONS, OP_LABELS, TypeIcon } from './meta.jsx';
@@ -318,7 +320,13 @@ function FilterValue({ prop, value, onChange }) {
   const [text, setText] = useState(value === undefined || value === null ? '' : String(value));
   const cls = `${field} min-w-0 flex-1`;
   // A rollup is filtered as its result: a number (percentages as shown, 0–100) or a date.
-  const type = prop.type === 'rollup' ? (rollupResultType(prop.config.fn ?? undefined) === 'date' ? 'date' : 'number') : prop.type;
+  const formula = prop.config.resultType;
+  const type =
+    prop.type === 'rollup'
+      ? rollupResultType(prop.config.fn ?? undefined) === 'date' ? 'date' : 'number'
+      : prop.type === 'formula'
+        ? formula === 'boolean' ? 'checkbox' : formula === 'date' ? 'date' : formula === 'number' ? 'number' : 'text'
+        : prop.type;
   switch (type) {
     case 'relation':
       return <RelationFilterValue prop={prop} value={typeof value === 'string' ? value : null} onChange={onChange} />;
@@ -356,9 +364,7 @@ function FilterValue({ prop, value, onChange }) {
             <option value="date">Date</option>
             <option value="today">Today</option>
           </select>
-          {value !== DYNAMIC_TODAY && (
-            <input type="date" aria-label="Value" value={String(value ?? '')} onChange={(e) => onChange(e.target.value || null)} className={`${cls} [color-scheme:dark]`} />
-          )}
+          {value !== DYNAMIC_TODAY && <DateFilterValue value={typeof value === 'string' ? value : null} onChange={onChange} />}
         </span>
       );
     default: {
@@ -404,6 +410,30 @@ function RelationFilterValue({ prop, value, onChange }) {
             value={value ? [value] : null}
             onChange={(ids) => {
               onChange(ids?.[0] ?? null);
+              setOpen(false);
+            }}
+          />
+        </Popover>
+      )}
+    </>
+  );
+}
+
+/** A date to filter by, picked on our calendar. @param {{ value: string | null, onChange: (v: string | null) => void }} props */
+function DateFilterValue({ value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(/** @type {HTMLButtonElement | null} */ (null));
+  return (
+    <>
+      <button ref={ref} type="button" aria-label="Value" onClick={() => setOpen(true)} className={`${field} min-w-0 flex-1 truncate text-left`}>
+        {value ? formatDateLong(value) : <span className="text-muted">Pick a date…</span>}
+      </button>
+      {open && (
+        <Popover anchor={ref.current} onClose={() => setOpen(false)} width={260}>
+          <MiniCalendar
+            value={value}
+            onPick={(iso) => {
+              onChange(iso);
               setOpen(false);
             }}
           />

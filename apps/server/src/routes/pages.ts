@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
-import { and, asc, desc, eq, gt, isNull, lt, ne, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray, isNull, lt, ne, sql } from 'drizzle-orm';
 import { InvalidValue, orderBetween, PageCreate, PageDuplicate, PageMove, PageUpdate, plainText } from '@papier/core';
 import { duplicatePage, TooBig } from '../db/duplicate.ts';
 import type { Db } from '../db/index.ts';
@@ -22,6 +22,7 @@ const pageFields = {
   kind: pages.kind,
   isTemplate: pages.isTemplate,
   order: pages.orderKey,
+  favorite: sql<boolean>`${pages.favoriteKey} is not null`.mapWith(Boolean),
   // Qualified by hand: drizzle renders ${pages.id} unqualified in single-table
   // queries, which would bind to the subquery's own row. A database's children
   // are its rows, which the sidebar never lists.
@@ -49,6 +50,25 @@ export function pageRoutes(app: FastifyInstance, db: Db) {
       .where(and(parent ? eq(pages.parentId, parent) : isNull(pages.parentId), isNull(pages.archivedAt), eq(pages.isTemplate, false)))
       .orderBy(asc(pages.orderKey))
       .all();
+  });
+
+  /**
+   * The sidebar's Favourites: starred pages that are live (no trashed or
+   * template ancestor), in starring order.
+   */
+  app.get('/api/favorites', async () => {
+    const ids = db
+      .all<{ id: string }>(sql`
+        with recursive up(fav, id, dead) as (
+          select p.id, p.parent_id, p.archived_at is not null or p.is_template from pages p where p.favorite_key is not null
+          union all
+          select up.fav, a.parent_id, a.archived_at is not null or a.is_template from up join pages a on a.id = up.id where up.dead = 0
+        )
+        select fav as id from up group by fav having max(dead) = 0
+      `)
+      .map((r) => r.id);
+    if (ids.length === 0) return [];
+    return db.select(pageFields).from(pages).where(inArray(pages.id, ids)).orderBy(asc(pages.favoriteKey)).limit(100).all();
   });
 
   /** The template library: page templates (database templates live in their database). */
@@ -135,7 +155,7 @@ export function pageRoutes(app: FastifyInstance, db: Db) {
   });
 
   app.patch<{ Params: { id: string } }>('/api/pages/:id', async (req, reply) => {
-    const { titleContent, appearance: look, ...patch } = PageUpdate.parse(req.body ?? {});
+    const { titleContent, appearance: look, favorite, ...patch } = PageUpdate.parse(req.body ?? {});
     // One source of truth: a rich title derives the plain one; a plain title drops the rich one.
     const title =
       titleContent !== undefined
@@ -150,9 +170,19 @@ export function pageRoutes(app: FastifyInstance, db: Db) {
         const current = tx.select({ a: pages.appearance }).from(pages).where(eq(pages.id, req.params.id)).get()?.a ?? {};
         appearance = Object.fromEntries(Object.entries({ ...current, ...look }).filter(([, v]) => v !== null && v !== undefined));
       }
+      // Starring goes last among the favourites (and keeps its place if already starred).
+      let favoriteKey: { favoriteKey: string | null } | undefined;
+      if (favorite === false) favoriteKey = { favoriteKey: null };
+      else if (favorite) {
+        const own = tx.select({ k: pages.favoriteKey }).from(pages).where(eq(pages.id, req.params.id)).get()?.k;
+        const last = tx.get<{ k: string | null }>(sql`select max(favorite_key) as k from pages`)?.k ?? null;
+        favoriteKey = { favoriteKey: own ?? orderBetween(last, null) };
+      }
+      // Starring alone isn't an edit of the page.
+      const edited = Object.keys(patch).length > 0 || titleContent !== undefined || look !== undefined;
       const row = tx
         .update(pages)
-        .set({ ...patch, ...title, ...(appearance ? { appearance } : {}), updatedAt: Date.now() })
+        .set({ ...patch, ...title, ...(appearance ? { appearance } : {}), ...favoriteKey, ...(edited ? { updatedAt: Date.now() } : {}) })
         .where(and(eq(pages.id, req.params.id), isNull(pages.archivedAt)))
         .returning({ id: pages.id, title: pages.title })
         .get();

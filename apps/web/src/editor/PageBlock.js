@@ -22,7 +22,7 @@ import { formatDateMention } from './dates.js';
  */
 
 /** Plain title text, dates shown the way the rest of the app shows them. @param {NonNullable<PageInfo>} page */
-function titleOf(page) {
+export function titleOf(page) {
   if (!page.titleContent?.length) return page.title;
   return page.titleContent
     .map((n) => (n.type === 'date' ? formatDateMention(String(/** @type {any} */ (n.props)?.date ?? '')) : typeof n.text === 'string' ? n.text : ''))

@@ -58,16 +58,18 @@ test('database templates: New uses the view’s default template', async ({ page
   ).json();
   await page.goto(`/?p=${db.id}`);
 
-  // + New template → opens the template to fill in.
+  // + New template → opens the template (in the side peek) to fill in.
+  const peek = page.getByRole('complementary', { name: 'Side peek' });
   await page.getByRole('button', { name: 'New from template' }).click();
   await page.getByRole('button', { name: 'New template' }).click();
-  await expect(page.getByRole('note')).toContainText('Template in');
-  await page.locator('[data-prop="Status"]').click();
+  await expect(peek.getByRole('note')).toContainText('Template in');
+  await peek.locator('[data-prop="Status"]').click();
   await page.locator('[data-popover]').getByRole('button', { name: 'Doing' }).click();
-  await expect(page.locator('[data-prop="Status"]')).toHaveText('Doing');
+  await expect(peek.locator('[data-prop="Status"]')).toHaveText('Doing');
 
   // Back in the database: make it the default, then New.
-  await page.getByRole('button', { name: 'Back to database' }).click();
+  await peek.getByRole('button', { name: 'Close side peek' }).click();
+  await expect(peek).toHaveCount(0);
   await page.getByRole('button', { name: 'New from template' }).click();
   const menu = page.locator('[data-popover]');
   await menu.getByText('Untitled template').hover();
@@ -77,8 +79,8 @@ test('database templates: New uses the view’s default template', async ({ page
 
   await page.getByRole('button', { name: 'New', exact: true }).first().click();
   // A templated row opens straight away, already filled in.
-  await expect(page.locator('[data-prop="Status"]')).toHaveText('Doing');
-  await expect(page.getByRole('note')).toHaveCount(0);
+  await expect(peek.locator('[data-prop="Status"]')).toHaveText('Doing');
+  await expect(peek.getByRole('note')).toHaveCount(0);
 
   const rows = (await (await request.post(`/api/databases/${db.id}/query`, { data: {} })).json()).rows;
   expect(rows.map((/** @type {{ props: Record<string, unknown> }} */ r) => r.props[status.id])).toEqual([status.config.options[1].id]);

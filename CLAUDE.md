@@ -25,7 +25,9 @@ Migrations in `apps/server/drizzle/` are committed and applied on server start. 
   build). `app.ts` builds the app (`buildApp({ dbPath, logger })`), routes in
   `src/routes/`, Drizzle schema in `src/db/schema.ts`.
 - `apps/web` — React + Vite + Tailwind v4, **plain JS + JSDoc types** (`checkJs`).
-  Server state via TanStack Query hooks in `src/api/`; open page lives in the URL (`?p=`).
+  Server state via TanStack Query hooks in `src/api/`; open page lives in the URL (`?p=`),
+  a database row in the side peek too (`?peek=`, `openPeek`/`usePeek` in `useSelectedPage.js`,
+  `RowPeek.jsx`). `DatabaseView`'s `openRow` passes the view's `[data-row-id]` order for ‹ ›.
 - `packages/core` — shared zod schemas + helpers (JS + JSDoc), e.g. `Page`, `Block`,
   `orderBetween` (fractional indexing). Validate API input with these.
 - `packages/ui` — `theme.css` tokens and `Backdrop`. Tailwind maps tokens in
@@ -38,7 +40,9 @@ TipTap v3 with our own schema, not a kit. Lazy-loaded as one chunk (`editor/inde
 - The ProseMirror doc is a **flat list of blocks** with `id` + `indent` attrs; nesting
   is indentation. `convert.js` maps it to/from stored rows (a `parent_id` tree with
   fractional `order` keys) and maps marks to the stored, editor-agnostic inline format
-  (`{type:'text',text,styles}`, `{type:'link',…}`, `{type:'date',props:{date}}`).
+  (`{type:'text',text,styles}`, `{type:'link',…}`, `{type:'date',props:{date}}`,
+  `{type:'page',props:{pageId}}` — an inline page link, node `pageMention` in `PageMention.js`,
+  inserted from `[[` or the body's `@` menu, which lists dates then page search hits).
 - `schema.js`: nodes, plus `TreeInvariants` (clamps indents, gives every block a
   unique id) and list numbering. `keymap.js` / `inputRules.js`: Notion-style keys.
   `blockOps.js`: shared block operations. `SideMenu.jsx`: the handle, drag, and the block
@@ -61,7 +65,9 @@ appends one (`block: false` when the editor inserts its own), deleting the block
 the page, re-adding it (undo) restores it, `POST /api/pages/:id/move` moves the block
 between parents. A page block for a non-child is just a link. When the server changes an
 open page's blocks, the client calls `reloadContent` (`api/blocks.js`) to remount it.
-Sidebar order (`pages.order_key`) and block order are independent.
+Sidebar order (`pages.order_key`) and block order are independent. Favourites: `pages.favorite_key`
+(fractional, null = not starred; `PATCH { favorite }`, `GET /api/favorites` hides dead ones);
+Recent is per device (`recentPages.js`, localStorage).
 
 ## Databases (`apps/server/src/routes/databases.ts`, `apps/web/src/components/database/`)
 
@@ -177,6 +183,23 @@ Links that belonged to the old database are scrubbed. `GET …/transfer-preview`
 (`leadView` in `schema.js`). The `Outline` plugin hides blocks under a collapsed toggle (`pb-hidden`), keeps
 the cursor out of them, and marks callout children (`in-callout`). `> ` makes a toggle and `" ` a quote.
 A new page's title takes focus in an effect, never while a dialog is open.
+
+## Formulas (`packages/core/src/formula.js`, `apps/server/src/db/formula.ts`)
+
+The language is Notion-like: `prop("Name")`, `+ - * / %`, `== != < > <= >=`, `and or not`, and the `FUNCTIONS` table,
+which also backs the in-app reference in `FormulaEditor.jsx`. Core does the parsing (with positions), the type
+checking (`number | text | date | boolean`; date-shaped text literals are dates) and `analyzeFormula`, all
+zod-free and shared with the client. The server compiles the AST into **one scalar SQL expression over a row**:
+- literals are bound parameters;
+- operators and functions are fixed SQL templates;
+- `prop()` becomes a subquery by property id (select options and titles become names; relations become
+  their titles; rollups and other formulas are inlined, and cycles are refused).
+
+So formulas filter and sort in SQL (`query.ts`) and compute in `Relations.values`, alongside rollups.
+better-sqlite3 binds JS numbers as REAL, so bind years and similar values as text where they get concatenated.
+`config.resultType` is kept current by `refreshFormulaTypes`, which runs after any property change. A rename
+rewrites `prop("Old")` references (`renameInFormulas`). The `set_formula` action lets buttons and automations
+compute a value. `today()` follows the viewer's day.
 
 ## Templates (`apps/server/src/db/duplicate.ts`)
 

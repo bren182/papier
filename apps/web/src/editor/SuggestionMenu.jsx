@@ -21,7 +21,7 @@ import Suggestion, { exitSuggestion } from '@tiptap/suggestion';
  * @param {{
  *   name: string,
  *   char: string,
- *   items: (query: string, editor: import('@tiptap/core').Editor) => MenuItem[],
+ *   items: (query: string, editor: import('@tiptap/core').Editor) => MenuItem[] | Promise<MenuItem[]>,
  *   allowSpaces?: boolean,
  * }} opts
  */

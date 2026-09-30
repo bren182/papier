@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useRows } from '../../api/databases.js';
 import { TitleText } from '../TitleText.jsx';
-import { ValueDisplay } from './cells.jsx';
+import { ValueCell, ValueDisplay } from './cells.jsx';
 import { DB_DRAG_TYPE, defaultTemplate, useDb, visibleColumns } from './context.js';
 import { Icon, ICONS } from './meta.jsx';
 import { field } from './Popover.jsx';
+import { RowMenu, useTransfer } from './tableTools.jsx';
 
 /** @typedef {import('../../api/databases.js').Row} Row */
 /** @typedef {import('./context.js').Property} Property */
@@ -17,12 +18,14 @@ import { field } from './Popover.jsx';
  * reorders (manual order, when the view has no sorts).
  */
 export function BoardView() {
-  const { properties, view, setConfig, m, templates, openRow } = useDb();
+  const { dbId, properties, view, setConfig, m, templates, openRow } = useDb();
   const groupable = properties.filter((p) => p.type === 'select' || p.type === 'multi_select');
   const group = groupable.find((p) => p.id === view.config.groupBy) ?? groupable[0];
   const [dragging, setDragging] = useState(/** @type {Dragging | null} */ (null));
   const [drop, setDrop] = useState(/** @type {BoardDrop | null} */ (null));
   const [newRowId, setNewRowId] = useState(/** @type {string | null} */ (null));
+  const [menu, setMenu] = useState(/** @type {{ row: Row, at: HTMLElement | { x: number, y: number } } | null} */ (null));
+  const transfer = useTransfer();
 
   if (!group) {
     return (
@@ -31,7 +34,13 @@ export function BoardView() {
         <button
           type="button"
           onClick={async () => {
-            const prop = await m.addProperty({ name: 'Status', type: 'select', config: { options: [{ name: 'Todo' }, { name: 'Doing' }, { name: 'Done' }] } });
+            const prop = await m.addProperty({
+              name: 'Status',
+              type: 'select',
+              config: {
+                options: [{ name: 'Todo' }, { name: 'Doing' }, { name: 'Done' }],
+              },
+            });
             setConfig({ groupBy: prop.id });
           }}
           className="h-8 rounded-md bg-accent px-3 text-[13px] font-medium text-[#141414] hover:bg-accent-text"
@@ -97,15 +106,23 @@ export function BoardView() {
               setDrop(null);
             }}
             newRowId={newRowId}
+            onMenu={(row, at) => setMenu({ row, at })}
             onNew={async () => {
               const templateId = defaultTemplate(view, templates);
-              const row = await m.addRow({ props: { [group.id]: c.id === null ? null : group.type === 'multi_select' ? [c.id] : c.id }, templateId });
+              const row = await m.addRow({
+                props: {
+                  [group.id]: c.id === null ? null : group.type === 'multi_select' ? [c.id] : c.id,
+                },
+                templateId,
+              });
               if (templateId) openRow(row.id);
               else setNewRowId(row.id);
             }}
           />
         ))}
       </div>
+      {menu && <RowMenu ids={[menu.row.id]} anchor={menu.at} onClose={() => setMenu(null)} onOpen={openRow} onTransfer={transfer.open} />}
+      {transfer.dialog({ sourceId: dbId })}
     </div>
   );
 }
@@ -113,12 +130,17 @@ export function BoardView() {
 /**
  * @param {{ group: Property, value: string | null, name: string, dragging: Dragging | null, drop: BoardDrop | null,
  *   onDragStart: (row: Row) => void, onDragOver: (d: BoardDrop) => void, onDrop: () => void, onDragEnd: () => void,
- *   newRowId: string | null, onNew: () => void }} props
+ *   newRowId: string | null, onNew: () => void, onMenu: (row: Row, at: HTMLElement | { x: number, y: number }) => void }} props
  */
-function Column({ group, value, name, dragging, drop, onDragStart, onDragOver, onDrop, onDragEnd, newRowId, onNew }) {
+function Column({ group, value, name, dragging, drop, onDragStart, onDragOver, onDrop, onDragEnd, newRowId, onNew, onMenu }) {
   const { dbId, view, properties } = useDb();
   const { sorts, filters } = view.config;
-  const q = useRows(dbId, { sorts, filters, group: { propId: group.id, value }, limit: 25 });
+  const q = useRows(dbId, {
+    sorts,
+    filters,
+    group: { propId: group.id, value },
+    limit: 25,
+  });
   const rows = q.data?.pages.flatMap((p) => p.rows) ?? [];
   const total = q.data?.pages[0]?.total ?? 0;
   const shown = visibleColumns(properties, view.config).filter((p) => p.id !== group.id);
@@ -149,6 +171,14 @@ function Column({ group, value, name, dragging, drop, onDragStart, onDragOver, o
       <header className="flex h-7 items-center gap-2 px-1 text-[13px]">
         <span className="truncate font-medium text-fg">{name}</span>
         <span className="text-faint">{total}</span>
+        <button
+          type="button"
+          onClick={onNew}
+          aria-label={`New in ${name}`}
+          className="ml-auto flex size-6 items-center justify-center rounded text-faint hover:bg-hover hover:text-fg"
+        >
+          <Icon path={ICONS.plus} />
+        </button>
       </header>
 
       {rows.map((row) => (
@@ -165,7 +195,15 @@ function Column({ group, value, name, dragging, drop, onDragStart, onDragOver, o
           className="relative"
         >
           {lineBefore === row.id && <span className="absolute -top-1 right-1 left-1 h-[2px] rounded bg-accent" />}
-          <Card row={row} props={shown} editTitle={row.id === newRowId} dragging={dragging?.row.id === row.id} onDragStart={() => onDragStart(row)} onDragEnd={onDragEnd} />
+          <Card
+            row={row}
+            props={shown}
+            editTitle={row.id === newRowId}
+            dragging={dragging?.row.id === row.id}
+            onDragStart={() => onDragStart(row)}
+            onDragEnd={onDragEnd}
+            onMenu={(at) => onMenu(row, at)}
+          />
           {lineAfter === row.id && <span className="absolute -bottom-1 right-1 left-1 h-[2px] rounded bg-accent" />}
         </div>
       ))}
@@ -175,20 +213,36 @@ function Column({ group, value, name, dragging, drop, onDragStart, onDragOver, o
           Load {Math.min(25, total - rows.length)} more
         </button>
       )}
-      <button type="button" onClick={onNew} className="flex h-8 items-center gap-1.5 rounded-md px-2 text-left text-[13px] text-faint hover:bg-hover hover:text-muted">
+      <button
+        type="button"
+        onClick={onNew}
+        className="flex h-8 items-center gap-1.5 rounded-md px-2 text-left text-[13px] text-faint hover:bg-hover hover:text-muted"
+      >
         <Icon path={ICONS.plus} /> New
       </button>
     </section>
   );
 }
 
+/** A tick on a card: its name follows it. @param {Property} p */
+const tick = (p) => p.type === 'checkbox' || (p.type === 'formula' && p.config.resultType === 'boolean');
+/** Values that mean little without their name (a lone tick or number). @param {Property} p */
+const labelled = (p) => p.type === 'checkbox' || p.type === 'number' || p.type === 'formula' || p.type === 'rollup';
+
+/** @param {unknown} v  worth a line on a card: set, not empty, and a ticked box */
+const hasValue = (v) => v !== undefined && v !== null && v !== false && v !== '' && !(Array.isArray(v) && v.length === 0);
+
 /**
- * @param {{ row: Row, props: Property[], editTitle: boolean, dragging: boolean, onDragStart: () => void, onDragEnd: () => void }} props
+ * A card: the title, then each shown property that has a value (checkboxes
+ * only when ticked, labelled), then the row's buttons.
+ * @param {{ row: Row, props: Property[], editTitle: boolean, dragging: boolean, onDragStart: () => void, onDragEnd: () => void,
+ *   onMenu: (at: HTMLElement | { x: number, y: number }) => void }} props
  */
-function Card({ row, props, editTitle, dragging, onDragStart, onDragEnd }) {
-  const { openRow, m } = useDb();
+function Card({ row, props, editTitle, dragging, onDragStart, onDragEnd, onMenu }) {
+  const { openRow, m, addOption } = useDb();
   const [editing, setEditing] = useState(editTitle);
-  const values = props.filter((p) => p.type === 'created_time' || p.type === 'edited_time' || (row.props[p.id] !== undefined && row.props[p.id] !== null));
+  const values = props.filter((p) => p.type !== 'button' && (p.type === 'created_time' || p.type === 'edited_time' || hasValue(row.props[p.id])));
+  const buttons = props.filter((p) => p.type === 'button');
 
   if (editing) {
     return (
@@ -204,7 +258,8 @@ function Card({ row, props, editTitle, dragging, onDragStart, onDragEnd }) {
           }}
           onKeyDown={(e) => {
             e.stopPropagation();
-            if (e.key === 'Enter' || e.key === 'Escape') /** @type {HTMLInputElement} */ (e.target).blur();
+            if (e.key === 'Enter' || e.key === 'Escape')
+              /** @type {HTMLInputElement} */ (e.target).blur();
           }}
           className="w-full bg-transparent text-[14px] font-medium text-fg-strong outline-none"
         />
@@ -226,19 +281,42 @@ function Card({ row, props, editTitle, dragging, onDragStart, onDragEnd }) {
       }}
       onDragEnd={onDragEnd}
       onClick={() => openRow(row.id)}
-      onKeyDown={(e) => e.key === 'Enter' && openRow(row.id)}
+      onKeyDown={(e) => e.target === e.currentTarget && e.key === 'Enter' && openRow(row.id)}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onMenu({ x: e.clientX, y: e.clientY });
+      }}
       data-row-id={row.id}
-      className={`flex cursor-pointer flex-col gap-1.5 rounded-md border border-line bg-s-sidebar p-2.5 text-left shadow-sm hover:border-white/15 hover:bg-hover ${dragging ? 'opacity-40' : ''}`}
+      className={`group/card relative flex cursor-pointer flex-col gap-1.5 rounded-md border border-line bg-s-sidebar p-2.5 text-left shadow-sm hover:border-white/15 hover:bg-hover ${dragging ? 'opacity-40' : ''}`}
     >
-      <span className={`text-[14px] leading-5 font-medium ${row.title ? 'text-fg-strong' : 'text-faint'}`}>
+      <span className={`pr-5 text-[14px] leading-5 font-medium ${row.title ? 'text-fg-strong' : 'text-faint'}`}>
         {row.icon && <span className="mr-1.5">{row.icon}</span>}
         <TitleText title={row.title} titleContent={row.titleContent} />
       </span>
+      <button
+        type="button"
+        aria-label="Card menu"
+        onClick={(e) => {
+          e.stopPropagation();
+          onMenu(e.currentTarget);
+        }}
+        className="absolute top-2 right-1.5 flex size-6 items-center justify-center rounded text-faint opacity-0 group-hover/card:opacity-100 hover:bg-white/10 hover:text-fg focus-visible:opacity-100"
+      >
+        <Icon path={ICONS.dots} />
+      </button>
       {values.map((p) => (
-        <span key={p.id} className="flex min-w-0 text-[12px] text-fg" title={p.name}>
+        <span key={p.id} className="flex min-w-0 items-center gap-1.5 text-[12px] text-fg" title={p.name}>
           <ValueDisplay prop={p} value={row.props[p.id]} row={row} wrap />
+          {labelled(p) && <span className={tick(p) ? 'text-muted' : 'order-first text-faint'}>{p.name}</span>}
         </span>
       ))}
+      {buttons.length > 0 && (
+        <div className="flex flex-wrap gap-1 pt-0.5">
+          {buttons.map((p) => (
+            <ValueCell key={p.id} prop={p} value={null} row={row} onChange={() => {}} onAddOption={addOption} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -129,6 +129,28 @@ body {
 .papier-editor .pb.pb-hidden {
   display: none;
 }
+/* toggle headings: sized like headings, the arrow stays centred on the first line */
+.papier-editor .pb[data-type='toggle'][data-level] {
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--p-strong);
+}
+.papier-editor .pb[data-type='toggle'][data-level='1'] { font-size: 1.875em; margin-top: 1.1em; }
+.papier-editor .pb[data-type='toggle'][data-level='2'] { font-size: 1.5em; margin-top: 0.9em; }
+.papier-editor .pb[data-type='toggle'][data-level='3'] { font-size: 1.25em; margin-top: 0.7em; }
+.papier-editor .pb[data-type='toggle'][data-level] .pb-toggle {
+  top: calc(2px + (1.3em - 1.25rem) / 2);
+}
+/* an open toggle with nothing inside says how to add something */
+.papier-editor .pb.toggle-empty:not(.is-empty)::after {
+  content: 'Empty toggle — press Enter at its end to add inside';
+  display: block;
+  padding-left: 1.5rem;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--p-faint);
+  pointer-events: none;
+}
 
 /*
  * callout: a boxed note with an icon; blocks indented under it sit inside the
@@ -177,6 +199,13 @@ body {
 }
 .papier-editor .pb-callout-icon:hover {
   background: var(--s-active);
+}
+/* the accent callout: the one accent, softly (colour stays a tint, text stays grey) */
+.papier-editor .pb[data-type='callout'][data-tone='accent'] {
+  background: linear-gradient(to right, transparent calc(var(--indent, 0) * var(--step)), var(--p-accent-soft) 0);
+}
+.papier-editor .pb.in-callout.in-callout-accent {
+  background: linear-gradient(to right, transparent calc(var(--callout-indent, 0) * var(--step)), var(--p-accent-soft) 0);
 }
 
 .papier-editor .pb-check {
@@ -371,6 +400,43 @@ body {
 .papier-date:hover {
   background: var(--s-active);
   color: var(--p-text);
+}
+
+/* inline page link: icon + live title, underlined like a link */
+.papier-page-link {
+  display: inline;
+  border-radius: 4px;
+  padding: 0 0.15em;
+  cursor: pointer;
+  color: var(--p-strong);
+  text-decoration: none;
+}
+.papier-page-link-icon {
+  display: inline-block;
+  margin-right: 0.25em;
+  color: var(--p-muted);
+  font-size: 0.95em;
+  line-height: 1;
+}
+.papier-page-link-icon svg {
+  display: inline;
+  vertical-align: -0.1em;
+}
+.papier-page-link-title {
+  text-decoration: underline;
+  text-decoration-color: var(--p-faint);
+  text-underline-offset: 0.2em;
+  font-weight: 500;
+}
+.papier-page-link:hover {
+  background: var(--s-active);
+}
+.papier-page-link.is-missing .papier-page-link-title {
+  color: var(--p-faint);
+  text-decoration: line-through;
+}
+.papier-page-link.ProseMirror-selectednode {
+  background: var(--p-accent-soft);
 }
 
 /* title editor */

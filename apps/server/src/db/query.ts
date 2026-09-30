@@ -1,5 +1,6 @@
 import { sql, type SQL } from 'drizzle-orm';
-import { DYNAMIC_TODAY, filterOps, TITLE_PROP, VALUELESS_OPS, type Filter, type Sort } from '@papier/core';
+import { DYNAMIC_TODAY, filterOps, FormulaError, TITLE_PROP, VALUELESS_OPS, type Filter, type Sort } from '@papier/core';
+import { compileFormula } from './formula.ts';
 import { properties, type Conn, type Prop } from './props.ts';
 
 type Option = { id: string; name: string };
@@ -51,6 +52,25 @@ export function filterSql(ctx: Ctx, f: Filter): SQL | null {
     if (r.result === 'date') return compareDate(r.expr, f.op, String(v));
     // Percentages are stored 0–1 and filtered as shown (0–100).
     return compareNum(r.result === 'percent' ? sql`${r.expr} * 100` : r.expr, f.op, Number(v));
+  }
+
+  if (type === 'formula') {
+    const fx = formulaSql(ctx, prop!);
+    if (!fx) return null;
+    if (f.op === 'is_empty') return sql`${fx.sql} is null`;
+    if (f.op === 'is_not_empty') return sql`${fx.sql} is not null`;
+    if (fx.type === 'number') return compareNum(fx.sql, f.op, Number(v));
+    if (fx.type === 'date') return compareDate(fx.sql, f.op, String(v));
+    if (fx.type === 'boolean') return v === true || v === 'true' ? sql`${fx.sql} = 1` : sql`coalesce(${fx.sql}, 0) = 0`;
+    const text = String(v ?? '').toLowerCase();
+    const col = sql`lower(${fx.sql})`;
+    switch (f.op) {
+      case 'contains': return sql`${col} like ${likeEscape(text)} escape '\\'`;
+      case 'not_contains': return sql`coalesce(${col}, '') not like ${likeEscape(text)} escape '\\'`;
+      case 'is': return sql`${col} = ${text}`;
+      case 'is_not': return sql`coalesce(${col}, '') <> ${text}`;
+    }
+    return null;
   }
 
   if (type === 'created_time' || type === 'edited_time') {
@@ -145,6 +165,12 @@ export function sortSql(ctx: Ctx, s: Sort): SQL[] {
     if (!r || r.result === 'list') return [];
     return [sql`${r.expr} is null`, sql`${r.expr} ${dir}`];
   }
+  if (type === 'formula') {
+    const f = formulaSql(ctx, ctx.props.get(s.propId)!);
+    if (!f) return [];
+    const key = f.type === 'text' ? sql`lower(${f.sql})` : f.sql;
+    return [sql`${key} is null`, sql`${key} ${dir}`];
+  }
   const a = alias(ctx, s.propId);
   if (type === 'select' || type === 'multi_select') {
     // Option order, not alphabetical (like Notion).
@@ -160,6 +186,17 @@ export function sortSql(ctx: Ctx, s: Sort): SQL[] {
   return [sql`${col} is null`, sql`${col} ${dir}`];
 }
 
+
+/** A formula property's compiled SQL over the row `p`, or null while it's invalid. */
+function formulaSql(ctx: Ctx, prop: Prop) {
+  try {
+    const f = compileFormula(prop.config.expression ?? '', { props: [...ctx.props.values()], rel: ctx.rel, tzOffset: ctx.tzOffset, rowId: sql`p.id` }, new Set([prop.id]));
+    return f;
+  } catch (err) {
+    if (err instanceof FormulaError) return null;
+    throw err;
+  }
+}
 
 /** A query context over one database's properties. */
 export function queryCtx(conn: Conn, databaseId: string, tzOffset = 0): Ctx {

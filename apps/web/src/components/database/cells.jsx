@@ -6,6 +6,7 @@ import { formatDateLong, formatDateMention, parseDateQuery, toISODate } from '..
 import { useSelectedPage } from '../../useSelectedPage.js';
 import { TitleText } from '../TitleText.jsx';
 import { Icon, ICONS } from './meta.jsx';
+import { MiniCalendar } from './MiniCalendar.jsx';
 import { field, menuItem, Popover } from './Popover.jsx';
 
 /**
@@ -123,6 +124,20 @@ export function ValueDisplay({ prop, value, row, wrap = false }) {
         </span>
       );
     }
+    case 'formula': {
+      if (value === undefined || value === null) return null;
+      const type = prop.config.resultType;
+      if (type === 'boolean') return <Check checked={value === true} />;
+      if (type === 'date' && typeof value === 'string') {
+        return (
+          <time dateTime={value} title={formatDateLong(value)} className="text-muted">
+            {formatDateMention(value)}
+          </time>
+        );
+      }
+      if (typeof value === 'number') return <span className="tabular-nums text-muted">{round(value).toLocaleString()}</span>;
+      return <span className={`text-muted ${wrap ? 'break-words whitespace-pre-wrap' : 'truncate'}`}>{String(value)}</span>;
+    }
     case 'rollup': {
       if (value === undefined || value === null) return null;
       const result = rollupResultType(prop.config.fn ?? undefined);
@@ -214,7 +229,8 @@ function EditableCell({ prop, value, row, onChange, onAddOption, className = '',
   const [editing, setEditing] = useState(false);
   const ref = useRef(/** @type {HTMLDivElement | null} */ (null));
   // A relation with no target yet is set up from its property menu.
-  const readOnly = prop.type === 'created_time' || prop.type === 'edited_time' || prop.type === 'rollup' || (prop.type === 'relation' && !prop.config.databaseId);
+  const readOnly =
+    prop.type === 'created_time' || prop.type === 'edited_time' || prop.type === 'rollup' || prop.type === 'formula' || (prop.type === 'relation' && !prop.config.databaseId);
   const empty = value === undefined || value === null;
 
   const open = () => {
@@ -514,12 +530,7 @@ export function DatePicker({ value, onChange, template = false }) {
       {q.trim() && (
         <div className="px-1 text-[12px] text-muted">{iso ? formatDateLong(iso) : 'Not a date I know'}</div>
       )}
-      <input
-        type="date"
-        value={value ?? ''}
-        onChange={(e) => e.target.value && onChange(e.target.value)}
-        className={`${field} [color-scheme:dark]`}
-      />
+      <MiniCalendar value={value} onPick={onChange} />
       <div className="flex gap-1">
         <button type="button" className={menuItem} onClick={() => onChange(toISODate(new Date()))}>
           Today

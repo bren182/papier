@@ -37,6 +37,8 @@ export const Page = z.object({
   /** A template: kept out of lists, copied by "Use template". */
   isTemplate: z.boolean(),
   order: z.string(),
+  /** Starred: listed under Favourites in the sidebar. */
+  favorite: z.boolean(),
   hasChildren: z.boolean(),
   createdAt: z.number(),
   updatedAt: z.number(),
@@ -67,6 +69,8 @@ export const PageUpdate = z
     icon: z.string().max(64).nullable(),
     /** Merged into the page's appearance; a null value removes that key. */
     appearance: Appearance,
+    /** Star or unstar: favourites are listed at the top of the sidebar. */
+    favorite: z.boolean(),
   })
   .partial()
   .refine((v) => Object.keys(v).length > 0, 'Nothing to update');

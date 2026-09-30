@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { usePage, useUpdatePage } from '../../api/pages.js';
+import { openPeek } from '../../useSelectedPage.js';
 import { DatabaseView } from './DatabaseView.jsx';
 import { DatabaseIcon, Icon, ICONS } from './meta.jsx';
 
@@ -20,7 +21,7 @@ export function InlineDatabase({ databaseId, viewId, onViewChange, onOpenPage })
         inline
         viewId={viewId}
         onViewChange={onViewChange}
-        onOpenRow={onOpenPage}
+        onOpenRow={openPeek}
         header={<InlineTitle id={databaseId} title={data.page.title} onOpen={() => onOpenPage(databaseId)} />}
       />
     </div>

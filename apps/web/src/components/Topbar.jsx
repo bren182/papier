@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react';
-import { usePage } from '../api/pages.js';
+import { usePage, useSetFavorite } from '../api/pages.js';
 import { PageMenu } from './PageMenu.jsx';
 import { TitleText } from './TitleText.jsx';
 
 /** @typedef {import('../usePrefs.js').Prefs} Prefs */
 
-const toggle =
-  'h-7 rounded-md border border-white/10 bg-white/[0.04] px-2.5 text-[13px] text-fg hover:bg-white/[0.08]';
+const toggle = 'h-7 rounded-md border border-white/10 bg-white/[0.04] px-2.5 text-[13px] text-fg hover:bg-white/[0.08]';
 
 /**
  * @param {{
@@ -24,7 +23,10 @@ export function Topbar({ selectedId, onSelect, prefs, onChange }) {
   return (
     <header
       className="flex h-11 shrink-0 items-center gap-2 bg-s-top px-4 text-sm"
-      style={{ backdropFilter: 'var(--s-top-glass)', WebkitBackdropFilter: 'var(--s-top-glass)' }}
+      style={{
+        backdropFilter: 'var(--s-top-glass)',
+        WebkitBackdropFilter: 'var(--s-top-glass)',
+      }}
     >
       {!prefs.sidebar && (
         <button
@@ -79,6 +81,7 @@ export function Topbar({ selectedId, onSelect, prefs, onChange }) {
       <button type="button" className={toggle} onClick={() => onChange({ motion: !prefs.motion })}>
         {prefs.motion ? 'Pause motion' : 'Play motion'}
       </button>
+      {data && !data.page.isTemplate && !data.inTemplate && <FavoriteButton page={data.page} />}
       {data && <PageMenu page={data.page} databaseId={data.database?.id ?? null} onSelect={onSelect} />}
     </header>
   );
@@ -111,9 +114,58 @@ function useServerHealth() {
 /** A panel-with-sidebar glyph for the show/hide sidebar buttons. */
 export function SidebarIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
       <rect x="3.5" y="4.5" width="17" height="15" rx="2" />
       <path d="M9.5 4.5v15" />
+    </svg>
+  );
+}
+
+/**
+ * Star / unstar the open page (Favourites in the sidebar).
+ * @param {{ page: import('@papier/core').Page }} props
+ */
+function FavoriteButton({ page }) {
+  const setFavorite = useSetFavorite();
+  const on = Boolean(page.favorite);
+  return (
+    <button
+      type="button"
+      aria-pressed={on}
+      aria-label={on ? 'Remove from favourites' : 'Add to favourites'}
+      title={on ? 'Remove from favourites' : 'Add to favourites'}
+      onClick={() => setFavorite.mutate({ id: page.id, favorite: !on })}
+      className={`flex size-7 items-center justify-center rounded-md hover:bg-s-active ${on ? 'text-fg-strong' : 'text-muted hover:text-fg'}`}
+    >
+      <StarIcon filled={on} />
+    </button>
+  );
+}
+
+/** @param {{ filled?: boolean }} props */
+export function StarIcon({ filled = false }) {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill={filled ? 'currentColor' : 'none'}
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.8L12 16.8l-5.2 2.8 1-5.8-4.3-4.1 5.9-.8z" />
     </svg>
   );
 }

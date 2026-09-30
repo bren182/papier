@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { plainText } from '@papier/core/text';
 import { reloadContent } from './blocks.js';
 import { api, ApiError } from './client.js';
+import { forgetRecent } from '../recentPages.js';
 
 /** @typedef {import('@papier/core').Page} Page */
 /** @typedef {{ id: string, title: string, titleContent: import('@papier/core').InlineContent | null, icon: string | null }} Crumb */
@@ -22,7 +23,32 @@ export const pageKeys = {
   all: ['pages'],
   children: (/** @type {string | null} */ parentId) => ['pages', 'children', parentId ?? 'root'],
   detail: (/** @type {string} */ id) => ['pages', 'detail', id],
+  favorites: ['pages', 'favorites'],
 };
+
+/** Starred pages, in starring order (the sidebar's Favourites). */
+export function useFavorites() {
+  return useQuery({
+    queryKey: pageKeys.favorites,
+    queryFn: () => /** @type {Promise<Page[]>} */ (api('/favorites')),
+  });
+}
+
+/** Star or unstar a page; the sidebar and the page follow at once. */
+export function useSetFavorite() {
+  const qc = useQueryClient();
+  return useMutation({
+    /** @param {{ id: string, favorite: boolean }} vars */
+    mutationFn: ({ id, favorite }) => /** @type {Promise<Page>} */ (api(`/pages/${id}`, { method: 'PATCH', body: { favorite } })),
+    onMutate: ({ id, favorite }) => {
+      const apply = (/** @type {Page} */ p) => (p.id === id ? { ...p, favorite } : p);
+      qc.setQueriesData({ queryKey: ['pages', 'children'] }, (/** @type {Page[] | undefined} */ list) => list?.map(apply));
+      qc.setQueryData(pageKeys.detail(id), (/** @type {PageDetail | undefined} */ d) => d && { ...d, page: apply(d.page) });
+      if (!favorite) qc.setQueryData(pageKeys.favorites, (/** @type {Page[] | undefined} */ list) => list?.filter((p) => p.id !== id));
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: pageKeys.favorites }),
+  });
+}
 
 /**
  * Children of one parent (null = root). Only fetched when `enabled`, so the
@@ -79,13 +105,15 @@ export function useUpdatePage() {
             ? { ...input, titleContent: null }
             : input;
       // Appearance merges, like on the server (null drops a key).
-      const apply = (/** @type {Page} */ p) => ({ ...p, ...patch, ...(patch.appearance ? { appearance: mergeAppearance(p.appearance, patch.appearance) } : {}) });
-      qc.setQueriesData({ queryKey: ['pages', 'children'] }, (/** @type {Page[] | undefined} */ list) =>
-        list?.map((p) => (p.id === id ? apply(p) : p)),
-      );
-      qc.setQueryData(pageKeys.detail(id), (/** @type {{ page: Page, ancestors: Crumb[] } | undefined} */ d) =>
-        d && { ...d, page: apply(d.page) },
-      );
+      const apply = (/** @type {Page} */ p) => ({
+        ...p,
+        ...patch,
+        ...(patch.appearance ? { appearance: mergeAppearance(p.appearance, patch.appearance) } : {}),
+      });
+      for (const queryKey of [['pages', 'children'], pageKeys.favorites]) {
+        qc.setQueriesData({ queryKey }, (/** @type {Page[] | undefined} */ list) => list?.map((p) => (p.id === id ? apply(p) : p)));
+      }
+      qc.setQueryData(pageKeys.detail(id), (/** @type {{ page: Page, ancestors: Crumb[] } | undefined} */ d) => d && { ...d, page: apply(d.page) });
     },
     onError: () => qc.invalidateQueries({ queryKey: pageKeys.all }),
   });
@@ -118,7 +146,8 @@ export function useRestorePage() {
   const qc = useQueryClient();
   return useMutation({
     /** @param {string} id */
-    mutationFn: (id) => /** @type {Promise<{ page: Page, parentId: string | null, contentChanged: string | null }>} */ (api(`/pages/${id}/restore`, { method: 'POST' })),
+    mutationFn: (id) =>
+      /** @type {Promise<{ page: Page, parentId: string | null, contentChanged: string | null }>} */ (api(`/pages/${id}/restore`, { method: 'POST' })),
     onSuccess: (res) => {
       refreshAfterTrash(qc);
       if (res.contentChanged) reloadContent(qc, [res.contentChanged]);
@@ -147,6 +176,7 @@ export function useArchivePage() {
       qc.invalidateQueries({ queryKey: ['db'] }); // a row or a database template
       qc.invalidateQueries({ queryKey: ['trash'] });
       reloadContent(qc, [page.parentId]); // its page block is gone
+      forgetRecent(page.id);
     },
   });
 }
@@ -159,7 +189,12 @@ export function useMovePage() {
   return useMutation({
     /** @param {PageMoveVars} vars */
     mutationFn: ({ id, parentId, beforeId, afterId }) =>
-      /** @type {Promise<Page>} */ (api(`/pages/${id}/move`, { method: 'POST', body: { parentId, beforeId, afterId } })),
+      /** @type {Promise<Page>} */ (
+        api(`/pages/${id}/move`, {
+          method: 'POST',
+          body: { parentId, beforeId, afterId },
+        })
+      ),
     onSuccess: (_page, { from, parentId }) => {
       qc.invalidateQueries({ queryKey: pageKeys.all });
       // The page block moved from one parent's content to the other's.

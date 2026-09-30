@@ -12,7 +12,7 @@ test('right-click a block opens its menu at the pointer', async ({ page, request
   await block(page, 'Two').locator('.pb-c').click({ button: 'right' });
   const menu = page.getByRole('menu');
   await expect(menu).toBeVisible();
-  await menu.getByRole('menuitem', { name: 'Heading 1' }).click();
+  await menu.getByRole('menuitem', { name: /^H1 ?Heading 1$/ }).click();
   await expect(page.locator('.papier-editor > .pb[data-type=heading]')).toHaveText('Two');
 });
 

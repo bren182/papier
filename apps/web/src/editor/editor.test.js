@@ -5,7 +5,7 @@ import { TextSelection } from '@tiptap/pm/state';
 import { docToRows } from './convert.js';
 import { applyDrop, planDrop } from './dropPlan.js';
 import { bodyExtensions } from './extensions.js';
-import { slashItems } from './menuItems.js';
+import { mentionItems, pageLinkItems, slashItems } from './menuItems.js';
 
 /** @type {Editor | null} */
 let editor = null;
@@ -346,6 +346,19 @@ describe('toggles', () => {
     expect(e.state.selection.$head.parent.textContent).toBe('Details');
   });
 
+  it('Mod-Alt-digit turns a block into another type', () => {
+    const e = setup(['hello']);
+    press(e, '1', { ctrlKey: true, altKey: true });
+    expect(blocks(e)).toEqual(['heading:0:hello']);
+    press(e, '7', { ctrlKey: true, altKey: true });
+    expect(blocks(e)).toEqual(['toggle:0:hello']);
+  });
+
+  it('an open toggle with nothing inside gets a hint', () => {
+    const e = setup(['toggle:0:Details', 'after']);
+    expect(e.view.dom.querySelector('.pb.toggle-empty')?.textContent).toBe('Details');
+  });
+
   it('a callout wraps the blocks indented under it', () => {
     const e = setup(['callout:0:Note', 'paragraph:1:inside', 'paragraph:2:deeper', 'outside']);
     expect(classes(e)).toEqual(['-', 'in', 'in', '-']);
@@ -356,8 +369,45 @@ describe('toggles', () => {
     const e = withAttrs(['toggle:0:T', 'callout:0:C'], 0, { collapsed: true });
     const rows = docToRows(/** @type {any} */ (e.getJSON()), new Map());
     expect(rows.map((r) => [r.type, r.props])).toEqual([
-      ['toggle', { collapsed: true }],
-      ['callout', { icon: '💡' }],
+      ['toggle', { collapsed: true, level: 0 }],
+      ['callout', { icon: '💡', tone: 'plain' }],
     ]);
+  });
+});
+
+describe('inline page links', () => {
+  const hit = { id: 'p1', title: 'Standups', titleContent: null, icon: '📅' };
+  /** An editor whose link menus search a fake workspace. */
+  function linked() {
+    const e = new Editor({
+      element: document.createElement('div'),
+      extensions: bodyExtensions({ links: { searchPages: async (q) => ('standups'.startsWith(q.toLowerCase()) ? [hit] : []), recentPages: () => [hit] } }),
+      content: { type: 'doc', content: [{ type: 'paragraph', attrs: { id: 'b0', indent: 0 }, content: [{ type: 'text', text: 'see ' }] }] },
+    });
+    e.commands.focus('end');
+    editor = e;
+    return e;
+  }
+
+  it('[[ offers recent pages, then search hits, and inserts a stored page link', async () => {
+    const e = linked();
+    expect((await pageLinkItems('', e)).map((i) => i.title)).toEqual(['Standups']);
+    const [item] = await pageLinkItems('stand', e);
+    const end = e.state.doc.content.size - 1;
+    e.commands.insertContent('[[stand');
+    item.run(e, { from: end, to: e.state.doc.content.size - 1 });
+    const [row] = docToRows(/** @type {any} */ (e.getJSON()), new Map());
+    expect(row.content).toEqual([
+      { type: 'text', text: 'see ', styles: {} },
+      { type: 'page', props: { pageId: 'p1' } },
+      { type: 'text', text: ' ', styles: {} },
+    ]);
+  });
+
+  it('@ lists dates first and matching pages after', async () => {
+    const e = linked();
+    const items = await mentionItems('stand', e);
+    expect(items.at(-1)).toMatchObject({ title: 'Standups', group: 'Link to page' });
+    expect((await mentionItems('today', e))[0]).toMatchObject({ group: 'Date' });
   });
 });

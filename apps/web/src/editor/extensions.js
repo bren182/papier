@@ -9,11 +9,12 @@ import Underline from '@tiptap/extension-underline';
 import { Dropcursor, Gapcursor, Placeholder, UndoRedo } from '@tiptap/extensions';
 import { DateNode } from './DateNode.js';
 import { PageBlock } from './PageBlock.js';
+import { PageMention } from './PageMention.js';
 import { ButtonBlock } from './ButtonBlock.jsx';
 import { DatabaseBlock } from './DatabaseBlock.jsx';
 import { BlockInputRules } from './inputRules.js';
 import { BlockKeymap } from './keymap.js';
-import { dateItems, slashItems } from './menuItems.js';
+import { dateItems, mentionItems, pageLinkItems, slashItems } from './menuItems.js';
 import { BLOCK_NODES, ListNumbering, Outline, PapierDocument, Text, TreeInvariants } from './schema.js';
 import { suggestionMenu } from './SuggestionMenu.jsx';
 
@@ -30,6 +31,12 @@ export const TemplateMode = Extension.create({
 });
 
 export const DateMenu = suggestionMenu({ name: 'dateMenu', char: '@', items: dateItems, allowSpaces: true }).extend({ priority: 300 });
+
+/** The page body's `@`: dates, then pages to link. */
+const MentionMenu = suggestionMenu({ name: 'mentionMenu', char: '@', items: mentionItems, allowSpaces: true }).extend({ priority: 300 });
+
+/** `[[`: link a page inline. */
+const PageLinkMenu = suggestionMenu({ name: 'pageLinkMenu', char: '[[', items: pageLinkItems, allowSpaces: true }).extend({ priority: 300 });
 
 const SlashMenu = suggestionMenu({ name: 'slashMenu', char: '/', items: slashItems }).extend({ priority: 300 });
 
@@ -57,7 +64,7 @@ function placeholderFor(node) {
     case 'callout':
       return 'Callout';
     case 'paragraph':
-      return 'Write, or press ‘/’ for blocks and ‘@’ for dates…';
+      return 'Write, or press ‘/’ for blocks, ‘@’ for dates and pages…';
     default:
       return '';
   }
@@ -66,10 +73,12 @@ function placeholderFor(node) {
 /**
  * Everything the page body editor is made of.
  * @param {{ pages?: Partial<import('./PageBlock.js').PageBlockOptions>, databases?: Partial<import('./DatabaseBlock.jsx').DatabaseBlockOptions>,
- *   buttons?: Partial<import('./ButtonBlock.jsx').ButtonBlockOptions>, callouts?: Partial<import('./schema.js').CalloutOptions>, template?: boolean }} [opts]
- *   page, database and button blocks' data and views, the callout icon picker (none in tests); template: a template page
+ *   buttons?: Partial<import('./ButtonBlock.jsx').ButtonBlockOptions>, callouts?: Partial<import('./schema.js').CalloutOptions>,
+ *   links?: Partial<Pick<import('./PageMention.js').PageMentionOptions, 'searchPages' | 'recentPages'>>, template?: boolean }} [opts]
+ *   page, database and button blocks' data and views, the callout icon picker, page search for inline links (none in tests);
+ *   template: a template page
  */
-export function bodyExtensions({ pages = {}, databases = {}, buttons = {}, callouts = {}, template = false } = {}) {
+export function bodyExtensions({ pages = {}, databases = {}, buttons = {}, callouts = {}, links = {}, template = false } = {}) {
   return [
     TemplateMode.configure({ enabled: template }),
     PapierDocument,
@@ -79,6 +88,7 @@ export function bodyExtensions({ pages = {}, databases = {}, buttons = {}, callo
     DatabaseBlock.configure(databases),
     ButtonBlock.configure(buttons),
     DateNode,
+    PageMention.configure({ watchPage: pages.watchPage ?? null, openPage: pages.openPage ?? null, ...links }),
     SoftBreak,
     Bold,
     Italic,
@@ -101,6 +111,7 @@ export function bodyExtensions({ pages = {}, databases = {}, buttons = {}, callo
     Gapcursor,
     Placeholder.configure({ placeholder: ({ node }) => placeholderFor(node), includeChildren: false }),
     SlashMenu,
-    DateMenu,
+    MentionMenu,
+    PageLinkMenu,
   ];
 }

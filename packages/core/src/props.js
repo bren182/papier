@@ -20,6 +20,7 @@ export const PROPERTY_TYPES = /** @type {const} */ ([
   'relation',
   'rollup',
   'button',
+  'formula',
 ]);
 
 /**
@@ -27,7 +28,7 @@ export const PROPERTY_TYPES = /** @type {const} */ ([
  * rollup over a relation) or a button, which does things instead. They have no
  * `page_props` rows. Relations have none either — their links live in `property_links`.
  */
-export const COMPUTED_TYPES = new Set(['created_time', 'edited_time', 'rollup', 'button']);
+export const COMPUTED_TYPES = new Set(['created_time', 'edited_time', 'rollup', 'button', 'formula']);
 
 /**
  * Rollup functions by the type of the property they aggregate. `any` applies to
@@ -103,6 +104,11 @@ export const FILTER_OPS = {
  */
 export function filterOps(prop) {
   if (!prop) return [];
+  if (prop.type === 'formula') {
+    // Filtered like what it computes (resultType is kept up to date by the server).
+    const t = prop.config?.resultType;
+    return t === 'boolean' ? FILTER_OPS.checkbox ?? [] : t ? (FILTER_OPS[t] ?? []) : [];
+  }
   if (prop.type !== 'rollup') return FILTER_OPS[prop.type] ?? [];
   const result = rollupResultType(prop.config?.fn ?? undefined);
   return FILTER_OPS[result === 'list' ? 'rollup_list' : result === 'percent' ? 'number' : result] ?? [];
@@ -130,6 +136,8 @@ export const VALUELESS_OPS = new Set(['is_empty', 'is_not_empty']);
  * @property {string | null} [fn]  rollup: one of ROLLUP_FN_NAMES
  * @property {string} [label]  button: its label (default: the property name)
  * @property {import('./actions.js').Action[]} [actions]  button: what it does
+ * @property {string} [expression]  formula: its source (see formula.js)
+ * @property {'number' | 'text' | 'date' | 'boolean' | null} [resultType]  formula: what it computes (null while invalid)
  * @typedef {{ id: string, name: string, type: string, config: PropertyConfig }} PropertyDef
  * @typedef {string | number | boolean | string[] | null} PropValue
  */

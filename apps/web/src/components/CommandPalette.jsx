@@ -1,5 +1,5 @@
 import { THEMES } from '@papier/ui';
-import { useArchivePage, useCreatePage, usePage, useUpdatePage } from '../api/pages.js';
+import { useArchivePage, useCreatePage, usePage, useSetFavorite, useUpdatePage } from '../api/pages.js';
 import { useDuplicatePage } from '../api/templates.js';
 import { requestPageAction } from '../pageActions.js';
 import { recentPages } from '../recentPages.js';
@@ -30,6 +30,7 @@ export function CommandPalette({ onClose, onSelect, selectedId, prefs, onPrefs, 
   const updatePage = useUpdatePage();
   const archive = useArchivePage();
   const duplicate = useDuplicatePage();
+  const setFavorite = useSetFavorite();
   const { data } = usePage(selectedId);
   const page = data?.page;
   const isRow = Boolean(data?.database);
@@ -72,6 +73,9 @@ export function CommandPalette({ onClose, onSelect, selectedId, prefs, onPrefs, 
       { id: 'customise', title: 'Customise page', keywords: 'font mood layout', run: () => requestPageAction('customise') },
       { id: 'full-width', title: look.fullWidth ? 'Normal width' : 'Full width', keywords: 'page layout', run: () => setLook({ fullWidth: look.fullWidth ? null : true }) },
       { id: 'small-text', title: look.smallText ? 'Normal text size' : 'Small text', keywords: 'page layout font', run: () => setLook({ smallText: look.smallText ? null : true }) },
+      ...(!page.isTemplate && !data?.inTemplate
+        ? [{ id: 'favorite', title: page.favorite ? 'Remove from favourites' : 'Add to favourites', keywords: 'star pin sidebar', run: () => quietly(setFavorite.mutateAsync({ id: page.id, favorite: !page.favorite })) }]
+        : []),
       { id: 'duplicate', title: 'Duplicate page', keywords: 'copy', run: () => quietly(duplicate.mutateAsync({ id: page.id }).then((copy) => onSelect(copy.id))) },
       ...(!page.isTemplate
         ? [

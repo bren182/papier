@@ -3,6 +3,8 @@ import { blockAt, insertBlockAfter, setBlockType, withDescendants } from './bloc
 import { docToRows } from './convert.js';
 import { DYNAMIC_TODAY } from '@papier/core/props';
 import { dateSuggestions } from './dates.js';
+import { titleOf } from './PageBlock.js';
+import { pageMentionOptions } from './PageMention.js';
 
 /** @typedef {import('./SuggestionMenu.jsx').MenuItem} MenuItem */
 /** @typedef {import('@tiptap/core').Editor} Editor */
@@ -46,7 +48,10 @@ export const BLOCK_TYPES = [
   { title: 'Bulleted list', icon: '•', aliases: ['ul', 'bullet', 'list'], type: 'bulletItem' },
   { title: 'Numbered list', icon: '1.', aliases: ['ol', 'number', 'ordered'], type: 'numberedItem' },
   { title: 'To-do list', icon: '☐', aliases: ['todo', 'task', 'check', 'checkbox'], type: 'todo' },
-  { title: 'Toggle', icon: '▸', aliases: ['toggle list', 'collapse', 'fold', 'details'], type: 'toggle' },
+  { title: 'Toggle', icon: '▸', aliases: ['toggle list', 'collapse', 'fold', 'details'], type: 'toggle', attrs: { level: 0 } },
+  { title: 'Toggle heading 1', icon: '▸H1', aliases: ['toggle h1', 'collapsible heading'], type: 'toggle', attrs: { level: 1 } },
+  { title: 'Toggle heading 2', icon: '▸H2', aliases: ['toggle h2'], type: 'toggle', attrs: { level: 2 } },
+  { title: 'Toggle heading 3', icon: '▸H3', aliases: ['toggle h3'], type: 'toggle', attrs: { level: 3 } },
   { title: 'Quote', icon: '❝', aliases: ['blockquote', 'citation'], type: 'quote' },
   { title: 'Callout', icon: '💡', aliases: ['note', 'tip', 'info', 'aside', 'box'], type: 'callout' },
   { title: 'Code', icon: '</>', aliases: ['codeblock', 'snippet', 'pre'], type: 'codeBlock' },
@@ -177,6 +182,14 @@ const INLINE_ITEMS = [
     subtext: 'Today, 2 days ago, next fri…',
     run: (editor, range) => editor.chain().focus().deleteRange(range).insertContent('@').run(),
   },
+  {
+    title: 'Link to page',
+    icon: '↗',
+    aliases: ['mention page', 'page link', 'link'],
+    group: 'Inline',
+    subtext: 'Or type [[',
+    run: (editor, range) => editor.chain().focus().deleteRange(range).insertContent('[[').run(),
+  },
 ];
 
 /**
@@ -221,4 +234,48 @@ export function dateItems(query, editor) {
         ])
         .run(),
   }));
+}
+
+/** A page as a menu item that inserts an inline link to it. @param {import('./PageMention.js').PageHit} hit @returns {MenuItem} */
+const pageLinkItem = (hit) => ({
+  title: titleOf(hit) || 'Untitled',
+  group: 'Link to page',
+  icon: hit.icon || '↗',
+  run: (editor, range) =>
+    editor
+      .chain()
+      .focus()
+      .insertContentAt(range, [
+        { type: 'pageMention', attrs: { pageId: hit.id } },
+        { type: 'text', text: ' ' },
+      ])
+      .run(),
+});
+
+/**
+ * `[[` menu: pages to link inline — recently opened ones before you type.
+ * @param {string} query
+ * @param {Editor} editor
+ * @returns {Promise<MenuItem[]>}
+ */
+export async function pageLinkItems(query, editor) {
+  const opts = pageMentionOptions(editor);
+  const q = query.trim();
+  const hits = q ? ((await opts?.searchPages?.(q).catch(() => [])) ?? []) : (opts?.recentPages?.() ?? []);
+  return hits.slice(0, 8).map(pageLinkItem);
+}
+
+/**
+ * The page body's `@` menu: dates first, then pages whose text matches.
+ * @param {string} query
+ * @param {Editor} editor
+ * @returns {Promise<MenuItem[]>}
+ */
+export async function mentionItems(query, editor) {
+  const dates = dateItems(query, editor);
+  const q = query.trim();
+  const search = pageMentionOptions(editor)?.searchPages;
+  if (!q || !search) return dates;
+  const hits = await search(q).catch(() => []);
+  return [...dates, ...hits.slice(0, 6).map(pageLinkItem)];
 }

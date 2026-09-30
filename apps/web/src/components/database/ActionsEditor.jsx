@@ -2,6 +2,7 @@ import { ACTIONS_FOR, MAX_ACTIONS, THIS_ROW } from '@papier/core/actions';
 import { DYNAMIC_TODAY } from '@papier/core/props';
 import { useDatabase, useDatabaseList } from '../../api/databases.js';
 import { ValueCell } from './cells.jsx';
+import { FormulaEditor } from './FormulaEditor.jsx';
 import { Icon, ICONS } from './meta.jsx';
 import { field, menuLabel } from './Popover.jsx';
 
@@ -21,6 +22,7 @@ export const ACTION_LABELS = /** @type {Record<string, string>} */ ({
   check: 'Check or uncheck',
   add_number: 'Add to a number',
   link: 'Link or unlink rows',
+  set_formula: 'Set to a formula',
   add_row: 'Add a row to a database',
 });
 
@@ -129,6 +131,8 @@ function newAction(type, properties) {
       return { type, propId, amount: 1 };
     case 'link':
       return { type, propId, rowIds: [], mode: 'add' };
+    case 'set_formula':
+      return { type, propId, formula: '' };
     default:
       return { type: 'set', propId, value: null };
   }
@@ -201,6 +205,9 @@ function RowActionFields({ action, properties, onChange }) {
           onKeyDown={(e) => e.stopPropagation()}
           className={field}
         />
+      )}
+      {prop && action.type === 'set_formula' && (
+        <FormulaEditor value={action.formula} onChange={(formula) => set({ formula })} properties={properties} rows={2} reference={false} />
       )}
       {prop && action.type === 'link' && (
         <div className="flex items-center gap-1">

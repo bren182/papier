@@ -21,6 +21,8 @@ export const pages = sqliteTable(
     isTemplate: integer('is_template', { mode: 'boolean' }).notNull().default(false),
     /** Fractional index among siblings; see orderBetween in @papier/core. */
     orderKey: text('order_key').notNull(),
+    /** Order among the sidebar's Favourites; null = not a favourite. */
+    favoriteKey: text('favorite_key'),
     /** Set when moved to trash (ms since epoch). Descendants are hidden with it. */
     archivedAt: integer('archived_at'),
     createdAt: integer('created_at').notNull(),

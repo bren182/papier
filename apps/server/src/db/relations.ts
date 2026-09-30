@@ -1,5 +1,6 @@
 import { and, eq, inArray, sql, type SQL } from 'drizzle-orm';
 import {
+  FormulaError,
   InvalidValue,
   orderBetween,
   ROLLUP_TARGET_TYPES,
@@ -12,6 +13,7 @@ import {
 } from '@papier/core';
 import type { Db } from './index.ts';
 import { liveLineage } from './lineage.ts';
+import { compileFormula, formulaValue } from './formula.ts';
 import { properties, type Conn, type Prop } from './props.ts';
 import { pageProps, pages, propertyLinks } from './schema.ts';
 
@@ -90,6 +92,12 @@ export class Relations {
     if (!this.targetDb(prop)) return sql`0`;
     const extra = targetId === undefined ? sql`` : sql` and t.id = ${targetId}`;
     return sql`exists (select 1 ${this.links(prop, rowId)}${extra})`;
+  }
+
+  /** The linked pages' titles, comma-separated (a relation in a formula). */
+  titles(prop: PropertyDef, rowId: SQL): SQL {
+    if (!this.targetDb(prop)) return sql`null`;
+    return sql`(select group_concat(x.title, ', ') from (select t.title ${this.links(prop, rowId)} order by ${this.linkOrder(prop)}) x)`;
   }
 
   /** The first linked page's title, lowercased (for sorting). */
@@ -191,21 +199,31 @@ export class Relations {
     }
 
     const byId = new Map(props.map((p) => [p.id, p]));
-    const rollups = props.flatMap((p) => {
-      if (p.type !== 'rollup') return [];
-      const r = this.rollup(p, byId, sql`p.id`);
-      return r ? [{ prop: p, ...r }] : [];
-    });
-    if (rollups.length) {
-      const cols = sql.join(rollups.map((r, i) => sql`${r.expr} as ${sql.raw(`r${i}`)}`), sql`, `);
+    // Rollups and formulas: one computed column each, in one query over the rows.
+    const computed: { prop: PropertyDef; expr: SQL; read: (v: unknown) => unknown }[] = [];
+    for (const p of props) {
+      if (p.type === 'rollup') {
+        const r = this.rollup(p, byId, sql`p.id`);
+        if (r) computed.push({ prop: p, expr: r.expr, read: (v) => (r.result === 'list' ? listText(r.target, JSON.parse(v as string)) : v) });
+      } else if (p.type === 'formula') {
+        try {
+          const f = compileFormula(p.config.expression ?? '', { props, rel: this, tzOffset: this.tzOffset, rowId: sql`p.id` }, new Set([p.id]));
+          computed.push({ prop: p, expr: f.sql, read: (v) => formulaValue(f.type, v) });
+        } catch (err) {
+          if (!(err instanceof FormulaError)) throw err; // an invalid formula just shows nothing
+        }
+      }
+    }
+    if (computed.length) {
+      const cols = sql.join(computed.map((c, i) => sql`${c.expr} as ${sql.raw(`c${i}`)}`), sql`, `);
       const rows = this.conn.all<Record<string, unknown>>(sql`select p.id, ${cols} from pages p where p.id in (${ids})`);
       for (const row of rows) {
         const cell = values.get(row.id as string)!;
-        rollups.forEach((r, i) => {
-          const v = row[`r${i}`];
+        computed.forEach((c, i) => {
+          const v = row[`c${i}`];
           if (v === null || v === undefined) return;
-          const value = r.result === 'list' ? listText(r.target, JSON.parse(v as string)) : v;
-          if (value !== null) cell[r.prop.id] = value;
+          const value = c.read(v);
+          if (value !== null && value !== undefined) cell[c.prop.id] = value;
         });
       }
     }

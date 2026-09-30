@@ -15,13 +15,19 @@ import { Toolbar } from './Toolbar.jsx';
  * Full-page databases keep the chosen view locally; an inline database block
  * stores it in the block (`viewId` / `onViewChange`).
  * @param {{ databaseId: string, inline?: boolean, viewId?: string | null, onViewChange?: (id: string) => void,
- *   onOpenRow: (id: string) => void, header?: import('react').ReactNode }} props
+ *   onOpenRow: (id: string, ids: string[]) => void, header?: import('react').ReactNode }} props
  */
 export function DatabaseView({ databaseId, inline = false, viewId, onViewChange, onOpenRow, header }) {
   const { data, isPending, isError } = useDatabase(databaseId);
   const m = useDatabaseMutations(databaseId);
   const [localViewId, setLocalViewId] = useState(/** @type {string | null} */ (null));
   const [newRowId, setNewRowId] = useState(/** @type {string | null} */ (null));
+  const root = useRef(/** @type {HTMLDivElement | null} */ (null));
+  /** Open a row, with the rows around it as the view shows them (the peek's ‹ ›). @param {string} id */
+  const openRow = (id) => {
+    const shown = [...(root.current?.querySelectorAll('[data-row-id]') ?? [])].map((el) => /** @type {HTMLElement} */ (el).dataset.rowId ?? '');
+    onOpenRow(id, [...new Set(shown)]);
+  };
 
   const views = data?.views ?? [];
   const chosen = viewId ?? localViewId;
@@ -38,7 +44,7 @@ export function DatabaseView({ databaseId, inline = false, viewId, onViewChange,
           view,
           m,
           inline,
-          openRow: onOpenRow,
+          openRow,
           /** @param {Partial<import('../../api/databases.js').ViewConfig>} patch */
           setConfig: (patch) => m.updateView(view, { config: { ...view.config, ...patch } }),
           /** @param {import('./context.js').Property} prop @param {string} name */
@@ -61,13 +67,13 @@ export function DatabaseView({ databaseId, inline = false, viewId, onViewChange,
     const template = templateId === undefined ? defaultTemplate(view, data.templates ?? []) : templateId;
     const row = await m.addRow({ props: { ...prefill(view, data.properties), ...values }, templateId: template });
     // A templated row already has its title and content: open it rather than rename in place.
-    if (template) onOpenRow(row.id);
+    if (template) openRow(row.id);
     else setNewRowId(row.id);
   };
 
   return (
     <DbCtx.Provider value={ctx}>
-      <div className="flex flex-col gap-2" data-database={databaseId}>
+      <div ref={root} className="flex flex-col gap-2" data-database={databaseId}>
         {header}
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-1">
           <ViewTabs views={views} active={view} onChoose={choose} />

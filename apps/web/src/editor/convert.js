@@ -8,6 +8,7 @@ import { rebalanceOrder } from '@papier/core';
  *   { type: 'text', text, styles: { bold: true, … } }
  *   { type: 'link', href, content: [text…] }
  *   { type: 'date', props: { date: 'YYYY-MM-DD' } }
+ *   { type: 'page', props: { pageId } }   (an inline link to a page)
  * Newlines inside text are hard breaks (except in code, where they're literal).
  */
 
@@ -45,8 +46,8 @@ const FROM_NODE = Object.fromEntries(Object.entries(TO_NODE).map(([ours, node]) 
 const PROPS = {
   heading: ['level'],
   todo: ['checked'],
-  toggle: ['collapsed'],
-  callout: ['icon'],
+  toggle: ['collapsed', 'level'],
+  callout: ['icon', 'tone'],
   code: ['language'],
   page: ['pageId'],
   database: ['pageId', 'viewId'],
@@ -90,6 +91,9 @@ export function inlineToPM(content, { code = false } = {}) {
     } else if (node.type === 'date' && !code) {
       const props = /** @type {{ date?: unknown }} */ (node.props ?? {});
       out.push({ type: 'date', attrs: { date: String(props.date ?? '') } });
+    } else if (node.type === 'page' && !code) {
+      const props = /** @type {{ pageId?: unknown }} */ (node.props ?? {});
+      if (props.pageId) out.push({ type: 'pageMention', attrs: { pageId: String(props.pageId) } });
     }
   };
 
@@ -138,6 +142,8 @@ export function inlineFromPM(nodes = []) {
       appendText(out, '\n', {});
     } else if (node.type === 'date') {
       out.push({ type: 'date', props: { date: String(node.attrs?.date ?? '') } });
+    } else if (node.type === 'pageMention') {
+      out.push({ type: 'page', props: { pageId: String(node.attrs?.pageId ?? '') } });
     }
   }
   return out;

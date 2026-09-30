@@ -4,11 +4,12 @@ import { useDatabase, useDatabaseList } from '../../api/databases.js';
 import { usePage } from '../../api/pages.js';
 import { TitleText } from '../TitleText.jsx';
 import { ActionsEditor } from './ActionsEditor.jsx';
+import { FormulaEditor } from './FormulaEditor.jsx';
 import { DatabaseIcon, ROLLUP_LABELS, TYPE_LABELS } from './meta.jsx';
 import { field, menuItem, menuLabel } from './Popover.jsx';
 
 /**
- * Settings of relation, rollup and button properties, shown in the property menu (and
+ * Settings of relation, rollup, button and formula properties, shown in the property menu (and
  * on a row page right after adding one). They take the mutations as a prop, so
  * they work outside a database view too.
  *
@@ -223,6 +224,31 @@ export function ButtonConfig({ prop, m, properties }) {
         onChange={(next) => {
           setActions(next);
           save({ actions: next });
+        }}
+      />
+    </div>
+  );
+}
+
+/**
+ * A formula property: its expression, saved after a short pause. What it
+ * computes (`resultType`) comes back from the server.
+ * @param {{ prop: Property, m: Mutations, properties: Property[] }} props
+ */
+export function FormulaConfig({ prop, m, properties }) {
+  const [expression, setExpression] = useState(prop.config.expression ?? '');
+  const timer = useRef(0);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  return (
+    <div className="flex flex-col gap-1 px-1 pb-1">
+      <div className={`${menuLabel} -mx-1`}>Formula</div>
+      <FormulaEditor
+        value={expression}
+        properties={properties.filter((p) => p.id !== prop.id)}
+        onChange={(next) => {
+          setExpression(next);
+          clearTimeout(timer.current);
+          timer.current = window.setTimeout(() => m.updateProperty(prop.id, { config: { ...prop.config, expression: next } }), 500);
         }}
       />
     </div>

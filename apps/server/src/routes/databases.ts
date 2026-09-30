@@ -29,6 +29,7 @@ import { TooBig } from '../db/duplicate.ts';
 import { liveLineage } from '../db/lineage.ts';
 import { properties, propFields, views, viewFields, writeValue, type Conn, type Prop, type Tx } from '../db/props.ts';
 import { firePropsChanged, fireRowAdded } from '../db/automations.ts';
+import { refreshFormulaTypes } from '../db/formula.ts';
 import { alias, filterSql, likeEscape, queryCtx, rowsFrom, sortSql } from '../db/query.ts';
 import { handOverLinks, Relations, rowValues } from '../db/relations.ts';
 import { createRow, placeKey, writeValues } from '../db/rows.ts';
@@ -184,6 +185,7 @@ export function databaseRoutes(app: FastifyInstance, db: Db) {
       if (input.type === 'relation' && config.databaseId && twoWay !== false) {
         addTwin(tx, id, { id: propId, name: input.name, type: input.type, config, order: orderKey });
       }
+      refreshFormulaTypes(tx, id);
       return true;
     });
     if (!done) return reply;
@@ -267,6 +269,9 @@ export function databaseRoutes(app: FastifyInstance, db: Db) {
       tx.update(dbProperties).set(patch).where(eq(dbProperties.id, old.id)).run();
       if (type !== old.type) scrubViews(tx, id, old.id, { keepDisplay: true });
       if (type !== old.type || input.config?.options) reindexProp(tx, { ...next, type, config });
+      // Formulas name properties: follow a rename, and re-derive what they compute.
+      if (input.name !== undefined && input.name !== old.name) renameInFormulas(tx, id, old.name, input.name);
+      refreshFormulaTypes(tx, id);
       return true;
     });
     if (!done) return reply;
@@ -289,6 +294,7 @@ export function databaseRoutes(app: FastifyInstance, db: Db) {
         if (reverseOf) setConfig(tx, reverseOf, (c) => ({ ...c, reverseId: null }));
       }
       deleteProp(tx, id, prop.id);
+      refreshFormulaTypes(tx, id);
       return true;
     });
     if (!deleted) return reply.code(404).send({ error: 'Property not found' });
@@ -590,6 +596,18 @@ function deleteProp(tx: Tx, databaseId: string, propId: string) {
   tx.delete(dbProperties).where(eq(dbProperties.id, propId)).run();
   scrubViews(tx, databaseId, propId, { keepDisplay: false });
   scrubRollups(tx, propId);
+}
+
+/** `prop("Old")` → `prop("New")` in the database's formulas, after a rename. */
+function renameInFormulas(tx: Tx, databaseId: string, from: string, to: string) {
+  const escaped = from.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = new RegExp(`prop\\(\\s*["'“]${escaped}["'”]\\s*\\)`, 'g');
+  const quoted = `prop("${to.replace(/"/g, '\\"')}")`;
+  for (const p of properties(tx, databaseId)) {
+    if (p.type !== 'formula' || !p.config.expression) continue;
+    const expression = p.config.expression.replace(pattern, () => quoted);
+    if (expression !== p.config.expression) setConfig(tx, p.id, (c) => ({ ...c, expression }));
+  }
 }
 
 /** Rollups over a property that is gone (or no longer a relation) lose that part of their config. */

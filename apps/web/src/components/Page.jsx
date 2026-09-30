@@ -6,7 +6,8 @@ import { useContentVersion } from '../api/blocks.js';
 import { pageKeys, useCreatePage, usePage, useRestorePage } from '../api/pages.js';
 import { useDuplicatePage } from '../api/templates.js';
 import { rememberRecent } from '../recentPages.js';
-import { layoutClasses, PageCover, PageDecor, usePageMood } from './PageHeader.jsx';
+import { openPeek } from '../useSelectedPage.js';
+import { hasCover, layoutClasses, PageCover, PageDecor, usePageMood } from './PageHeader.jsx';
 import { TitleText } from './TitleText.jsx';
 
 /** @typedef {import('@papier/core').Page} PageData */
@@ -17,11 +18,11 @@ import { TitleText } from './TitleText.jsx';
 // The editors (TipTap/ProseMirror) are one lazy chunk; the shell and sidebar
 // paint without them.
 const loadEditors = () => import('../editor/index.js');
-const TitleEditor = lazy(() => loadEditors().then((m) => ({ default: m.TitleEditor })));
-const PageEditor = lazy(() => loadEditors().then((m) => ({ default: m.PageEditor })));
+export const TitleEditor = lazy(() => loadEditors().then((m) => ({ default: m.TitleEditor })));
+export const PageEditor = lazy(() => loadEditors().then((m) => ({ default: m.PageEditor })));
 const loadDatabases = () => import('./database/index.js');
 const DatabaseView = lazy(() => loadDatabases().then((m) => ({ default: m.DatabaseView })));
-const RowProperties = lazy(() => loadDatabases().then((m) => ({ default: m.RowProperties })));
+export const RowProperties = lazy(() => loadDatabases().then((m) => ({ default: m.RowProperties })));
 
 const titleClass = 'page-title font-display text-[40px] leading-[48px] font-semibold tracking-[-0.01em] text-fg-strong';
 
@@ -48,11 +49,11 @@ export function Page({ selectedId, onSelect, onTemplates }) {
   const width = look?.fullWidth ? 'max-w-none' : isDatabase ? 'max-w-[1240px]' : 'max-w-[784px]';
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto">
+    <div className="min-h-0 flex-1 overflow-y-auto" data-page-scroll="">
       {/* the cover: a clear window onto the backdrop, or a gradient cover */}
       <PageCover page={data?.page} />
 
-      <div className="p-glass min-h-[calc(100%-170px)] border-t border-white/5 bg-s-page pb-24">
+      <div className={`p-glass border-t border-white/5 bg-s-page pb-24 ${hasCover(data?.page) ? 'min-h-[calc(100%-170px)]' : 'min-h-full'}`}>
         {/* px-14: room for the block handles, inside the column */}
         <article className={`mx-auto flex w-full flex-col px-14 pt-10 ${width} ${layoutClasses(look)}`}>
           {!selectedId ? (
@@ -90,7 +91,7 @@ export function Page({ selectedId, onSelect, onTemplates }) {
               <div className="mt-4">
                 <Suspense fallback={null}>
                   {isDatabase ? (
-                    <DatabaseView key={data.page.id} databaseId={data.page.id} onOpenRow={onSelect} />
+                    <DatabaseView key={data.page.id} databaseId={data.page.id} onOpenRow={openPeek} />
                   ) : (
                     <PageEditor
                       key={`${data.page.id}:${contentVersion}`}

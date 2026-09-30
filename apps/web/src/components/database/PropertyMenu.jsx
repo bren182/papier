@@ -3,7 +3,7 @@ import { PROPERTY_TYPES, rollupResultType } from '@papier/core/props';
 import { useDb } from './context.js';
 import { Icon, ICONS, TYPE_LABELS, TypeIcon } from './meta.jsx';
 import { field, menuItem, menuLabel, Popover } from './Popover.jsx';
-import { ButtonConfig, RelationConfig, RollupConfig } from './RelationConfig.jsx';
+import { ButtonConfig, FormulaConfig, RelationConfig, RollupConfig } from './RelationConfig.jsx';
 
 /**
  * Column header menu: rename, change type, edit options, sort, hide, delete.
@@ -30,7 +30,7 @@ export function PropertyMenu({ prop, anchor, onClose }) {
   };
 
   return (
-    <Popover anchor={anchor} onClose={onClose} width={prop.type === 'button' ? 340 : 250}>
+    <Popover anchor={anchor} onClose={onClose} width={prop.type === 'formula' ? 400 : prop.type === 'button' ? 340 : 250}>
       {!isTitle && (
         <div className="p-1">
           <input
@@ -81,6 +81,7 @@ export function PropertyMenu({ prop, anchor, onClose }) {
           {prop.type === 'relation' && <RelationConfig prop={prop} m={m} />}
           {prop.type === 'rollup' && <RollupConfig prop={prop} m={m} properties={properties} />}
           {prop.type === 'button' && <ButtonConfig prop={prop} m={m} properties={properties} />}
+          {prop.type === 'formula' && <FormulaConfig prop={prop} m={m} properties={properties} />}
           {prop.type === 'number' && (
             <button
               type="button"

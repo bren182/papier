@@ -41,20 +41,25 @@ function usePatch(id) {
   };
 }
 
+/** Whether a page shows the band above its content (any cover, "clear" included). @param {PageData | undefined} page */
+export const hasCover = (page) => Boolean(page?.appearance?.cover);
+
 /**
- * The 170px window above the glass: clear (the backdrop shows through) or a
- * gradient cover drawn from the palette.
+ * The 170px band above the glass, only when the page has a cover: a gradient
+ * drawn from the palette, or "clear" — the backdrop, blurred like the glass.
+ * No cover (the default): no band, the page starts right under the top bar.
  * @param {{ page: PageData | undefined }} props
  */
 export function PageCover({ page }) {
   const cover = page?.appearance?.cover;
   const [choosing, setChoosing] = useState(false);
   const ref = useRef(/** @type {HTMLButtonElement | null} */ (null));
-  const has = Boolean(cover && cover !== 'clear');
+  if (!cover) return null;
+  const clear = cover === 'clear';
   return (
-    <div className="group/cover relative h-[170px]" data-cover={cover ?? 'clear'}>
-      {has && <div aria-hidden="true" className="page-cover absolute inset-0" style={{ backgroundImage: coverCss(cover) }} />}
-      {page && has && (
+    <div className={`group/cover relative h-[170px] ${clear ? 'p-glass' : ''}`} data-cover={cover}>
+      {!clear && <div aria-hidden="true" className="page-cover absolute inset-0" style={{ backgroundImage: coverCss(cover) }} />}
+      {page && (
         <div className="absolute right-4 bottom-3 flex gap-1 opacity-0 transition-opacity group-hover/cover:opacity-100 focus-within:opacity-100">
           <button ref={ref} type="button" onClick={() => setChoosing(true)} className={coverButton}>
             Change cover
@@ -93,13 +98,13 @@ function CoverChooser({ page, anchor, onClose }) {
             title={c.name}
             aria-label={`Cover ${c.name}`}
             onClick={() => {
-              patch.look({ cover: c.id === 'clear' ? null : c.id });
+              patch.look({ cover: c.id });
               onClose();
             }}
             className={`page-cover h-12 rounded-md border ${page.appearance?.cover === c.id ? 'border-accent' : 'border-line'} hover:border-muted`}
             style={{ backgroundImage: c.css === 'none' ? undefined : c.css }}
           >
-            {c.id === 'clear' && <span className="text-[11px] text-muted">Clear</span>}
+            {c.id === 'clear' && <span className="text-[11px] text-muted">Clear (blurred)</span>}
           </button>
         ))}
       </div>
@@ -122,7 +127,7 @@ export function PageDecor({ page }) {
   const lookRef = useRef(/** @type {HTMLButtonElement | null} */ (null));
   // Opened from the palette, a menu's own button may not be there (e.g. Change cover): anchor on the header.
   const boxRef = useRef(/** @type {HTMLDivElement | null} */ (null));
-  const hasCover = Boolean(page.appearance?.cover && page.appearance.cover !== 'clear');
+  const covered = hasCover(page);
   const close = () => setOpen(null);
   // The command palette's "Change icon / cover / Customise".
   usePageAction('icon', () => setOpen('icon'));
@@ -138,7 +143,7 @@ export function PageDecor({ page }) {
           type="button"
           aria-label="Change icon"
           onClick={() => setOpen('icon')}
-          className={`mb-2 flex size-[78px] items-center justify-center rounded-lg text-[64px] leading-none hover:bg-hover ${hasCover ? '-mt-[76px]' : ''}`}
+          className={`mb-2 flex size-[78px] items-center justify-center rounded-lg text-[64px] leading-none hover:bg-hover ${covered ? '-mt-[76px]' : ''}`}
         >
           {page.icon}
         </button>
@@ -149,7 +154,7 @@ export function PageDecor({ page }) {
             ☺ Add icon
           </button>
         )}
-        {!hasCover && (
+        {!covered && (
           <button ref={coverRef} type="button" className={action} onClick={() => setOpen('cover')}>
             ▭ Add cover
           </button>

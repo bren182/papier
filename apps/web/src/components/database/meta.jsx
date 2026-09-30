@@ -13,6 +13,7 @@ export const TYPE_LABELS = /** @type {Record<string, string>} */ ({
   relation: 'Relation',
   rollup: 'Rollup',
   button: 'Button',
+  formula: 'Formula',
 });
 
 export const ROLLUP_LABELS = /** @type {Record<string, string>} */ ({
@@ -105,6 +106,7 @@ const PATHS = /** @type {Record<string, import('react').ReactNode>} */ ({
   ),
   relation: <path d="M7 17L17 7M9 7h8v8" />,
   rollup: <path d="M17 5H7l6 7-6 7h10" />,
+  formula: <path d="M15 4h-2.5A2.5 2.5 0 0 0 10 6.5V20M7 10h7M14 14l5 5M19 14l-5 5" />,
   button: (
     <>
       <rect x="3.5" y="7" width="17" height="10" rx="3" />

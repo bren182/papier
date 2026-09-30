@@ -4,10 +4,10 @@ import { rememberRefs, useDatabase, useDatabaseMutations } from '../../api/datab
 import { ValueCell } from './cells.jsx';
 import { Icon, ICONS, TYPE_LABELS, TypeIcon } from './meta.jsx';
 import { menuItem, menuLabel, Popover } from './Popover.jsx';
-import { ButtonConfig, RelationConfig, RollupConfig } from './RelationConfig.jsx';
+import { ButtonConfig, FormulaConfig, RelationConfig, RollupConfig } from './RelationConfig.jsx';
 
 /** Types set up after they're added (which database, what to roll up, what a button does). */
-const CONFIGURED = new Set(['relation', 'rollup', 'button']);
+const CONFIGURED = new Set(['relation', 'rollup', 'button', 'formula']);
 
 /**
  * A row page's property values, between its title and its content.
@@ -93,9 +93,11 @@ export function RowProperties({ page, databaseId, values, refs, template = false
         </Popover>
       )}
       {configProp && (
-        <Popover anchor={configuring.el} onClose={() => setConfiguring(null)} width={configProp.type === 'button' ? 340 : 280}>
+        <Popover anchor={configuring.el} onClose={() => setConfiguring(null)} width={configProp.type === 'formula' ? 400 : configProp.type === 'button' ? 340 : 280}>
           {configProp.type === 'relation' ? (
             <RelationConfig prop={configProp} m={m} />
+          ) : configProp.type === 'formula' ? (
+            <FormulaConfig prop={configProp} m={m} properties={data.properties} />
           ) : configProp.type === 'button' ? (
             <ButtonConfig prop={configProp} m={m} properties={data.properties} />
           ) : (

@@ -14,10 +14,11 @@
  *   | { type: 'check', propId: string, to: boolean | 'toggle' }
  *   | { type: 'add_number', propId: string, amount: number }
  *   | { type: 'link', propId: string, rowIds: string[], mode: 'add' | 'remove' }
+ *   | { type: 'set_formula', propId: string, formula: string }
  *   | { type: 'add_row', databaseId: string, templateId?: string | null, title?: string, values: Record<string, unknown> }} Action
  */
 
-export const ACTION_TYPES = /** @type {const} */ (['set', 'set_today', 'shift_date', 'check', 'add_number', 'link', 'add_row']);
+export const ACTION_TYPES = /** @type {const} */ (['set', 'set_today', 'shift_date', 'check', 'add_number', 'link', 'set_formula', 'add_row']);
 
 /** Most actions one button or automation runs. */
 export const MAX_ACTIONS = 20;
@@ -26,20 +27,20 @@ export const MAX_ACTIONS = 20;
 export const THIS_ROW = '@this';
 
 /** Actions that change the row they run for (everything but add_row). */
-export const ROW_ACTIONS = new Set(['set', 'set_today', 'shift_date', 'check', 'add_number', 'link']);
+export const ROW_ACTIONS = new Set(['set', 'set_today', 'shift_date', 'check', 'add_number', 'link', 'set_formula']);
 
 /**
  * Row actions that fit a property type (for menus, and checked on run).
  * @type {Record<string, readonly string[]>}
  */
 export const ACTIONS_FOR = {
-  text: ['set'],
-  url: ['set'],
-  number: ['set', 'add_number'],
-  select: ['set'],
+  text: ['set', 'set_formula'],
+  url: ['set', 'set_formula'],
+  number: ['set', 'add_number', 'set_formula'],
+  select: ['set', 'set_formula'],
   multi_select: ['set'],
-  date: ['set', 'set_today', 'shift_date'],
-  checkbox: ['check'],
+  date: ['set', 'set_today', 'shift_date', 'set_formula'],
+  checkbox: ['check', 'set_formula'],
   relation: ['set', 'link'],
 };
 

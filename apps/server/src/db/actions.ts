@@ -2,8 +2,10 @@ import { and, eq, isNull, sql } from 'drizzle-orm';
 import {
   ACTIONS_FOR,
   DYNAMIC_TODAY,
+  FormulaError,
   InvalidValue,
   ROW_ACTIONS,
+  textToValue,
   shiftDate,
   THIS_ROW,
   Action as ActionSchema,
@@ -15,9 +17,10 @@ import type { z } from 'zod';
 import type { Db } from './index.ts';
 
 type Action = z.infer<typeof ActionSchema>;
+import { compileFormula, formulaValue } from './formula.ts';
 import { liveLineage } from './lineage.ts';
 import { properties, type Tx } from './props.ts';
-import { rowValues } from './relations.ts';
+import { Relations, rowValues } from './relations.ts';
 import { createRow, writeValues } from './rows.ts';
 import { pages } from './schema.ts';
 
@@ -82,7 +85,8 @@ export function runActions(tx: Tx, ctx: RunContext, actions: Action[]): RunResul
     if (!(prop.id in before)) before[prop.id] = current;
     result.before.set(rowId, before);
 
-    const next = nextValue(action, prop, current, ctx);
+    const next =
+      action.type === 'set_formula' ? formulaResult(tx, [...props.values()], prop, action.formula, rowId, ctx) : nextValue(action, prop, current, ctx);
     writeValues(tx, rowId, [{ ...prop, order: '' }], { [prop.id]: next });
     const written = rowValues(tx, rowId).props[prop.id] ?? null;
     result.changes.push({ rowId, propId: prop.id, name: prop.name, type: prop.type, value: written, text: valueToText(prop, written as PropValue) });
@@ -93,7 +97,38 @@ export function runActions(tx: Tx, ctx: RunContext, actions: Action[]): RunResul
 }
 
 /** What a row action sets its property to, given the current value. */
-function nextValue(action: Exclude<Action, { type: 'add_row' }>, prop: PropertyDef, current: unknown, ctx: RunContext): unknown {
+/**
+ * "Set to a formula": the formula's value for this row, fitted to the
+ * property (a date for a date, a number for a number, text matched to a
+ * select option by name…). Throws InvalidValue when it can't be.
+ */
+function formulaResult(tx: Tx, props: PropertyDef[], prop: PropertyDef, src: string, rowId: string, ctx: RunContext): unknown {
+  let f;
+  try {
+    f = compileFormula(src, { props, rel: new Relations(tx), tzOffset: tzOffsetOfDay(ctx.today), rowId: sql`${rowId}` });
+  } catch (err) {
+    if (err instanceof FormulaError) throw new InvalidValue(`The formula for “${prop.name}” has a problem: ${err.message}`);
+    throw err;
+  }
+  const value = formulaValue(f.type, tx.get<{ v: unknown }>(sql`select ${f.sql} as v`)?.v);
+  if (value === null) return null;
+  if (prop.type === 'checkbox') return f.type === 'boolean' ? value : Boolean(value);
+  if (prop.type === 'number') return f.type === 'number' ? value : Number.isFinite(Number(value)) ? Number(value) : null;
+  if (prop.type === 'date' && f.type === 'date') return value;
+  const text = textToValue(prop, String(value));
+  if (text === null && String(value).trim()) throw new InvalidValue(`“${String(value)}” doesn't fit “${prop.name}”`);
+  return text;
+}
+
+/**
+ * The tz offset that makes today() be `today`: formulas run with the viewer's
+ * day (buttons send it), not the server clock's.
+ */
+function tzOffsetOfDay(today: string) {
+  return Math.round((Date.now() - Date.parse(`${today}T12:00:00Z`)) / 60_000);
+}
+
+function nextValue(action: Exclude<Action, { type: 'add_row' | 'set_formula' }>, prop: PropertyDef, current: unknown, ctx: RunContext): unknown {
   switch (action.type) {
     case 'set':
       return prop.type === 'date' && action.value === DYNAMIC_TODAY ? ctx.today : action.value;

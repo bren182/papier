@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { pageKeys, useArchivePage, useChildPages, useCreatePage, useMovePage } from '../api/pages.js';
+import { pageKeys, useArchivePage, useChildPages, useCreatePage, useFavorites, useMovePage, useSetFavorite } from '../api/pages.js';
+import { useRecentPages } from '../recentPages.js';
 import { SearchDialog } from './SearchDialog.jsx';
 import { TitleText } from './TitleText.jsx';
-import { SidebarIcon } from './Topbar.jsx';
+import { SidebarIcon, StarIcon } from './Topbar.jsx';
 
 /** @typedef {import('@papier/core').Page} Page */
 /** @typedef {'before' | 'inside' | 'after'} DropWhere */
@@ -36,8 +37,7 @@ import { SidebarIcon } from './Topbar.jsx';
 /** How long hovering the middle of a collapsed page waits before opening it. */
 const EXPAND_DELAY_MS = 600;
 
-const navButton =
-  'flex h-8 items-center gap-2.5 rounded-md px-2.5 text-left text-sm text-muted hover:bg-s-active hover:text-fg';
+const navButton = 'flex h-8 items-center gap-2.5 rounded-md px-2.5 text-left text-sm text-muted hover:bg-s-active hover:text-fg';
 
 /**
  * @param {{ selectedId: string | null, onSelect: (id: string | null) => void, onSearch: () => void,
@@ -64,37 +64,44 @@ export function Sidebar({ selectedId, onSelect, onSearch, onTemplates, onShortcu
 
   /** @param {Page} page */
   const deletePage = (page) =>
-    archivePage.mutate({ id: page.id, parentId: page.parentId }, {
-      onSuccess: () => {
-        // If the open page was this one or inside it, step out to the parent.
-        /** @type {{ ancestors: { id: string }[] } | undefined} */
-        const open = selectedId ? qc.getQueryData(pageKeys.detail(selectedId)) : undefined;
-        const openLineage = open && selectedId ? [...open.ancestors.map((a) => a.id), selectedId] : [];
-        if (openLineage.includes(page.id)) onSelect(page.parentId);
+    archivePage.mutate(
+      { id: page.id, parentId: page.parentId },
+      {
+        onSuccess: () => {
+          // If the open page was this one or inside it, step out to the parent.
+          /** @type {{ ancestors: { id: string }[] } | undefined} */
+          const open = selectedId ? qc.getQueryData(pageKeys.detail(selectedId)) : undefined;
+          const openLineage = open && selectedId ? [...open.ancestors.map((a) => a.id), selectedId] : [];
+          if (openLineage.includes(page.id)) onSelect(page.parentId);
+        },
       },
-    });
+    );
 
   const dnd = useTreeDnd(setExpanded);
   const [moving, setMoving] = useState(/** @type {Page | null} */ (null));
   const movePage = useMovePage();
 
   /** @type {TreeContext} */
-  const ctx = { selectedId, onSelect, isExpanded, setExpanded, onAddChild: addPage, onDelete: deletePage, onMoveTo: setMoving, dnd };
+  const ctx = {
+    selectedId,
+    onSelect,
+    isExpanded,
+    setExpanded,
+    onAddChild: addPage,
+    onDelete: deletePage,
+    onMoveTo: setMoving,
+    dnd,
+  };
 
   return (
-    <nav
-      aria-label="Workspace"
-      className="p-glass relative flex w-[260px] shrink-0 flex-col gap-0.5 border-r border-white/5 bg-s-sidebar px-2 py-3"
-    >
+    <nav aria-label="Workspace" className="p-glass relative flex w-[260px] shrink-0 flex-col gap-0.5 border-r border-white/5 bg-s-sidebar px-2 py-3">
       <div className="group/head flex items-center">
         <button
           type="button"
           onClick={() => onSelect(null)}
           className="flex h-10 min-w-0 flex-1 items-center gap-2.5 rounded-md px-2.5 text-left hover:bg-s-active"
         >
-          <span className="flex size-[22px] items-center justify-center rounded-[5px] bg-hover font-display text-sm text-fg-strong">
-            P
-          </span>
+          <span className="flex size-[22px] items-center justify-center rounded-[5px] bg-hover font-display text-sm text-fg-strong">P</span>
           <span className="flex-1 text-sm font-semibold text-fg-strong">Papier</span>
         </button>
         <button
@@ -127,19 +134,21 @@ export function Sidebar({ selectedId, onSelect, onSearch, onTemplates, onShortcu
         <kbd className="font-mono text-[11px] text-faint">Ctrl /</kbd>
       </button>
 
-      <div className="group/pages mt-4 flex h-[26px] items-center justify-between px-2.5 text-xs font-medium text-faint">
-        <span>Pages</span>
-        <button
-          type="button"
-          aria-label="New page"
-          onClick={() => addPage(null)}
-          className="flex size-5 items-center justify-center rounded text-muted opacity-0 group-hover/pages:opacity-100 hover:bg-s-active hover:text-fg focus-visible:opacity-100"
-        >
-          <PlusIcon size={14} />
-        </button>
-      </div>
+      <div className="-mx-2 mt-4 min-h-0 flex-1 overflow-y-auto px-2">
+        <Favorites selectedId={selectedId} onSelect={onSelect} />
+        <Recent selectedId={selectedId} onSelect={onSelect} />
+        <div className="group/pages flex h-[26px] items-center justify-between px-2.5 text-xs font-medium text-faint">
+          <span>Pages</span>
+          <button
+            type="button"
+            aria-label="New page"
+            onClick={() => addPage(null)}
+            className="flex size-5 items-center justify-center rounded text-muted opacity-0 group-hover/pages:opacity-100 hover:bg-s-active hover:text-fg focus-visible:opacity-100"
+          >
+            <PlusIcon size={14} />
+          </button>
+        </div>
 
-      <div className="-mx-2 min-h-0 flex-1 overflow-y-auto px-2">
         <PageList parentId={null} depth={0} path={[]} ctx={ctx} />
       </div>
 
@@ -169,6 +178,124 @@ export function Sidebar({ selectedId, onSelect, onSearch, onTemplates, onShortcu
         />
       )}
     </nav>
+  );
+}
+
+/**
+ * Starred pages, in starring order; hidden until something is starred.
+ * @param {{ selectedId: string | null, onSelect: (id: string) => void }} props
+ */
+function Favorites({ selectedId, onSelect }) {
+  const { data } = useFavorites();
+  const setFavorite = useSetFavorite();
+  if (!data?.length) return null;
+  return (
+    <SideSection label="Favourites" storageKey="papier.sidebar.favorites">
+      {data.map((p) => (
+        <SideLink key={p.id} page={p} active={p.id === selectedId} onSelect={onSelect}>
+          <button
+            type="button"
+            aria-label={`Remove ${p.title || 'Untitled'} from favourites`}
+            title="Remove from favourites"
+            onClick={() => setFavorite.mutate({ id: p.id, favorite: false })}
+            className="flex size-6 items-center justify-center rounded text-muted opacity-0 group-hover:opacity-100 hover:bg-white/10 hover:text-fg focus-visible:opacity-100"
+          >
+            <StarIcon filled />
+          </button>
+        </SideLink>
+      ))}
+    </SideSection>
+  );
+}
+
+/**
+ * The last few pages opened on this device.
+ * @param {{ selectedId: string | null, onSelect: (id: string) => void }} props
+ */
+function Recent({ selectedId, onSelect }) {
+  const recent = useRecentPages().slice(0, 5);
+  if (recent.length === 0) return null;
+  return (
+    <SideSection label="Recent" storageKey="papier.sidebar.recent">
+      {recent.map((p) => (
+        <SideLink key={p.id} page={{ ...p, kind: 'page' }} active={p.id === selectedId} onSelect={onSelect} />
+      ))}
+    </SideSection>
+  );
+}
+
+/**
+ * A small sidebar section whose header folds it (remembered per device).
+ * @param {{ label: string, storageKey: string, children: import('react').ReactNode }} props
+ */
+function SideSection({ label, storageKey, children }) {
+  const [open, setOpen] = useState(() => {
+    try {
+      return localStorage.getItem(storageKey) !== 'closed';
+    } catch {
+      return true;
+    }
+  });
+  const toggle = () => {
+    setOpen(!open);
+    try {
+      localStorage.setItem(storageKey, open ? 'closed' : 'open');
+    } catch {
+      // no storage: not remembered
+    }
+  };
+  return (
+    <section aria-label={label} className="mb-3">
+      <button
+        type="button"
+        onClick={toggle}
+        aria-expanded={open}
+        className="flex h-[26px] w-full items-center gap-1 rounded px-2.5 text-left text-xs font-medium text-faint hover:text-muted"
+      >
+        {label}
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.6"
+          strokeLinecap="round"
+          style={{ transform: `rotate(${open ? 90 : 0}deg)` }}
+          aria-hidden="true"
+        >
+          <path d="M9 6l6 6-6 6" />
+        </svg>
+      </button>
+      {open && <ul>{children}</ul>}
+    </section>
+  );
+}
+
+/**
+ * A flat link to a page (Favourites, Recent); `children` are its hover actions.
+ * @param {{ page: { id: string, title: string, titleContent: Page['titleContent'], icon: string | null, kind: string }, active: boolean,
+ *   onSelect: (id: string) => void, children?: import('react').ReactNode }} props
+ */
+function SideLink({ page, active, onSelect, children }) {
+  return (
+    <li
+      className={`group flex h-[30px] items-center gap-0.5 rounded-md pr-1 pl-[6px] text-sm ${active ? 'bg-s-active text-fg-strong' : 'text-[#a3a3a3] hover:bg-s-active hover:text-fg'}`}
+    >
+      <button type="button" onClick={() => onSelect(page.id)} className="flex h-full min-w-0 flex-1 items-center gap-1.5 pl-[22px] text-left">
+        {page.icon ? (
+          <span className="flex w-4 shrink-0 justify-center text-[14px] leading-none">{page.icon}</span>
+        ) : page.kind === 'database' ? (
+          <DatabaseIcon />
+        ) : (
+          <PageIcon />
+        )}
+        <span className={`truncate ${page.title ? '' : 'text-faint'}`}>
+          <TitleText title={page.title} titleContent={page.titleContent} />
+        </span>
+      </button>
+      {children}
+    </li>
   );
 }
 
@@ -247,11 +374,7 @@ function TreeItem({ page, depth, path, ctx }) {
         onDragEnd={dnd.end}
         data-page-id={page.id}
         className={`group relative flex h-[30px] items-center gap-0.5 rounded-md pr-1 text-sm ${
-          drop === 'inside'
-            ? 'bg-accent-soft text-fg-strong'
-            : active
-              ? 'bg-s-active text-fg-strong'
-              : 'text-[#a3a3a3] hover:bg-s-active hover:text-fg'
+          drop === 'inside' ? 'bg-accent-soft text-fg-strong' : active ? 'bg-s-active text-fg-strong' : 'text-[#a3a3a3] hover:bg-s-active hover:text-fg'
         } ${dnd.dragging?.id === page.id ? 'opacity-50' : ''}`}
         style={{ paddingLeft: 6 + depth * 18 }}
       >
@@ -280,7 +403,10 @@ function TreeItem({ page, depth, path, ctx }) {
               strokeWidth="2.4"
               strokeLinecap="round"
               className="transition-transform"
-              style={{ transform: `rotate(${expanded ? 90 : 0}deg)`, opacity: page.hasChildren ? 1 : 0.45 }}
+              style={{
+                transform: `rotate(${expanded ? 90 : 0}deg)`,
+                opacity: page.hasChildren ? 1 : 0.45,
+              }}
             >
               <path d="M9 6l6 6-6 6" />
             </svg>
@@ -385,7 +511,12 @@ function useTreeDnd(setExpanded) {
         setExpanded(page.id, true);
       } else {
         const side = drop.where === 'before' ? { beforeId: page.id } : { afterId: page.id };
-        movePage.mutate({ id: dragging.id, from, parentId: page.parentId, ...side });
+        movePage.mutate({
+          id: dragging.id,
+          from,
+          parentId: page.parentId,
+          ...side,
+        });
       }
       setDrop(null);
       setDragging(null);

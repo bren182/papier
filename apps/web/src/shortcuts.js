@@ -17,7 +17,7 @@ export const SHORTCUTS = [
       { keys: ['Mod', 'K'], label: 'Search and commands (type > for commands)' },
       { keys: ['Mod', '\\'], label: 'Show / hide the sidebar' },
       { keys: ['Mod', '/'], label: 'Keyboard shortcuts' },
-      { keys: ['Esc'], label: 'Close a menu or dialog' },
+      { keys: ['Esc'], label: 'Close a menu, dialog or the side peek' },
     ],
   },
   {
@@ -32,9 +32,23 @@ export const SHORTCUTS = [
       { keys: ['Mod', 'Z'], label: 'Undo' },
       { keys: ['Mod', 'Shift', 'Z'], label: 'Redo' },
       { keys: ['/'], label: 'Insert a block (page, database, heading…)' },
-      { keys: ['@'], label: 'Insert a date: today, next fri, oct 5…' },
+      { keys: ['@'], label: 'Insert a date (today, next fri, oct 5…) or link a page' },
+      { keys: ['[['], label: 'Link a page inline' },
       { keys: ['Right-click'], label: 'Block menu: turn into, duplicate, delete' },
       { keys: ['Shift', 'Right-click'], label: 'The browser’s own menu' },
+    ],
+  },
+  {
+    group: 'Turn into',
+    items: [
+      { keys: ['Mod', 'Alt', '0'], label: 'Text' },
+      { keys: ['Mod', 'Alt', '1'], label: 'Heading 1 (2, 3 for the others)' },
+      { keys: ['Mod', 'Alt', '4'], label: 'To-do' },
+      { keys: ['Mod', 'Alt', '5'], label: 'Bulleted list' },
+      { keys: ['Mod', 'Alt', '6'], label: 'Numbered list' },
+      { keys: ['Mod', 'Alt', '7'], label: 'Toggle' },
+      { keys: ['Mod', 'Alt', '8'], label: 'Code' },
+      { keys: ['Mod', 'Alt', '9'], label: 'Callout' },
     ],
   },
   {

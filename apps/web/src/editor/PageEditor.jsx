@@ -15,6 +15,7 @@ import { InlineDatabase } from '../components/database/InlineDatabase.jsx';
 import { ButtonBlockSettings } from '../components/database/ButtonBlockSettings.jsx';
 import { Popover } from '../components/database/Popover.jsx';
 import { useRunButton } from '../api/actions.js';
+import { recentPages } from '../recentPages.js';
 
 /** @typedef {import('@papier/core').Block} Block */
 
@@ -49,7 +50,9 @@ function Editor({ pageId, rows, onOpenPage, onEmptyChange, template, editorRef }
   const runBlockRef = useRef(runBlock);
   runBlockRef.current = runBlock;
   // A callout's icon picker, opened from its node view.
-  const [iconPick, setIconPick] = useState(/** @type {{ anchor: HTMLElement, onPick: (emoji: string) => void } | null} */ (null));
+  const [iconPick, setIconPick] = useState(
+    /** @type {{ anchor: HTMLElement, current: import('./schema.js').CalloutLook, onChange: (patch: Partial<import('./schema.js').CalloutLook>) => void } | null} */ (null),
+  );
   const editor = useEditor({
     extensions: bodyExtensions({
       template,
@@ -71,7 +74,14 @@ function Editor({ pageId, rows, onOpenPage, onEmptyChange, template, editorRef }
         saveContent: (id, rows) => saveBlocks(id, { upserts: rows, deletes: [] }),
       },
       databases: { View: InlineDatabase, openPage: (id) => onOpenPage(id) },
-      callouts: { pickIcon: (anchor, _current, onPick) => setIconPick({ anchor, onPick }) },
+      links: {
+        searchPages: async (q) => {
+          const res = /** @type {{ items: { page: import('./PageMention.js').PageHit }[] }} */ (await api(`/search?q=${encodeURIComponent(q)}&limit=8`));
+          return res.items.map((i) => i.page).filter((p) => p.id !== pageId);
+        },
+        recentPages: () => recentPages().filter((p) => p.id !== pageId),
+      },
+      callouts: { pickIcon: (anchor, current, onChange) => setIconPick({ anchor, current, onChange }) },
       buttons: {
         Settings: ButtonBlockSettings,
         onRun: async (id) => {
@@ -176,10 +186,27 @@ function Editor({ pageId, rows, onOpenPage, onEmptyChange, template, editorRef }
       <EditorContent editor={editor} />
       {iconPick && (
         <Popover anchor={iconPick.anchor} onClose={() => setIconPick(null)} width={340}>
+          <div className="flex items-center gap-1 px-1 pt-1 pb-1.5 text-[12px] text-muted" role="group" aria-label="Callout tone">
+            Tone
+            {/** @type {const} */ (['plain', 'accent']).map((tone) => (
+              <button
+                key={tone}
+                type="button"
+                aria-pressed={iconPick.current.tone === tone}
+                onClick={() => {
+                  iconPick.onChange({ tone });
+                  setIconPick({ ...iconPick, current: { ...iconPick.current, tone } });
+                }}
+                className={`rounded-md px-2 py-0.5 capitalize ${iconPick.current.tone === tone ? 'bg-hover text-fg' : 'hover:bg-hover'}`}
+              >
+                {tone}
+              </button>
+            ))}
+          </div>
           <Suspense fallback={<div className="h-10" />}>
             <EmojiPicker
               onPick={(emoji) => {
-                iconPick.onPick(emoji);
+                iconPick.onChange({ icon: emoji });
                 setIconPick(null);
               }}
             />

@@ -105,6 +105,17 @@ describe('inline content', () => {
     expect(inlineFromPM(pm)).toEqual(stored);
   });
 
+  it('keeps inline page links (not in code)', () => {
+    const stored = [
+      { type: 'text', text: 'see ', styles: {} },
+      { type: 'page', props: { pageId: 'p1' } },
+    ];
+    const pm = inlineToPM(stored);
+    expect(pm[1]).toEqual({ type: 'pageMention', attrs: { pageId: 'p1' } });
+    expect(inlineFromPM(pm)).toEqual(stored);
+    expect(inlineToPM(stored, { code: true }).map((n) => n.type)).toEqual(['text']);
+  });
+
   it('merges adjacent runs with equal styles', () => {
     const pm = [
       { type: 'text', text: 'a' },

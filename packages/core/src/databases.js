@@ -1,8 +1,10 @@
 import { z } from 'zod';
 import { MAX_ACTIONS } from './actions.js';
+import { MAX_FORMULA } from './formula.js';
 import { FILTER_OPS, PROPERTY_TYPES, ROLLUP_FN_NAMES } from './props.js';
 
 export * from './actions.js';
+export * from './formula.js';
 export * from './props.js';
 
 export const PropertyId = z.string().min(1).max(64);
@@ -31,6 +33,7 @@ export const Action = z.discriminatedUnion('type', [
   z.object({ type: z.literal('check'), propId: Id, to: z.union([z.boolean(), z.literal('toggle')]) }),
   z.object({ type: z.literal('add_number'), propId: Id, amount: z.number().finite() }),
   z.object({ type: z.literal('link'), propId: Id, rowIds: z.array(Id).max(100), mode: z.enum(['add', 'remove']) }),
+  z.object({ type: z.literal('set_formula'), propId: Id, formula: z.string().max(MAX_FORMULA) }),
   z.object({
     type: z.literal('add_row'),
     databaseId: Id,
@@ -73,6 +76,9 @@ export const PropertyConfig = z
     /** Button: its label (default: the property name) and what it does. */
     label: z.string().trim().max(100),
     actions: Actions,
+    /** Formula: its source; resultType is worked out by the server. */
+    expression: z.string().max(MAX_FORMULA),
+    resultType: z.enum(['number', 'text', 'date', 'boolean']).nullable(),
   })
   .partial();
 

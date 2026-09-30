@@ -78,6 +78,7 @@ Tick boxes as they land. Anything unticked in a shipped milestone moves to the n
 - [x] Trash with restore, 30-day retention (auto-purge; Delete forever)
 - [x] Page icons + covers, emoji picker — plus layout (full width, small text, font), per-page mood and app colour themes; image covers wait for uploads
 - [x] Command palette (`Ctrl/Cmd-K`): jump to page, run command (`>` for commands only)
+- [x] Favourites + Recent in the sidebar; inline page links (`[[` or `@`, live title); database rows open in a side peek (‹ › through the view, Open as page); richer board cards (buttons, labelled numbers, row menu); toggle headings and accent callouts
 - [ ] Copy/paste of rich content in and out (markdown + HTML clipboard)
 
 ### v0.3 — "databases"
@@ -90,6 +91,7 @@ Tick boxes as they land. Anything unticked in a shipped milestone moves to the n
 - [x] Relations + rollups (count, sum, % complete, etc.) — core, not optional. Two-way by default (`property_links`, each link stored once), rollups computed in SQL so they sort and filter; property values are searchable too
 - [x] Buttons + automations: button property and page button blocks (set / today / move date / check / +number / link / add row, Undo toast); automations when a row is added, when a property changes, or on a schedule (per database, ⚡ panel)
 - [x] Templates: save any page as a template (library), database templates with a default per view, "Today ↻" dates that resolve on use; Duplicate
+- [x] Formulas: a Notion-like formula property (sorts/filters in SQL, in-app function reference) and "Set to a formula" in buttons/automations
 - [ ] Built-in template library — decided after importing + analysing my Notion workspace
 
 ### v0.4 — "not alone"
@@ -417,6 +419,6 @@ that I hate.*
 - Being able to setup a custom "Home" page. So where you land you can see certain important blocks that you can customise. 
 - Uploading images for backgrounds for the app, and background for headers, background for pages etc. For now we'll assume storage stays local on a user's computer so no syncing yet.
 - Shortcut minigame: a "Practice" button in the keyboard shortcuts dialog (Ctrl+/) starts a Dance Dance Revolution–style drill (like Discord's keybinds easter egg) — shortcuts scroll up as falling prompts, press the right combo in time, streaks + a best score. A fun way to actually learn them. 
-- A small templating language for custom button logic (like Notion's formulas in buttons): a documented set of expressions that compile to whitelisted, parameterised SQLite queries — e.g. "set Reminder to next birthday", "count rows where…" — so buttons and automations can compute values, not just set fixed ones. Plugs into the actions engine (`apps/server/src/db/actions.ts`) as one more action or value type.
-- Noticed a small UX bug with the datepicker, some click actions close the popup immediately like using arrows to click to next month. 
-- The top header space on each page shoul.d be hideable and not shown by dfeefulat i think also the image does not get bluyrred in this header curently
+- ~~A small templating language for custom button logic~~ — landed as formulas (formula property + "Set to a formula" action).
+- ~~Noticed a small UX bug with the datepicker, some click actions close the popup immediately like using arrows to click to next month.~~ Fixed: our own calendar replaces the native date popup.
+- ~~The top header space on each page shoul.d be hideable and not shown by dfeefulat i think also the image does not get bluyrred in this header curently~~ Fixed: no header band unless the page has a cover; the "Clear" cover is blurred like the glass.

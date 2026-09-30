@@ -12,6 +12,23 @@ import { CONTINUES } from './schema.js';
  * - Backspace at the start: non-text → text, then outdent, then merge up.
  * - Tab / Shift-Tab: indent / outdent the selected blocks with their children.
  */
+/**
+ * Ctrl/Cmd+Alt+digit: turn the block into…  (listed in shortcuts.js)
+ * @type {[string, string, Record<string, unknown>][]}
+ */
+export const TURN_INTO_KEYS = [
+  ['0', 'paragraph', {}],
+  ['1', 'heading', { level: 1 }],
+  ['2', 'heading', { level: 2 }],
+  ['3', 'heading', { level: 3 }],
+  ['4', 'todo', {}],
+  ['5', 'bulletItem', {}],
+  ['6', 'numberedItem', {}],
+  ['7', 'toggle', { level: 0 }],
+  ['8', 'codeBlock', {}],
+  ['9', 'callout', {}],
+];
+
 export const BlockKeymap = Extension.create({
   name: 'blockKeymap',
   priority: 50, // after marks/suggestions, before the defaults
@@ -117,6 +134,23 @@ export const BlockKeymap = Extension.create({
       },
 
       'Mod-Enter': exitCode,
+
+      // Turn the block into another type, keeping its text (as in Notion).
+      ...Object.fromEntries(
+        TURN_INTO_KEYS.map(([key, type, attrs]) => [
+          `Mod-Alt-${key}`,
+          () => {
+            const { state } = editor;
+            const block = blockAt(state.doc, state.selection.from);
+            const target = state.schema.nodes[type];
+            if (!block || !target || block.node.isAtom) return false;
+            const tr = state.tr;
+            setBlockType(tr, block.pos, target, attrs);
+            editor.view.dispatch(tr);
+            return true;
+          },
+        ]),
+      ),
 
       Backspace: () => {
         const { state } = editor;

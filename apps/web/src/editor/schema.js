@@ -202,11 +202,17 @@ function leadView({ name, control, onActivate, sync }, { node, getPos, editor })
 
 /**
  * Toggle: a block whose indented children fold away. The arrow flips
- * `collapsed`; the Outline plugin hides the children.
+ * `collapsed`; the Outline plugin hides the children. `level` 1–3 makes it
+ * a toggle heading.
  */
 export const Toggle = blockNode({
   name: 'toggle',
   attrs: {
+    level: {
+      default: 0,
+      renderHTML: (/** @type {Record<string, any>} */ a) => (a.level ? { 'data-level': a.level } : {}),
+      parseHTML: (/** @type {HTMLElement} */ el) => Number(el.getAttribute('data-level')) || 0,
+    },
     collapsed: {
       default: false,
       keepOnSplit: false,
@@ -229,6 +235,8 @@ export const Toggle = blockNode({
             onActivate: (n, pos) => props.editor.view.dispatch(props.editor.state.tr.setNodeAttribute(pos, 'collapsed', !n.attrs.collapsed)),
             sync: (n, dom) => {
               dom.dataset.collapsed = n.attrs.collapsed ? 'true' : 'false';
+              if (n.attrs.level) dom.dataset.level = String(n.attrs.level);
+              else delete dom.dataset.level;
               arrow.setAttribute('aria-label', n.attrs.collapsed ? 'Expand' : 'Collapse');
               arrow.setAttribute('aria-expanded', n.attrs.collapsed ? 'false' : 'true');
             },
@@ -242,9 +250,11 @@ export const Toggle = blockNode({
 
 /**
  * Callout: a boxed block with an icon; its indented children sit inside the
- * box (the Outline plugin marks them). `pickIcon` (an option) opens the
- * emoji picker; without it the icon can't be changed (headless tests).
- * @typedef {{ pickIcon: ((anchor: HTMLElement, current: string, onPick: (emoji: string) => void) => void) | null }} CalloutOptions
+ * box (the Outline plugin marks them). `tone` is plain (grey) or accent.
+ * `pickIcon` (an option) opens the icon and tone picker; without it they can't
+ * be changed (headless tests).
+ * @typedef {{ icon: string, tone: 'plain' | 'accent' }} CalloutLook
+ * @typedef {{ pickIcon: ((anchor: HTMLElement, current: CalloutLook, onChange: (patch: Partial<CalloutLook>) => void) => void) | null }} CalloutOptions
  */
 export const Callout = blockNode({
   name: 'callout',
@@ -253,6 +263,11 @@ export const Callout = blockNode({
       default: '💡',
       renderHTML: (/** @type {Record<string, any>} */ a) => ({ 'data-icon': a.icon }),
       parseHTML: (/** @type {HTMLElement} */ el) => el.getAttribute('data-icon') || '💡',
+    },
+    tone: {
+      default: 'plain',
+      renderHTML: (/** @type {Record<string, any>} */ a) => ({ 'data-tone': a.tone }),
+      parseHTML: (/** @type {HTMLElement} */ el) => (el.getAttribute('data-tone') === 'accent' ? 'accent' : 'plain'),
     },
   },
   parse: () => [{ tag: 'div.pb[data-type="callout"]' }, { tag: 'aside' }],
@@ -271,13 +286,17 @@ export const Callout = blockNode({
             name: 'callout',
             control: icon,
             onActivate: (n) =>
-              options.pickIcon?.(icon, n.attrs.icon, (emoji) => {
+              options.pickIcon?.(icon, { icon: n.attrs.icon, tone: n.attrs.tone }, (patch) => {
                 // Find it again: the document may have changed while the picker was open.
                 const pos = typeof props.getPos === 'function' ? props.getPos() : undefined;
-                if (pos !== undefined) props.editor.view.dispatch(props.editor.state.tr.setNodeAttribute(pos, 'icon', emoji));
+                if (pos === undefined) return;
+                const tr = props.editor.state.tr;
+                for (const [k, v] of Object.entries(patch)) tr.setNodeAttribute(pos, k, v);
+                props.editor.view.dispatch(tr);
               }),
-            sync: (n) => {
+            sync: (n, dom) => {
               icon.textContent = n.attrs.icon;
+              dom.dataset.tone = n.attrs.tone;
             },
           },
           props,
@@ -448,9 +467,9 @@ export const Outline = Extension.create({
             /** @type {Decoration[]} */
             const decos = [];
             const hidden = hiddenRanges(state.doc);
-            /** @type {{ indent: number, pos: number, size: number, last: { pos: number, size: number } | null }[]} */
+            /** @type {{ indent: number, pos: number, size: number, accent: boolean, last: { pos: number, size: number } | null }[]} */
             const callouts = [];
-            /** @param {{ indent: number, pos: number, size: number, last: { pos: number, size: number } | null }} c */
+            /** @param {{ indent: number, pos: number, size: number, accent: boolean, last: { pos: number, size: number } | null }} c */
             const close = (c) => {
               if (!c.last) return;
               decos.push(Decoration.node(c.pos, c.pos + c.size, { class: 'callout-open' }));
@@ -465,10 +484,15 @@ export const Outline = Extension.create({
               while (callouts.length && indent <= /** @type {{ indent: number }} */ (callouts[callouts.length - 1]).indent) close(/** @type {any} */ (callouts.pop()));
               const outer = callouts[0];
               if (outer) {
-                decos.push(Decoration.node(pos, pos + node.nodeSize, { class: 'in-callout', style: `--callout-indent:${outer.indent}` }));
+                decos.push(Decoration.node(pos, pos + node.nodeSize, { class: outer.accent ? 'in-callout in-callout-accent' : 'in-callout', style: `--callout-indent:${outer.indent}` }));
                 for (const c of callouts) c.last = { pos, size: node.nodeSize };
               }
-              if (node.type.name === 'callout') callouts.push({ indent, pos, size: node.nodeSize, last: null });
+              if (node.type.name === 'callout') callouts.push({ indent, pos, size: node.nodeSize, accent: node.attrs.tone === 'accent', last: null });
+              // An open toggle with nothing inside says how to add something.
+              if (node.type.name === 'toggle' && !node.attrs.collapsed && node.content.size > 0) {
+                const next = state.doc.childAfter(pos + node.nodeSize).node;
+                if (!next || (next.attrs.indent ?? 0) <= indent) decos.push(Decoration.node(pos, pos + node.nodeSize, { class: 'toggle-empty' }));
+              }
             });
             while (callouts.length) close(/** @type {any} */ (callouts.pop()));
             return DecorationSet.create(state.doc, decos);

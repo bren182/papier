@@ -9,24 +9,33 @@ import { createPortal } from 'react-dom';
  */
 export function Popover({ anchor, onClose, children, width = 240, className = '', align = 'start' }) {
   const ref = useRef(/** @type {HTMLDivElement | null} */ (null));
-  const [pos, setPos] = useState(/** @type {{ top: number, left: number } | null} */ (null));
+  const [pos, setPos] = useState(/** @type {{ top: number, left: number, maxHeight: number } | null} */ (null));
 
   useLayoutEffect(() => {
     if (!anchor) return;
+    // Below the anchor if it fits, else above; if neither, on the roomier side,
+    // capped to the viewport and scrolling inside.
     const place = () => {
       const r = anchor.getBoundingClientRect();
-      const h = ref.current?.offsetHeight ?? 0;
-      const below = r.bottom + 4;
-      const top = below + h > window.innerHeight - 8 && r.top - h - 4 > 8 ? r.top - h - 4 : below;
+      const h = ref.current?.scrollHeight ?? 0;
+      const below = window.innerHeight - r.bottom - 12;
+      const above = r.top - 12;
+      const top = h <= below || below >= above ? r.bottom + 4 : Math.max(8, r.top - Math.min(h, above) - 4);
+      const maxHeight = h <= below || below >= above ? below : above;
       const left = align === 'end' ? r.right - width : r.left;
-      setPos({ top, left: Math.max(8, Math.min(left, window.innerWidth - width - 8)) });
+      setPos({ top, left: Math.max(8, Math.min(left, window.innerWidth - width - 8)), maxHeight: Math.max(120, maxHeight) });
     };
     place();
     window.addEventListener('resize', place);
     window.addEventListener('scroll', place, true);
+    // Content can grow after opening (a formula's check, a menu that expands).
+    const observer = new ResizeObserver(place);
+    if (ref.current?.firstElementChild) observer.observe(ref.current.firstElementChild);
+    if (ref.current) observer.observe(ref.current);
     return () => {
       window.removeEventListener('resize', place);
       window.removeEventListener('scroll', place, true);
+      observer.disconnect();
     };
   }, [anchor, width, align]);
 
@@ -60,8 +69,8 @@ export function Popover({ anchor, onClose, children, width = 240, className = ''
     <div
       ref={ref}
       data-popover=""
-      className={`papier-popover fixed z-50 p-1 ${className}`}
-      style={{ width, top: pos?.top ?? -9999, left: pos?.left ?? -9999 }}
+      className={`papier-popover fixed z-50 overflow-y-auto overscroll-contain p-1 ${className}`}
+      style={{ width, top: pos?.top ?? -9999, left: pos?.left ?? -9999, maxHeight: pos?.maxHeight }}
       // Keep ProseMirror (inline databases) from treating these as editor events.
       onMouseDown={(e) => e.stopPropagation()}
     >

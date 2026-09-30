@@ -33,7 +33,7 @@ describe('actions', () => {
 
   it('fit property types', () => {
     expect(ACTIONS_FOR.date).toContain('shift_date');
-    expect(ACTIONS_FOR.checkbox).toEqual(['check']);
+    expect(ACTIONS_FOR.checkbox).toEqual(['check', 'set_formula']);
     expect(ACTIONS_FOR.rollup).toBeUndefined();
   });
 });

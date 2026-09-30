@@ -5,6 +5,7 @@ import { useSelectedPage } from './useSelectedPage.js';
 import { Sidebar } from './components/Sidebar.jsx';
 import { Topbar } from './components/Topbar.jsx';
 import { Page } from './components/Page.jsx';
+import { RowPeek } from './components/RowPeek.jsx';
 import { CommandPalette } from './components/CommandPalette.jsx';
 import { SettingsMenu } from './components/SettingsMenu.jsx';
 import { ShortcutsDialog } from './components/ShortcutsDialog.jsx';
@@ -68,7 +69,10 @@ export function App() {
       </div>
       <main className="relative flex min-w-0 flex-1 flex-col">
         <Topbar selectedId={selectedId} onSelect={select} prefs={prefs} onChange={updatePrefs} />
-        <Page selectedId={selectedId} onSelect={select} onTemplates={setLibrary} />
+        <div className="relative flex min-h-0 flex-1">
+          <Page selectedId={selectedId} onSelect={select} onTemplates={setLibrary} />
+          <RowPeek onSelect={select} />
+        </div>
       </main>
       {searching && (
         <CommandPalette

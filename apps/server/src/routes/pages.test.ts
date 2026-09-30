@@ -100,3 +100,39 @@ describe('pages API', () => {
     expect(res.statusCode).toBe(404);
   });
 });
+
+describe('favourites', () => {
+  const star = (id: string, favorite: boolean) => app.inject({ method: 'PATCH', url: `/api/pages/${id}`, payload: { favorite } });
+  const favorites = async () => (await app.inject({ method: 'GET', url: '/api/favorites' })).json() as Array<{ id: string; title: string; favorite: boolean }>;
+
+  it('lists starred pages in starring order, without touching updatedAt', async () => {
+    const a = await create({ title: 'A' });
+    const b = await create({ title: 'B' });
+    const c = await create({ title: 'C', parentId: a.id });
+    await star(b.id, true);
+    await star(c.id, true);
+    const res = await star(b.id, true); // again: keeps its place
+    expect(res.json()).toMatchObject({ favorite: true, updatedAt: b.updatedAt });
+    expect((await favorites()).map((p) => p.title)).toEqual(['B', 'C']);
+    await star(b.id, false);
+    expect((await favorites()).map((p) => p.title)).toEqual(['C']);
+    expect((await list()).find((p) => p.id === b.id)).toMatchObject({ favorite: false });
+  });
+
+  it('hides favourites inside the trash, and brings them back on restore', async () => {
+    const a = await create({ title: 'A' });
+    const c = await create({ title: 'C', parentId: a.id });
+    await star(c.id, true);
+    await app.inject({ method: 'DELETE', url: `/api/pages/${a.id}` });
+    expect(await favorites()).toEqual([]);
+    await app.inject({ method: 'POST', url: `/api/pages/${a.id}/restore` });
+    expect((await favorites()).map((p) => p.title)).toEqual(['C']);
+  });
+
+  it('does not copy the star with a duplicate', async () => {
+    const a = await create({ title: 'A' });
+    await star(a.id, true);
+    const copy = (await app.inject({ method: 'POST', url: `/api/pages/${a.id}/duplicate`, payload: { today: '2026-09-30' } })).json();
+    expect(copy.favorite).toBe(false);
+  });
+});
