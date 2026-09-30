@@ -113,6 +113,44 @@ export const Filter = z
   })
   .refine((f) => Object.values(FILTER_OPS).some((ops) => ops.includes(f.op)), 'Unknown filter operator');
 
+/**
+ * What starts an automation: a row added to its database, a property changing
+ * (optionally only when the row then matches `when`), or a schedule — every day,
+ * week or month at a local time (the automation's `tz`), for each row that
+ * matches `filters` (`rows: 'matching'`) or once without a row (`'none'`).
+ */
+export const Trigger = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('row_added') }),
+  z.object({ type: z.literal('prop_changed'), propId: PropertyId, when: Filter.nullable().default(null) }),
+  z.object({
+    type: z.literal('schedule'),
+    every: z.enum(['day', 'week', 'month']).default('day'),
+    at: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).default('09:00'),
+    /** Weekly: 0 = Sunday … 6 = Saturday. */
+    weekday: z.number().int().min(0).max(6).default(1),
+    /** Monthly: day of the month (the last day in shorter months). */
+    monthday: z.number().int().min(1).max(31).default(1),
+    rows: z.enum(['matching', 'none']).default('matching'),
+    filters: z.array(Filter).max(20).default([]),
+  }),
+]);
+
+/** An IANA time zone ("Europe/Amsterdam"): automations run on its days and hours. */
+export const TimeZone = z.string().min(1).max(64);
+
+export const AutomationCreate = z.object({
+  name: z.string().trim().min(1).max(100).default('Automation'),
+  enabled: z.boolean().default(true),
+  trigger: Trigger,
+  actions: Actions.default([]),
+  tz: TimeZone.default('UTC'),
+});
+
+export const AutomationUpdate = z
+  .object({ name: z.string().trim().min(1).max(100), enabled: z.boolean(), trigger: Trigger, actions: Actions, tz: TimeZone })
+  .partial()
+  .refine((v) => Object.keys(v).length > 0, 'Nothing to update');
+
 export const ViewConfig = z.object({
   sorts: z.array(Sort).max(10).default([]),
   filters: z.array(Filter).max(20).default([]),
@@ -201,3 +239,4 @@ export const PropsPatch = z.record(PropertyId, z.unknown()).refine((v) => Object
 /** @typedef {z.infer<typeof DatabaseQuery>} DatabaseQuery */
 /** @typedef {z.infer<typeof Filter>} Filter */
 /** @typedef {z.infer<typeof Sort>} Sort */
+/** @typedef {z.infer<typeof Trigger>} Trigger */

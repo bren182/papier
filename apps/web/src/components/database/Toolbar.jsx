@@ -1,5 +1,7 @@
 import { useRef, useState } from 'react';
-import { filterOps, rollupResultType, VALUELESS_OPS } from '@papier/core/props';
+import { DYNAMIC_TODAY, filterOps, rollupResultType, VALUELESS_OPS } from '@papier/core/props';
+import { useAutomations } from '../../api/automations.js';
+import { AutomationsPanel } from './AutomationsPanel.jsx';
 import { RefChip, RelationPicker } from './cells.jsx';
 import { defaultTemplate, orderedProperties, TITLE, useDb } from './context.js';
 import { Icon, ICONS, OP_LABELS, TypeIcon } from './meta.jsx';
@@ -9,18 +11,30 @@ const toolButton = 'flex h-7 items-center gap-1.5 rounded-md px-2 text-[13px] te
 const activeTool = 'text-accent-text hover:text-accent-text';
 
 /**
- * Sort, Filter, Properties and New ▾ — the strip above a view.
+ * Automations, Filter, Sort, Properties and New ▾ — the strip above a view.
  * @param {{ onNew: (templateId?: string | null) => void }} props  undefined = the view's default
  */
 export function Toolbar({ onNew }) {
-  const { view } = useDb();
-  const [open, setOpen] = useState(/** @type {'sort' | 'filter' | 'props' | 'new' | null} */ (null));
-  const refs = { sort: useRef(null), filter: useRef(null), props: useRef(null), new: useRef(null) };
+  const { view, dbId } = useDb();
+  const [open, setOpen] = useState(/** @type {'sort' | 'filter' | 'props' | 'new' | 'auto' | null} */ (null));
+  const refs = { sort: useRef(null), filter: useRef(null), props: useRef(null), new: useRef(null), auto: useRef(null) };
   const close = () => setOpen(null);
   const { sorts, filters } = view.config;
+  const running = (useAutomations(dbId).data ?? []).filter((a) => a.enabled).length;
 
   return (
     <div className="flex items-center gap-0.5">
+      <button
+        ref={refs.auto}
+        type="button"
+        aria-label="Automations"
+        title="Automations"
+        className={`${toolButton} ${running ? activeTool : ''}`}
+        onClick={() => setOpen('auto')}
+      >
+        <Icon path={ICONS.bolt} />
+        {running ? running : null}
+      </button>
       <button ref={refs.filter} type="button" className={`${toolButton} ${filters.length ? activeTool : ''}`} onClick={() => setOpen('filter')}>
         <Icon path={ICONS.filter} />
         Filter{filters.length ? ` · ${filters.length}` : ''}
@@ -48,6 +62,7 @@ export function Toolbar({ onNew }) {
       {open === 'filter' && <FilterMenu anchor={refs.filter.current} onClose={close} />}
       {open === 'props' && <PropertiesMenu anchor={refs.props.current} onClose={close} />}
       {open === 'new' && <NewMenu anchor={refs.new.current} onClose={close} onNew={onNew} />}
+      {open === 'auto' && <AutomationsPanel anchor={refs.auto.current} onClose={close} />}
     </div>
   );
 }
@@ -193,32 +208,17 @@ function FilterMenu({ anchor, onClose }) {
   return (
     <Popover anchor={anchor} onClose={onClose} width={440}>
       {filters.length === 0 && <div className="px-2 py-1.5 text-[13px] text-muted">No filters — every row shows.</div>}
-      {filters.map((f, i) => {
-        const prop = byId.get(f.propId);
-        if (!prop) return null;
-        const ops = filterOps(prop);
-        return (
-          <div key={i} className="flex items-center gap-1 px-1 py-0.5">
-            <PropSelect
-              value={f.propId}
-              options={all}
-              onChange={(propId) => {
-                const next = byId.get(propId);
-                update(i, { propId, op: filterOps(next ?? { type: 'text' })[0] ?? 'is', value: next?.type === 'checkbox' ? true : undefined });
-              }}
-            />
-            <select value={f.op} aria-label="Condition" onChange={(e) => update(i, { op: e.target.value })} className={`${field} w-[130px]`}>
-              {ops.map((op) => (
-                <option key={op} value={op}>
-                  {OP_LABELS[op]}
-                </option>
-              ))}
-            </select>
-            {!VALUELESS_OPS.has(f.op) && <FilterValue prop={prop} value={f.value} onChange={(value) => update(i, { value })} />}
-            <RemoveButton label="Remove filter" onClick={() => setConfig({ filters: filters.filter((_, j) => j !== i) })} />
-          </div>
-        );
-      })}
+      {filters.map((f, i) =>
+        byId.has(f.propId) ? (
+          <ConditionRow
+            key={i}
+            filter={f}
+            properties={all}
+            onChange={(patch) => update(i, patch)}
+            onRemove={() => setConfig({ filters: filters.filter((_, j) => j !== i) })}
+          />
+        ) : null,
+      )}
       <div className="my-1 h-px bg-line" />
       <button
         type="button"
@@ -228,6 +228,40 @@ function FilterMenu({ anchor, onClose }) {
         <Icon path={ICONS.plus} /> Add filter
       </button>
     </Popover>
+  );
+}
+
+/**
+ * One condition: property, operator, value. Used by view filters and by
+ * automations ("when … is …", "for rows where …").
+ * @param {{ filter: import('./context.js').ViewConfig['filters'][number], properties: import('./context.js').Property[],
+ *   onChange: (patch: Partial<import('./context.js').ViewConfig['filters'][number]>) => void, onRemove?: () => void }} props
+ */
+export function ConditionRow({ filter: f, properties, onChange, onRemove }) {
+  const prop = properties.find((p) => p.id === f.propId);
+  if (!prop) return null;
+  const ops = filterOps(prop);
+  return (
+    <div className="flex items-center gap-1 px-1 py-0.5">
+      <PropSelect
+        value={f.propId}
+        options={properties}
+        onChange={(propId) => {
+          const next = properties.find((p) => p.id === propId);
+          onChange({ propId, op: filterOps(next ?? { type: 'text' })[0] ?? 'is', value: next?.type === 'checkbox' ? true : undefined });
+        }}
+      />
+      <select value={f.op} aria-label="Condition" onChange={(e) => onChange({ op: e.target.value })} className={`${field} w-[130px] max-w-[130px] shrink-0`}>
+        {ops.map((op) => (
+          <option key={op} value={op}>
+            {OP_LABELS[op]}
+          </option>
+        ))}
+      </select>
+      {/* Keyed by property: a new property starts a fresh value box. */}
+      {!VALUELESS_OPS.has(f.op) && <FilterValue key={f.propId} prop={prop} value={f.value} onChange={(value) => onChange({ value })} />}
+      {onRemove && <RemoveButton label="Remove filter" onClick={onRemove} />}
+    </div>
   );
 }
 
@@ -265,7 +299,23 @@ function FilterValue({ prop, value, onChange }) {
     case 'date':
     case 'created_time':
     case 'edited_time':
-      return <input type="date" aria-label="Value" value={String(value ?? '')} onChange={(e) => onChange(e.target.value || null)} className={`${cls} [color-scheme:dark]`} />;
+      // "Today" is resolved when the query runs, so a view (or a schedule) keeps meaning today.
+      return (
+        <span className="flex min-w-[140px] flex-1 gap-1">
+          <select
+            value={value === DYNAMIC_TODAY ? 'today' : 'date'}
+            aria-label="Date"
+            onChange={(e) => onChange(e.target.value === 'today' ? DYNAMIC_TODAY : null)}
+            className={`${field} w-[84px] shrink-0`}
+          >
+            <option value="date">Date</option>
+            <option value="today">Today</option>
+          </select>
+          {value !== DYNAMIC_TODAY && (
+            <input type="date" aria-label="Value" value={String(value ?? '')} onChange={(e) => onChange(e.target.value || null)} className={`${cls} [color-scheme:dark]`} />
+          )}
+        </span>
+      );
     default: {
       // Typing re-queries; commit on a short pause rather than every key.
       const commit = (/** @type {string} */ t) => onChange(type === 'number' ? (t.trim() === '' ? null : Number(t)) : t);
@@ -376,7 +426,7 @@ function PropertiesMenu({ anchor, onClose }) {
  */
 function PropSelect({ value, options, onChange }) {
   return (
-    <select value={value} aria-label="Property" onChange={(e) => onChange(e.target.value)} className={`${field} w-[130px]`}>
+    <select value={value} aria-label="Property" onChange={(e) => onChange(e.target.value)} className={`${field} w-[130px] max-w-[130px] shrink-0`}>
       {options.map((p) => (
         <option key={p.id} value={p.id}>
           {p.name}

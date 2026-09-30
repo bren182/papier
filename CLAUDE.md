@@ -114,6 +114,23 @@ editor flushes its saver first. The client uses `useRunButton` (`api/actions.js`
 `writeValues`, `createRow`) live in `db/rows.ts`; the view query builder lives in `db/query.ts`
 (`filterSql`, `sortSql`, `matchingRows`). Date filters accept `'@today'`.
 
+**Automations** (`db/automations.ts`, table `automations`: trigger + actions + IANA `tz`)
+run on the same engine. There are three triggers:
+- `row_added`;
+- `prop_changed` (with an optional `when` filter checked via `matchingRows`);
+- `schedule` (every day, week or month at a local `at`, for each matching row or once row-less).
+
+Triggers fire inside the user's own edit transaction: `POST …/rows`, `PATCH /pages/:id/props` (for
+values that actually changed, never on templates), and button runs (`fireAfterRun`). Each automation
+runs in a savepoint: a failure is rolled back into `last_error`, and the edit still succeeds.
+**No cascades:** only user edits call the fire functions; engine writes (`source: 'automation'`) never
+do. Undo fires nothing. The scheduler (`automations/scheduler.ts`) starts only with
+`buildApp({ scheduler: true })` (`index.ts`); tests call `tick(db, now)` directly. It runs due
+`next_run_at` rows, catches up once after downtime, and skips trashed and template databases
+(`databaseRuns`). Time zone math uses `Intl` (`zoned`, `fromZoned`, `nextRun`), so DST is safe.
+Duplicating a database copies its automations with remapped ids. UI: the ⚡ button in `Toolbar.jsx`
+opens `AutomationsPanel.jsx`. Conditions reuse `ConditionRow` (the view filter row).
+
 ## Templates (`apps/server/src/db/duplicate.ts`)
 
 A template is a page with `is_template`: a root page (the library, `GET /api/templates`)

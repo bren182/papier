@@ -4,7 +4,7 @@ import { InvalidValue, orderBetween, validateValue } from '@papier/core';
 import { duplicatePage } from './duplicate.ts';
 import { properties, writeValue, type Conn, type Prop, type Tx } from './props.ts';
 import { writeLinks } from './relations.ts';
-import { dbProperties, dbViews, pages } from './schema.ts';
+import { automations, dbProperties, dbViews, pages } from './schema.ts';
 import { indexTitle } from './search.ts';
 
 /**
@@ -18,7 +18,7 @@ import { indexTitle } from './search.ts';
  */
 export function placeKey(
   db: Conn,
-  table: typeof pages | typeof dbProperties | typeof dbViews,
+  table: typeof pages | typeof dbProperties | typeof dbViews | typeof automations,
   scope: SQL | undefined,
   { beforeId, afterId }: { beforeId?: string; afterId?: string },
 ) {

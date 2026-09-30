@@ -150,4 +150,5 @@ export const ICONS = {
   table: 'M3.5 5.5h17v13h-17zM3.5 10h17M9.5 10v8.5',
   board: 'M4 5h4v14H4zM10 5h4v9h-4zM16 5h4v11h-4z',
   grip: 'M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01',
+  bolt: 'M13 3L5 14h6l-1 7 8-11h-6l1-7z',
 };

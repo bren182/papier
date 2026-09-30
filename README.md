@@ -88,7 +88,7 @@ Tick boxes as they land. Anything unticked in a shipped milestone moves to the n
 - [ ] List, gallery, calendar views
 - [x] Inline databases embedded in a page
 - [x] Relations + rollups (count, sum, % complete, etc.) — core, not optional. Two-way by default (`property_links`, each link stored once), rollups computed in SQL so they sort and filter; property values are searchable too
-- [ ] Buttons + automations: button property and page button blocks (done: set / today / move date / check / +number / link / add row, Undo toast); triggered and scheduled automations next
+- [x] Buttons + automations: button property and page button blocks (set / today / move date / check / +number / link / add row, Undo toast); automations when a row is added, when a property changes, or on a schedule (per database, ⚡ panel)
 - [x] Templates: save any page as a template (library), database templates with a default per view, "Today ↻" dates that resolve on use; Duplicate
 - [ ] Built-in template library — decided after importing + analysing my Notion workspace
 

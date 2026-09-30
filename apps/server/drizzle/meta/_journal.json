@@ -57,6 +57,13 @@
       "when": 1790760715014,
       "tag": "0007_relations",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1790765664013,
+      "tag": "0008_automations",
+      "breakpoints": true
     }
   ]
 }

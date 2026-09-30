@@ -4,7 +4,8 @@ import { DYNAMIC_TODAY, plainText, validateValue, ViewConfig, type PropValue } f
 import { OWNING_BLOCKS } from './pageTree.ts';
 import { properties, views, writeValue, type Prop, type Tx } from './props.ts';
 import { indexBlocks, indexTitle } from './search.ts';
-import { blocks, dbProperties, dbViews, pageProps, pages, propertyLinks } from './schema.ts';
+import { automations, blocks, dbProperties, dbViews, pageProps, pages, propertyLinks } from './schema.ts';
+import { dueAt } from './automations.ts';
 
 /**
  * Deep copy of a page: its content, the sub-pages its content owns (page and
@@ -46,14 +47,17 @@ type Ctx = {
   linked: Map<string, Prop>;
   /** Copied button blocks (new ids): their actions are remapped at the end. */
   buttons: string[];
+  /** Copied automations (new ids): triggers and actions are remapped at the end. */
+  automations: string[];
 };
 type Copied = { id: string; views: Map<string, string> };
 
 export function duplicatePage(tx: Tx, sourceId: string, target: Target, today: string): string {
-  const ctx: Ctx = { tx, today, pages: 0, blocks: 0, now: Date.now(), pageMap: new Map(), propMap: new Map(), linked: new Map(), buttons: [] };
+  const ctx: Ctx = { tx, today, pages: 0, blocks: 0, now: Date.now(), pageMap: new Map(), propMap: new Map(), linked: new Map(), buttons: [], automations: [] };
   const id = copyPage(ctx, sourceId, target).id;
   fixRelationConfigs(ctx);
   fixButtonBlocks(ctx);
+  fixAutomations(ctx);
   copyLinks(ctx);
   return id;
 }
@@ -147,6 +151,12 @@ function copyDatabase(ctx: Ctx, fromId: string, toId: string): Map<string, strin
     viewMap.set(v.id, newId);
     tx.insert(dbViews).values({ id: newId, databaseId: toId, name: v.name, type: v.type, config, orderKey: v.order, createdAt: ctx.now }).run();
   }
+  // Automations come along (on, as they were); what they point at is remapped at the end.
+  for (const a of tx.select().from(automations).where(eq(automations.databaseId, fromId)).orderBy(asc(automations.orderKey)).all()) {
+    const id = randomUUID();
+    tx.insert(automations).values({ ...a, id, databaseId: toId, nextRunAt: null, lastRunAt: null, lastError: null, createdAt: ctx.now }).run();
+    ctx.automations.push(id);
+  }
   return viewMap;
 }
 
@@ -168,6 +178,25 @@ function fixRelationConfigs(ctx: Ctx) {
           }
         : { ...c, relationId: map(c.relationId), targetPropId: map(c.targetPropId) };
     ctx.tx.update(dbProperties).set({ config }).where(eq(dbProperties.id, ctx.propMap.get(oldId)!)).run();
+  }
+}
+
+/** Copied automations watch and act on the copies of the properties, databases and rows they name. */
+function fixAutomations(ctx: Ctx) {
+  const prop = (id: unknown) => (typeof id === 'string' ? (ctx.propMap.get(id) ?? id) : id);
+  for (const id of ctx.automations) {
+    const a = ctx.tx.select().from(automations).where(eq(automations.id, id)).get();
+    if (!a) continue;
+    const t = a.trigger as Record<string, unknown> & { when?: { propId: string } | null; filters?: { propId: string }[] };
+    const trigger = {
+      ...t,
+      ...('propId' in t ? { propId: prop(t.propId) } : {}),
+      ...(t.when ? { when: { ...t.when, propId: prop(t.when.propId) } } : {}),
+      ...(t.filters ? { filters: t.filters.map((f) => ({ ...f, propId: prop(f.propId) })) } : {}),
+    };
+    const next = { ...a, trigger, actions: remapActions(ctx, a.actions) as unknown[] };
+    // Copies inside a template stay put: the scheduler skips template databases anyway.
+    ctx.tx.update(automations).set({ trigger, actions: next.actions, nextRunAt: dueAt(next, ctx.now) }).where(eq(automations.id, id)).run();
   }
 }
 

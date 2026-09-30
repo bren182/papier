@@ -4,7 +4,9 @@ import { BLOCK_TYPES } from '@papier/core';
 import { openDb } from './db/index.ts';
 import { backfillPageBlocks } from './db/pageTree.ts';
 import { backfillSearch } from './db/search.ts';
+import { startScheduler } from './automations/scheduler.ts';
 import { actionRoutes } from './routes/actions.ts';
+import { automationRoutes } from './routes/automations.ts';
 import { blockRoutes } from './routes/blocks.ts';
 import { databaseRoutes } from './routes/databases.ts';
 import { pageRoutes } from './routes/pages.ts';
@@ -14,9 +16,11 @@ type AppOptions = {
   /** SQLite file path; ':memory:' for tests. */
   dbPath?: string;
   logger?: boolean;
+  /** Run scheduled automations (the real server only: not tests or scripts). */
+  scheduler?: boolean;
 };
 
-export function buildApp({ dbPath = ':memory:', logger = true }: AppOptions = {}) {
+export function buildApp({ dbPath = ':memory:', logger = true, scheduler = false }: AppOptions = {}) {
   const app = Fastify({ logger: logger && { level: process.env.LOG_LEVEL ?? 'info' } });
   const { db, sqlite } = openDb(dbPath);
   const linked = backfillPageBlocks(db);
@@ -24,7 +28,9 @@ export function buildApp({ dbPath = ':memory:', logger = true }: AppOptions = {}
   const backfilled = backfillSearch(db);
   if (backfilled) app.log.info({ rows: backfilled }, 'Indexed blocks and property values for search');
 
+  const stopScheduler = scheduler ? startScheduler(db, app.log) : null;
   app.addHook('onClose', async () => {
+    stopScheduler?.();
     sqlite.close();
   });
 
@@ -41,6 +47,7 @@ export function buildApp({ dbPath = ':memory:', logger = true }: AppOptions = {}
   databaseRoutes(app, db);
   searchRoutes(app, db);
   actionRoutes(app, db);
+  automationRoutes(app, db);
 
   return app;
 }

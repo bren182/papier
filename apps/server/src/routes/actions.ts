@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import { and, eq } from 'drizzle-orm';
 import { ActionRun, Actions, ActionUndo, InvalidValue } from '@papier/core';
 import { rowDatabaseId, runActions, undoRun, type RunContext, type RunResult } from '../db/actions.ts';
+import { fireAfterRun } from '../db/automations.ts';
 import type { Db } from '../db/index.ts';
 import { liveLineage } from '../db/lineage.ts';
 import type { Tx } from '../db/props.ts';
@@ -11,13 +12,19 @@ import { rowById } from './databases.ts';
 /**
  * Buttons: a button property runs its actions on its row, a button block runs
  * row-less (it can add rows). Each run returns what it changed and an undo
- * snapshot for the client's "Undo" toast.
+ * snapshot for the client's "Undo" toast. A click counts as the user's own
+ * edit, so it fires the automations watching what it changed (their changes
+ * aren't part of the undo).
  */
 export function actionRoutes(app: FastifyInstance, db: Db) {
   /** Run in one transaction; an action that can't run is a 400 and nothing changes. */
   const run = (reply: FastifyReply, fn: (tx: Tx) => RunResult) => {
     try {
-      return db.transaction(fn);
+      return db.transaction((tx) => {
+        const result = fn(tx);
+        fireAfterRun(tx, result, (rowId) => rowDatabaseId(tx, rowId));
+        return result;
+      });
     } catch (err) {
       if (err instanceof InvalidValue) {
         reply.code(400).send({ error: err.message });

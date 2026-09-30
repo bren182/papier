@@ -25,6 +25,7 @@ import type { Db } from '../db/index.ts';
 import { TooBig } from '../db/duplicate.ts';
 import { liveLineage } from '../db/lineage.ts';
 import { properties, propFields, views, viewFields, writeValue, type Conn, type Prop, type Tx } from '../db/props.ts';
+import { firePropsChanged, fireRowAdded } from '../db/automations.ts';
 import { alias, filterSql, likeEscape, queryCtx, rowsFrom, sortSql } from '../db/query.ts';
 import { handOverLinks, Relations, rowValues } from '../db/relations.ts';
 import { createRow, placeKey, writeValues } from '../db/rows.ts';
@@ -398,7 +399,11 @@ export function databaseRoutes(app: FastifyInstance, db: Db) {
     const input = RowCreate.parse(req.body ?? {});
     const id = liveDatabase(req.params.id);
     if (!id) return reply.code(404).send({ error: 'Database not found' });
-    const rowId = write(reply, (tx) => createRow(tx, id, input, input.today));
+    const rowId = write(reply, (tx) => {
+      const rowId = createRow(tx, id, input, input.today);
+      fireRowAdded(tx, id, rowId);
+      return rowId;
+    });
     if (!rowId) return reply;
     return reply.code(201).send(rowById(db, rowId));
   });
@@ -440,8 +445,15 @@ export function databaseRoutes(app: FastifyInstance, db: Db) {
     if (!database || !liveLineage(db, pageId)) return reply.code(404).send({ error: 'Row not found' });
     const template = db.select({ t: pages.isTemplate }).from(pages).where(eq(pages.id, pageId)).get()?.t ?? false;
     const done = write(reply, (tx) => {
+      const before = rowValues(tx, pageId).props;
       writeValues(tx, pageId, properties(tx, database.id), input, { template });
       tx.update(pages).set({ updatedAt: Date.now() }).where(eq(pages.id, pageId)).run();
+      // Automations watch real changes to real rows (not templates, not no-op writes).
+      if (!template) {
+        const after = rowValues(tx, pageId).props;
+        const changed = Object.keys(input).filter((k) => JSON.stringify(before[k] ?? null) !== JSON.stringify(after[k] ?? null));
+        firePropsChanged(tx, database.id, pageId, changed);
+      }
       return true;
     });
     if (!done) return reply;

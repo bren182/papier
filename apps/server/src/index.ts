@@ -7,7 +7,7 @@ const host = process.env.HOST ?? '127.0.0.1';
 const dbPath = process.env.DATABASE_PATH ?? 'data/papier.db';
 
 mkdirSync(dirname(dbPath), { recursive: true });
-const app = buildApp({ dbPath });
+const app = buildApp({ dbPath, scheduler: true });
 
 try {
   await app.listen({ port, host });

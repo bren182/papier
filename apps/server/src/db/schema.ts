@@ -146,6 +146,33 @@ export const propertyLinks = sqliteTable(
   (t) => [primaryKey({ columns: [t.pageId, t.propId, t.targetId] }), index('property_links_target').on(t.propId, t.targetId)],
 );
 
+/**
+ * A database's automations: a trigger (JSON Trigger in @papier/core) and the
+ * actions it runs (db/actions.ts). Schedules keep their next due time in
+ * `nextRunAt` for the scheduler; `lastError` says why the last run failed.
+ */
+export const automations = sqliteTable(
+  'automations',
+  {
+    id: text('id').primaryKey(),
+    databaseId: text('database_id')
+      .notNull()
+      .references(() => pages.id),
+    name: text('name').notNull(),
+    enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+    trigger: text('trigger', { mode: 'json' }).$type<Record<string, unknown>>().notNull(),
+    actions: text('actions', { mode: 'json' }).$type<unknown[]>().notNull().default([]),
+    /** IANA time zone: whose "today" and whose 09:00. */
+    tz: text('tz').notNull().default('UTC'),
+    orderKey: text('order_key').notNull(),
+    nextRunAt: integer('next_run_at'),
+    lastRunAt: integer('last_run_at'),
+    lastError: text('last_error'),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [index('automations_database_order').on(t.databaseId, t.orderKey), index('automations_due').on(t.enabled, t.nextRunAt)],
+);
+
 /** Saved views of a database, shared by every place that shows it. */
 export const dbViews = sqliteTable(
   'db_views',
