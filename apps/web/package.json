@@ -6,11 +6,13 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "typecheck": "tsc -p jsconfig.json"
   },
   "dependencies": {
     "@papier/core": "workspace:*",
     "@papier/ui": "workspace:*",
+    "@tanstack/react-query": "^5.104.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },

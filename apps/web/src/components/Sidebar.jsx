@@ -1,27 +1,66 @@
-const TREE = [
-  { label: 'Roadmap', depth: 0, expanded: true },
-  { label: 'v0.1 — it holds my notes', depth: 1, active: true },
-  { label: 'v0.2 — actually nice', depth: 1 },
-  { label: 'v0.3 — databases', depth: 1 },
-  { label: 'v0.4 — not alone', depth: 1 },
-  { label: 'v1.0 — shipped', depth: 1 },
-  { label: 'Tech stack', depth: 0, expanded: false },
-  { label: 'Data model', depth: 0, expanded: false },
-  { label: 'Scale & longevity', depth: 0, expanded: false },
-  { label: 'Open questions', depth: 0, expanded: false },
-  { label: 'Scratch', depth: 0, expanded: false },
-];
+import { useCallback, useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { pageKeys, useArchivePage, useChildPages, useCreatePage } from '../api/pages.js';
+
+/** @typedef {import('@papier/core').Page} Page */
+/**
+ * @typedef {{
+ *   selectedId: string | null,
+ *   onSelect: (id: string | null) => void,
+ *   isExpanded: (id: string) => boolean,
+ *   setExpanded: (id: string, open: boolean) => void,
+ *   onAddChild: (parentId: string) => void,
+ *   onDelete: (page: Page) => void,
+ * }} TreeContext
+ */
 
 const navButton =
   'flex h-8 items-center gap-2.5 rounded-md px-2.5 text-left text-sm text-muted hover:bg-s-active hover:text-fg';
 
-export function Sidebar() {
+/** @param {{ selectedId: string | null, onSelect: (id: string | null) => void }} props */
+export function Sidebar({ selectedId, onSelect }) {
+  const [isExpanded, setExpanded] = useExpandedSet();
+  const createPage = useCreatePage();
+  const archivePage = useArchivePage();
+  const qc = useQueryClient();
+
+  /** @param {string | null} parentId */
+  const addPage = (parentId) =>
+    createPage.mutate(
+      { parentId },
+      {
+        onSuccess: (page) => {
+          if (parentId) setExpanded(parentId, true);
+          onSelect(page.id);
+        },
+      },
+    );
+
+  /** @param {Page} page */
+  const deletePage = (page) =>
+    archivePage.mutate(page.id, {
+      onSuccess: () => {
+        // If the open page was this one or inside it, step out to the parent.
+        /** @type {{ ancestors: { id: string }[] } | undefined} */
+        const open = selectedId ? qc.getQueryData(pageKeys.detail(selectedId)) : undefined;
+        const openLineage = open && selectedId ? [...open.ancestors.map((a) => a.id), selectedId] : [];
+        if (openLineage.includes(page.id)) onSelect(page.parentId);
+      },
+    });
+
+  /** @type {TreeContext} */
+  const ctx = { selectedId, onSelect, isExpanded, setExpanded, onAddChild: addPage, onDelete: deletePage };
+
   return (
     <nav
       aria-label="Workspace"
       className="p-glass relative flex w-[260px] shrink-0 flex-col gap-0.5 border-r border-white/5 bg-s-sidebar px-2 py-3"
     >
-      <button type="button" className="flex h-10 items-center gap-2.5 rounded-md px-2.5 text-left hover:bg-s-active">
+      <button
+        type="button"
+        onClick={() => onSelect(null)}
+        className="flex h-10 items-center gap-2.5 rounded-md px-2.5 text-left hover:bg-s-active"
+      >
         <span className="flex size-[22px] items-center justify-center rounded-[5px] bg-hover font-display text-sm text-fg-strong">
           P
         </span>
@@ -38,46 +77,27 @@ export function Sidebar() {
         <span>Settings</span>
       </button>
 
-      <div className="mt-4 flex h-[26px] items-center px-2.5 text-xs font-medium text-faint">Pages</div>
-
-      {TREE.map((item) => (
+      <div className="group/pages mt-4 flex h-[26px] items-center justify-between px-2.5 text-xs font-medium text-faint">
+        <span>Pages</span>
         <button
-          key={item.label}
           type="button"
-          aria-current={item.active ? 'page' : undefined}
-          className={`flex h-[30px] items-center gap-1.5 rounded-md pr-2.5 text-left text-sm ${
-            item.active ? 'bg-s-active text-fg-strong' : 'text-[#a3a3a3] hover:bg-s-active hover:text-fg'
-          }`}
-          style={{ paddingLeft: 6 + item.depth * 18 }}
+          aria-label="New page"
+          onClick={() => addPage(null)}
+          className="flex size-5 items-center justify-center rounded text-muted opacity-0 group-hover/pages:opacity-100 hover:bg-s-active hover:text-fg focus-visible:opacity-100"
         >
-          <span className="flex size-4 items-center justify-center">
-            {item.expanded !== undefined && (
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.4"
-                strokeLinecap="round"
-                className="text-muted"
-                style={{ transform: `rotate(${item.expanded ? 90 : 0}deg)` }}
-              >
-                <path d="M9 6l6 6-6 6" />
-              </svg>
-            )}
-          </span>
-          <PageIcon />
-          <span className="truncate">{item.label}</span>
+          <PlusIcon size={14} />
         </button>
-      ))}
+      </div>
 
-      <div className="flex-1" />
+      <div className="-mx-2 min-h-0 flex-1 overflow-y-auto px-2">
+        <PageList parentId={null} depth={0} ctx={ctx} />
+      </div>
+
       <button type="button" className={navButton}>
         <TrashIcon />
         <span>Trash</span>
       </button>
-      <button type="button" className={navButton}>
+      <button type="button" className={navButton} onClick={() => addPage(null)} disabled={createPage.isPending}>
         <PlusIcon />
         <span>New page</span>
       </button>
@@ -85,20 +105,157 @@ export function Sidebar() {
   );
 }
 
-const iconProps = /** @type {const} */ ({
-  width: 16,
-  height: 16,
-  viewBox: '0 0 24 24',
-  fill: 'none',
-  stroke: 'currentColor',
-  strokeWidth: 2,
-  strokeLinecap: 'round',
-  strokeLinejoin: 'round',
-});
+/** @param {{ parentId: string | null, depth: number, ctx: TreeContext }} props */
+function PageList({ parentId, depth, ctx }) {
+  const { data: pages, isPending, isError } = useChildPages(parentId);
+  const indent = { paddingLeft: 6 + depth * 18 + 22 };
+
+  if (isPending) return null;
+  if (isError) {
+    return (
+      <div className="flex h-[30px] items-center text-sm text-faint" style={indent}>
+        Couldn't load pages
+      </div>
+    );
+  }
+  if (pages.length === 0) {
+    return (
+      <div className="flex h-[30px] items-center text-sm text-faint" style={indent}>
+        {parentId ? 'No pages inside' : 'No pages yet'}
+      </div>
+    );
+  }
+
+  return (
+    <ul role={depth === 0 ? 'tree' : 'group'} aria-label={depth === 0 ? 'Pages' : undefined}>
+      {pages.map((page) => (
+        <TreeItem key={page.id} page={page} depth={depth} ctx={ctx} />
+      ))}
+    </ul>
+  );
+}
+
+/** @param {{ page: Page, depth: number, ctx: TreeContext }} props */
+function TreeItem({ page, depth, ctx }) {
+  const expanded = ctx.isExpanded(page.id);
+  const active = ctx.selectedId === page.id;
+  const title = page.title || 'Untitled';
+
+  return (
+    <li role="treeitem" aria-expanded={page.hasChildren ? expanded : undefined} aria-selected={active}>
+      <div
+        className={`group flex h-[30px] items-center gap-0.5 rounded-md pr-1 text-sm ${
+          active ? 'bg-s-active text-fg-strong' : 'text-[#a3a3a3] hover:bg-s-active hover:text-fg'
+        }`}
+        style={{ paddingLeft: 6 + depth * 18 }}
+      >
+        <button
+          type="button"
+          aria-label={expanded ? `Collapse ${title}` : `Expand ${title}`}
+          onClick={() => ctx.setExpanded(page.id, !expanded)}
+          className="flex size-5 shrink-0 items-center justify-center rounded text-muted hover:bg-white/10"
+        >
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.4"
+            strokeLinecap="round"
+            className="transition-transform"
+            style={{ transform: `rotate(${expanded ? 90 : 0}deg)`, opacity: page.hasChildren ? 1 : 0.45 }}
+          >
+            <path d="M9 6l6 6-6 6" />
+          </svg>
+        </button>
+
+        <button
+          type="button"
+          aria-current={active ? 'page' : undefined}
+          onClick={() => ctx.onSelect(page.id)}
+          className="flex h-full min-w-0 flex-1 items-center gap-1.5 text-left"
+        >
+          <PageIcon />
+          <span className={`truncate ${page.title ? '' : 'text-faint'}`}>{title}</span>
+        </button>
+
+        <span className="flex shrink-0 opacity-0 group-focus-within:opacity-100 group-hover:opacity-100">
+          <button
+            type="button"
+            aria-label={`Delete ${title}`}
+            onClick={() => ctx.onDelete(page)}
+            className="flex size-6 items-center justify-center rounded text-muted hover:bg-white/10 hover:text-fg"
+          >
+            <TrashIcon size={14} />
+          </button>
+          <button
+            type="button"
+            aria-label={`Add a page inside ${title}`}
+            onClick={() => ctx.onAddChild(page.id)}
+            className="flex size-6 items-center justify-center rounded text-muted hover:bg-white/10 hover:text-fg"
+          >
+            <PlusIcon size={14} />
+          </button>
+        </span>
+      </div>
+
+      {expanded && <PageList parentId={page.id} depth={depth + 1} ctx={ctx} />}
+    </li>
+  );
+}
+
+const EXPANDED_KEY = 'papier.expanded';
+
+/** Which tree nodes are open, remembered per device. */
+function useExpandedSet() {
+  const [open, setOpen] = useState(() => {
+    try {
+      return new Set(/** @type {string[]} */ (JSON.parse(localStorage.getItem(EXPANDED_KEY) ?? '[]')));
+    } catch {
+      return new Set();
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(EXPANDED_KEY, JSON.stringify([...open]));
+    } catch {
+      // storage unavailable: expansion just won't persist
+    }
+  }, [open]);
+
+  const isExpanded = useCallback((/** @type {string} */ id) => open.has(id), [open]);
+  const setExpanded = useCallback((/** @type {string} */ id, /** @type {boolean} */ value) => {
+    setOpen((prev) => {
+      if (prev.has(id) === value) return prev;
+      const next = new Set(prev);
+      if (value) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }, []);
+
+  return /** @type {const} */ ([isExpanded, setExpanded]);
+}
+
+/** @param {number} [size] */
+const iconProps = (size = 16) =>
+  /** @type {const} */ ({
+    width: size,
+    height: size,
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 2,
+    strokeLinecap: 'round',
+    strokeLinejoin: 'round',
+    'aria-hidden': true,
+  });
 
 function SearchIcon() {
   return (
-    <svg {...iconProps}>
+    <svg {...iconProps()}>
       <circle cx="11" cy="11" r="7" />
       <path d="M20 20l-3.5-3.5" />
     </svg>
@@ -107,7 +264,7 @@ function SearchIcon() {
 
 function GearIcon() {
   return (
-    <svg {...iconProps}>
+    <svg {...iconProps()}>
       <circle cx="12" cy="12" r="3" />
       <path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" />
     </svg>
@@ -116,24 +273,26 @@ function GearIcon() {
 
 function PageIcon() {
   return (
-    <svg {...iconProps} strokeWidth={1.8} className="shrink-0 opacity-75">
+    <svg {...iconProps()} strokeWidth={1.8} className="shrink-0 opacity-75">
       <path d="M6 3h8l4 4v14H6z" />
       <path d="M14 3v4h4" />
     </svg>
   );
 }
 
-function TrashIcon() {
+/** @param {{ size?: number }} props */
+function TrashIcon({ size }) {
   return (
-    <svg {...iconProps}>
+    <svg {...iconProps(size)}>
       <path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" />
     </svg>
   );
 }
 
-function PlusIcon() {
+/** @param {{ size?: number }} props */
+function PlusIcon({ size }) {
   return (
-    <svg {...iconProps}>
+    <svg {...iconProps(size)}>
       <path d="M12 5v14M5 12h14" />
     </svg>
   );

@@ -1,24 +1,48 @@
 import { useEffect, useState } from 'react';
+import { usePage } from '../api/pages.js';
 
 /** @typedef {import('../usePrefs.js').Prefs} Prefs */
 
 const toggle =
   'h-7 rounded-md border border-white/10 bg-white/[0.04] px-2.5 text-[13px] text-fg hover:bg-white/[0.08]';
 
-/** @param {{ prefs: Prefs, onChange: (patch: Partial<Prefs>) => void }} props */
-export function Topbar({ prefs, onChange }) {
+/**
+ * @param {{
+ *   selectedId: string | null,
+ *   onSelect: (id: string | null) => void,
+ *   prefs: Prefs,
+ *   onChange: (patch: Partial<Prefs>) => void,
+ * }} props
+ */
+export function Topbar({ selectedId, onSelect, prefs, onChange }) {
   const online = useServerHealth();
   const ambient = prefs.mode === 'ambient';
+  const { data } = usePage(selectedId);
 
   return (
     <header
       className="flex h-11 shrink-0 items-center gap-2 bg-s-top px-4 text-sm"
       style={{ backdropFilter: 'var(--s-top-glass)', WebkitBackdropFilter: 'var(--s-top-glass)' }}
     >
-      <span className="text-muted">Roadmap</span>
-      <span className="text-faint">/</span>
-      <span className="text-fg">v0.1 — it holds my notes</span>
-      <span className="flex-1" />
+      <nav aria-label="Breadcrumb" className="flex min-w-0 flex-1 items-center gap-1">
+        {data &&
+          [...data.ancestors, data.page].map((crumb, i, all) => {
+            const last = i === all.length - 1;
+            return (
+              <span key={crumb.id} className="flex min-w-0 items-center gap-1">
+                {i > 0 && <span className="text-faint">/</span>}
+                <button
+                  type="button"
+                  onClick={() => onSelect(crumb.id)}
+                  aria-current={last ? 'page' : undefined}
+                  className={`max-w-[220px] truncate rounded px-1.5 py-0.5 hover:bg-s-active ${last ? 'text-fg' : 'text-muted'}`}
+                >
+                  {crumb.title || 'Untitled'}
+                </button>
+              </span>
+            );
+          })}
+      </nav>
 
       <span className="flex items-center gap-1.5 text-[13px] text-muted" title="API server status">
         <span className={`size-2 rounded-full ${online ? 'bg-accent' : 'bg-faint'}`} />
