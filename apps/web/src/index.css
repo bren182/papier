@@ -295,3 +295,9 @@ body {
 .ProseMirror .prosemirror-dropcursor-block {
   border-radius: 1px;
 }
+
+/* During a block drag our own drop line shows the target; hide ProseMirror's. */
+.papier-block-drag .prosemirror-dropcursor-block,
+.papier-block-drag .prosemirror-dropcursor-inline {
+  display: none;
+}

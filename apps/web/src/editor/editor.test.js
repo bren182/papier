@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { Editor } from '@tiptap/core';
 import { TextSelection } from '@tiptap/pm/state';
 import { docToRows } from './convert.js';
+import { applyDrop, planDrop } from './dropPlan.js';
 import { bodyExtensions } from './extensions.js';
 
 /** @type {Editor | null} */
@@ -190,6 +191,58 @@ describe('Backspace at the start of a block', () => {
     expect(blocks(e)).toEqual(['paragraph:0:a', 'paragraph:1:b']);
     press(e, 'Backspace');
     expect(blocks(e)).toEqual(['paragraph:0:a', 'paragraph:0:b']);
+  });
+});
+
+describe('drag and drop', () => {
+  /** @param {Editor} e @param {{ index: number, end: number }} drag @param {number} gap @param {number} level */
+  const dropAt = (e, drag, gap, level) => {
+    const plan = planDrop(e.state.doc, drag, gap, level);
+    const tr = applyDrop(e.state, drag, plan);
+    if (tr) e.view.dispatch(tr);
+    return plan;
+  };
+
+  it('picks the level from the pointer, within what the tree allows', () => {
+    const e = setup(['a', 'b', 'x']);
+    const drag = { index: 2, end: 2 };
+    // Between a and b: b follows at level 0, a allows up to 1.
+    expect(planDrop(e.state.doc, drag, 1, 0)).toMatchObject({ level: 0, min: 0, max: 1 });
+    expect(planDrop(e.state.doc, drag, 1, 5)).toMatchObject({ level: 1 });
+    expect(planDrop(e.state.doc, drag, 1, -3)).toMatchObject({ level: 0 });
+  });
+
+  it('never drops shallower than the block below (no stealing its siblings)', () => {
+    const e = setup(['parent', 'paragraph:1:child', 'x']);
+    // Between parent and its first child: only as a child.
+    expect(planDrop(e.state.doc, { index: 2, end: 2 }, 1, 0)).toMatchObject({ level: 1, min: 1, max: 1 });
+  });
+
+  it('moves a block with its children to the chosen level', () => {
+    const e = setup(['a', 'b', 'x', 'paragraph:1:x-child']);
+    dropAt(e, { index: 2, end: 3 }, 1, 1);
+    expect(blocks(e)).toEqual(['paragraph:0:a', 'paragraph:1:x', 'paragraph:2:x-child', 'paragraph:0:b']);
+  });
+
+  it('re-levels in place when dropped on its own spot', () => {
+    const e = setup(['bulletItem:0:a', 'bulletItem:0:b']);
+    dropAt(e, { index: 1, end: 1 }, 1, 1);
+    expect(blocks(e)).toEqual(['bulletItem:0:a', 'bulletItem:1:b']);
+  });
+
+  it('turns text into the list it is dropped into', () => {
+    const e = setup(['bulletItem:0:apples', 'bulletItem:0:bananas', 'note']);
+    const plan = dropAt(e, { index: 2, end: 2 }, 1, 0);
+    expect(plan.convertTo).toBe('bulletItem');
+    expect(blocks(e)).toEqual(['bulletItem:0:apples', 'bulletItem:0:note', 'bulletItem:0:bananas']);
+    expect(e.state.doc.child(1).attrs.id).toBe('b2'); // same block, new type
+  });
+
+  it('joins a nested list by its level, and keeps headings as they are', () => {
+    const e = setup(['bulletItem:0:a', 'todo:1:sub', 'note', 'heading:0:Title']);
+    expect(planDrop(e.state.doc, { index: 2, end: 2 }, 2, 1).convertTo).toBe('todo');
+    expect(planDrop(e.state.doc, { index: 2, end: 2 }, 2, 0).convertTo).toBe('bulletItem');
+    expect(planDrop(e.state.doc, { index: 3, end: 3 }, 1, 0).convertTo).toBeNull();
   });
 });
 

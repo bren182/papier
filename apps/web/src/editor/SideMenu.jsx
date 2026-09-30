@@ -1,26 +1,34 @@
 import { useEffect, useRef, useState } from 'react';
-import { Plugin, PluginKey, TextSelection } from '@tiptap/pm/state';
-import { Fragment } from '@tiptap/pm/model';
+import { TextSelection } from '@tiptap/pm/state';
 import { blockAt, deleteBlock, duplicateBlock, posOfIndex, setBlockType, withDescendants } from './blockOps.js';
+import { applyDrop, planDrop } from './dropPlan.js';
 import { BLOCK_TYPES } from './menuItems.js';
 import { INDENT_REM } from './schema.js';
 
 /** @typedef {import('@tiptap/core').Editor} Editor */
 /** @typedef {import('@tiptap/pm/view').EditorView} EditorView */
 /** @typedef {{ index: number, top: number, left: number }} Hover */
+/** @typedef {{ index: number, end: number }} Drag */
+/** @typedef {import('./dropPlan.js').DropPlan & { top: number, left: number, width: number }} Drop */
+
+/** What a dragged block turns into, for the drop line's label. */
+const TYPE_LABEL = /** @type {Record<string, string>} */ ({ bulletItem: '• List item', numberedItem: '1. List item', todo: '☐ To-do' });
 
 const HANDLE_W = 48; // + and ⋮⋮, 24px each
 
 /**
  * The `+` / drag handle beside the hovered block, drawn inside the editor's own
  * left gutter (so nothing can clip it), plus the block menu the handle opens.
- * Dragging moves the block together with its children.
+ * Dragging moves the block together with its children: the pointer's height
+ * picks the gap, its horizontal position picks the nesting level, and a drop
+ * line shows both (plus a label when the block will join a list's type).
  * @param {{ editor: Editor, container: HTMLElement | null }} props
  */
 export function SideMenu({ editor, container }) {
   const [hover, setHover] = useState(/** @type {Hover | null} */ (null));
   const [menu, setMenu] = useState(/** @type {Hover | null} */ (null));
-  const drag = useRef(/** @type {{ index: number, end: number, from: number, to: number } | null} */ (null));
+  const [drop, setDrop] = useState(/** @type {Drop | null} */ (null));
+  const drag = useRef(/** @type {Drag | null} */ (null));
 
   // Track the block under the pointer.
   useEffect(() => {
@@ -46,34 +54,61 @@ export function SideMenu({ editor, container }) {
     };
   }, [editor, container, menu]);
 
-  // Drops of our drag: move the block + children to the nearest gap, adopting
-  // the indentation found there.
+  // Our block drags, handled on the container (gutter included) before
+  // ProseMirror sees them: track the target while dragging, apply it on drop.
   useEffect(() => {
-    const key = new PluginKey('papierBlockDrop');
-    editor.registerPlugin(
-      new Plugin({
-        key,
-        props: {
-          handleDrop: (view, event) => {
-            const d = drag.current;
-            drag.current = null;
-            if (!d) return false;
-            moveBlocks(view, d, event.clientX, event.clientY);
-            return true;
-          },
-        },
-      }),
-    );
-    return () => {
-      editor.unregisterPlugin(key);
+    if (!container) return;
+    const view = editor.view;
+    const end = () => {
+      drag.current = null;
+      setDrop(null);
+      container.classList.remove('papier-block-drag');
     };
-  }, [editor]);
 
-  if (!hover && !menu) return null;
-  const at = /** @type {Hover} */ (menu ?? hover);
+    /** @param {DragEvent} e */
+    const onOver = (e) => {
+      const d = drag.current;
+      if (!d) return;
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+      const next = locateDrop(view, container, d, e.clientX, e.clientY);
+      setDrop((cur) =>
+        next && cur && next.gap === cur.gap && next.level === cur.level && next.convertTo === cur.convertTo ? cur : next,
+      );
+    };
+    /** @param {DragEvent} e */
+    const onLeave = (e) => {
+      if (drag.current && !container.contains(/** @type {Node | null} */ (e.relatedTarget))) setDrop(null);
+    };
+    /** @param {DragEvent} e */
+    const onDrop = (e) => {
+      const d = drag.current;
+      if (!d) return; // not ours (text, files): ProseMirror handles it
+      e.preventDefault();
+      e.stopPropagation();
+      const plan = locateDrop(view, container, d, e.clientX, e.clientY);
+      const tr = plan && applyDrop(view.state, d, plan);
+      if (tr) view.dispatch(tr.scrollIntoView());
+      view.focus();
+      end();
+    };
+
+    container.addEventListener('dragover', onOver);
+    container.addEventListener('dragleave', onLeave);
+    container.addEventListener('drop', onDrop, true); // capture: before ProseMirror's own drop handler
+    return () => {
+      container.removeEventListener('dragover', onOver);
+      container.removeEventListener('dragleave', onLeave);
+      container.removeEventListener('drop', onDrop, true);
+    };
+  }, [editor, container]);
+
+  if (!hover && !menu && !drop) return null;
+  const at = menu ?? hover;
 
   /** New empty block under this one (after its children), with the `/` menu open. */
   const add = () => {
+    if (!at) return;
     const { state, view } = editor;
     const end = withDescendants(state.doc, at.index, at.index);
     const node = state.doc.child(at.index);
@@ -87,21 +122,23 @@ export function SideMenu({ editor, container }) {
 
   /** @param {import('react').DragEvent} e */
   const onDragStart = (e) => {
+    if (!at) return;
     const { state, view } = editor;
     const end = withDescendants(state.doc, at.index, at.index);
-    const from = posOfIndex(state.doc, at.index);
-    const to = posOfIndex(state.doc, end + 1);
-    const slice = state.doc.slice(from, to);
-    drag.current = { index: at.index, end, from, to };
-    view.dragging = { slice, move: true };
+    drag.current = { index: at.index, end };
+    container?.classList.add('papier-block-drag'); // hides ProseMirror's drop cursor
     e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', slice.content.textBetween(0, slice.content.size, '\n'));
+    const from = posOfIndex(state.doc, at.index);
+    e.dataTransfer.setData('text/plain', state.doc.textBetween(from, posOfIndex(state.doc, end + 1), '\n'));
     const dom = view.nodeDOM(from);
     if (dom instanceof HTMLElement) e.dataTransfer.setDragImage(dom, 0, 0);
+    setHover(null);
   };
 
   return (
     <>
+      {drop && <DropLine drop={drop} />}
+      {at && (
       <div
         className="absolute z-20 flex items-center text-faint"
         style={{ top: at.top, left: at.left, width: HANDLE_W }}
@@ -135,7 +172,8 @@ export function SideMenu({ editor, container }) {
           onDragStart={onDragStart}
           onDragEnd={() => {
             drag.current = null;
-            setHover(null);
+            setDrop(null);
+            container?.classList.remove('papier-block-drag');
           }}
           onClick={() => setMenu(menu ? null : at)}
           className="flex h-6 w-6 cursor-grab items-center justify-center rounded hover:bg-hover hover:text-fg active:cursor-grabbing"
@@ -150,6 +188,7 @@ export function SideMenu({ editor, container }) {
           </svg>
         </div>
       </div>
+      )}
       {menu && <BlockMenu editor={editor} at={menu} onClose={() => (setMenu(null), setHover(null))} />}
     </>
   );
@@ -185,39 +224,55 @@ function locate(view, container, x, y) {
 }
 
 /**
- * Move blocks d.index..d.end to the gap nearest the drop point.
- * @param {EditorView} view @param {{ index: number, end: number, from: number, to: number }} d @param {number} x @param {number} y
+ * Drop target under the pointer: the gap from its height (above/below the
+ * middle of the block it's over), the level from its x relative to the text
+ * column, plus where to draw the line (container coordinates).
+ * @param {EditorView} view @param {HTMLElement} container @param {Drag} d @param {number} x @param {number} y
+ * @returns {Drop | null}
  */
-function moveBlocks(view, d, x, y) {
-  const { state } = view;
-  const doc = state.doc;
+function locateDrop(view, container, d, x, y) {
+  const doc = view.state.doc;
   const rect = view.dom.getBoundingClientRect();
-  const hit = view.posAtCoords({ left: Math.min(Math.max(x, rect.left + 1), rect.right - 1), top: y });
-  if (!hit) return;
+  const hit = view.posAtCoords({
+    left: Math.min(Math.max(x, rect.left + 1), rect.right - 1),
+    top: Math.min(Math.max(y, rect.top + 1), rect.bottom - 1),
+  });
+  if (!hit) return null;
   const target = blockAt(doc, hit.inside >= 0 ? hit.inside : hit.pos);
-  if (!target) return;
+  if (!target) return null;
   const dom = view.nodeDOM(target.pos);
   const box = dom instanceof HTMLElement ? dom.getBoundingClientRect() : null;
   const gap = box && y > box.top + box.height / 2 ? target.index + 1 : target.index;
-  if (gap >= d.index && gap <= d.end + 1) return; // onto itself
 
-  // Adopt the indentation of whatever follows the gap (or precedes it at the end).
-  const next = gap < doc.childCount ? doc.child(gap) : null;
-  const prev = gap > 0 ? doc.child(gap - 1) : null;
-  const want = Math.min(next ? next.attrs.indent : (prev?.attrs.indent ?? 0), prev ? prev.attrs.indent + 1 : 0);
-  const delta = want - doc.child(d.index).attrs.indent;
+  const step = INDENT_REM * (parseFloat(getComputedStyle(document.documentElement).fontSize) || 16);
+  // A third of a step into a level selects it; the gutter means "as shallow as allowed".
+  const plan = planDrop(doc, d, gap, Math.floor((x - rect.left) / step + 0.35));
 
-  /** @type {import('@tiptap/pm/model').Node[]} */
-  const moved = [];
-  doc.slice(d.from, d.to).content.forEach((n) => moved.push(n.type.create({ ...n.attrs, indent: Math.max(0, n.attrs.indent + delta) }, n.content, n.marks)));
+  // Line at the top of the block that will follow, or under the last block.
+  const followIndex = plan.inPlace ? d.index : plan.gap;
+  const outer = container.getBoundingClientRect();
+  let top = rect.bottom;
+  if (followIndex < doc.childCount) {
+    const el = view.nodeDOM(posOfIndex(doc, followIndex));
+    if (el instanceof HTMLElement) top = el.getBoundingClientRect().top;
+  }
+  const left = rect.left - outer.left + plan.level * step;
+  return { ...plan, top: Math.round(top - outer.top - 1), left: Math.round(left), width: Math.round(rect.right - outer.left - left) };
+}
 
-  const insertAt = posOfIndex(doc, gap);
-  const tr = state.tr.insert(insertAt, Fragment.fromArray(moved));
-  tr.delete(tr.mapping.map(d.from), tr.mapping.map(d.to));
-  const landed = tr.mapping.slice(1).map(insertAt);
-  tr.setSelection(TextSelection.near(tr.doc.resolve(Math.min(landed + 1, tr.doc.content.size))));
-  view.dispatch(tr.scrollIntoView());
-  view.focus();
+/** @param {{ drop: Drop }} props */
+function DropLine({ drop }) {
+  return (
+    <div className="pointer-events-none absolute z-20" style={{ top: drop.top, left: drop.left, width: drop.width }} aria-hidden="true">
+      <div className="h-[3px] -translate-y-1/2 rounded-full bg-accent/80" />
+      <div className="absolute top-0 -left-1 size-2 -translate-y-1/2 rounded-full bg-accent" />
+      {drop.convertTo && (
+        <span className="papier-popover absolute top-1.5 left-0 px-1.5 py-0.5 text-[11px] text-muted">
+          {TYPE_LABEL[drop.convertTo] ?? drop.convertTo}
+        </span>
+      )}
+    </div>
+  );
 }
 
 /**
