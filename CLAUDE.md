@@ -107,6 +107,20 @@ cascade. `backfillSearch` indexes unindexed blocks on startup. User input goes t
 per page, best of the top `CANDIDATES` rows; snippets only for returned rows, marked
 with `HIT_START`/`HIT_END` from `@papier/core` (render via `snippetParts`, not HTML).
 
+## Notion import (`apps/server/src/import/notion/`)
+
+`pnpm --filter @papier/server import:notion <exportDir> --db <file> --include "Dev/Cloudsmiths" …`
+(`--dry-run` imports into memory and only reports). Writes through the API in-process
+(`buildApp` + `app.inject`), so every invariant holds. Pure parsing: `tree.ts` (export
+layout, `ExportSource` so a zip can plug in later), `markdown.ts`/`inline.ts` (body →
+flat blocks with indents), `database.ts` (CSV header = columns, **values from each row
+page's leading `Key: value` block**, since file names are truncated; CSV-only rows too;
+type inference; `sort:` → view sort, a "next birthday" formula → `upcoming`). Include
+paths are ids-stripped display paths; one nested in another becomes its own root and
+the outer page keeps a link. Target a scratch DB (e.g. `apps/server/data/import-scratch.db`);
+it refuses `data/papier.db` without `--yes-dev-db`. The export is personal data —
+tests use synthetic fixtures only.
+
 ## Conventions
 
 - Server TS: `erasableSyntaxOnly` — no `enum`/`namespace`/parameter properties; import

@@ -7,7 +7,8 @@
     "dev": "node --watch src/index.ts",
     "start": "node src/index.ts",
     "typecheck": "tsc --noEmit",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "import:notion": "node src/import/notion/cli.ts"
   },
   "dependencies": {
     "@papier/core": "workspace:*",

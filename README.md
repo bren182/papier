@@ -102,7 +102,7 @@ Tick boxes as they land. Anything unticked in a shipped milestone moves to the n
 
 - [ ] Desktop apps: signed-ish installers for Windows (`.msi`), macOS (`.dmg`), Linux (`.AppImage` + `.deb`)
 - [ ] Offline editing with sync-on-reconnect
-- [ ] Import from Notion export (`.zip` of markdown/CSV)
+- [ ] Import from Notion export (`.zip` of markdown/CSV) — converter script landed (`pnpm --filter @papier/server import:notion`, unzipped folder in, pages/databases/rows/blocks out); upload UI + zip still to do
 - [ ] Export: markdown, HTML, PDF, full JSON backup
 - [ ] Version history / page snapshots
 - [ ] Automated nightly backups off-box
