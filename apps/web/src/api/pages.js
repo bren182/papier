@@ -8,7 +8,8 @@ import { api, ApiError } from './client.js';
 /** @typedef {{ title?: string, titleContent?: import('@papier/core').InlineContent, icon?: string | null }} PagePatch */
 /**
  * A page, its ancestors, and — for a database row — its database and values.
- * @typedef {{ page: Page, ancestors: Crumb[], database: { id: string, title: string } | null, props: Record<string, unknown> | null }} PageDetail
+ * @typedef {{ page: Page, ancestors: Crumb[], database: { id: string, title: string } | null, props: Record<string, unknown> | null,
+ *   inTemplate: boolean }} PageDetail  inTemplate: some ancestor is a template
  */
 
 export const pageKeys = {
@@ -89,6 +90,8 @@ export function useArchivePage() {
     mutationFn: ({ id }) => api(`/pages/${id}`, { method: 'DELETE' }),
     onSuccess: (_res, page) => {
       qc.invalidateQueries({ queryKey: pageKeys.all });
+      qc.invalidateQueries({ queryKey: ['templates'] });
+      qc.invalidateQueries({ queryKey: ['db'] }); // a row or a database template
       reloadContent(qc, [page.parentId]); // its page block is gone
     },
   });

@@ -42,6 +42,12 @@ export const FILTER_OPS = {
   edited_time: ['is', 'before', 'after', 'on_or_before', 'on_or_after'],
 };
 
+/**
+ * A date that means "the day a page is made from this template". Only valid in
+ * templates (property values and `@date` mentions); copying resolves it.
+ */
+export const DYNAMIC_TODAY = '@today';
+
 /** Operators that take no value. */
 export const VALUELESS_OPS = new Set(['is_empty', 'is_not_empty']);
 
@@ -61,9 +67,10 @@ export class InvalidValue extends Error {}
  * (blank text, no options, unchecked) normalise to null — null means "no row".
  * @param {PropertyDef} prop
  * @param {unknown} v
+ * @param {{ template?: boolean }} [opts]  templates may hold DYNAMIC_TODAY in dates
  * @returns {PropValue}
  */
-export function validateValue(prop, v) {
+export function validateValue(prop, v, { template = false } = {}) {
   if (v === null || v === undefined) return null;
   const fail = () => {
     throw new InvalidValue(`Invalid ${prop.type} value for "${prop.name}"`);
@@ -88,6 +95,7 @@ export function validateValue(prop, v) {
       return out.length ? /** @type {string[]} */ (out) : null;
     }
     case 'date':
+      if (template && v === DYNAMIC_TODAY) return v;
       if (typeof v !== 'string' || !DATE_RE.test(v)) fail();
       return /** @type {string} */ (v);
     case 'checkbox':
@@ -106,7 +114,7 @@ export function validateValue(prop, v) {
  * @returns {{ sortText: string | null, sortNum: number | null }}
  */
 export function sortKeys(prop, v) {
-  if (v === null) return { sortText: null, sortNum: null };
+  if (v === null || v === DYNAMIC_TODAY) return { sortText: null, sortNum: null };
   switch (prop.type) {
     case 'text':
     case 'url':
@@ -138,6 +146,8 @@ export function valueToText(prop, v) {
       return /** @type {string[]} */ (v).map(name).filter(Boolean).join(', ');
     case 'checkbox':
       return v ? 'Yes' : '';
+    case 'date':
+      return v === DYNAMIC_TODAY ? 'Today' : String(v);
     default:
       return String(v);
   }

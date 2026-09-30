@@ -20,25 +20,27 @@ import { InlineDatabase } from '../components/database/InlineDatabase.jsx';
 /**
  * The page body. Loads the page's blocks once, then the editor owns them and
  * autosaves changes per block.
- * @param {{ pageId: string, onOpenPage: (id: string) => void, onEmptyChange?: (empty: boolean) => void, ref?: import('react').Ref<PageEditorHandle> }} props
+ * @param {{ pageId: string, onOpenPage: (id: string) => void, onEmptyChange?: (empty: boolean) => void, template?: boolean,
+ *   ref?: import('react').Ref<PageEditorHandle> }} props
  *   onEmptyChange: whether the content is just one empty line (a new page)
  */
-export function PageEditor({ pageId, onOpenPage, onEmptyChange, ref }) {
+export function PageEditor({ pageId, onOpenPage, onEmptyChange, template = false, ref }) {
   const { data, error } = usePageBlocks(pageId);
   if (error) return <p className="text-[15px] leading-6 text-muted">Couldn’t load this page’s content.</p>;
   if (!data) return null;
-  return <Editor pageId={pageId} rows={data} onOpenPage={onOpenPage} onEmptyChange={onEmptyChange} editorRef={ref} />;
+  return <Editor pageId={pageId} rows={data} onOpenPage={onOpenPage} onEmptyChange={onEmptyChange} template={template} editorRef={ref} />;
 }
 
 /**
  * @param {{ pageId: string, rows: Block[], onOpenPage: (id: string) => void, onEmptyChange?: (empty: boolean) => void,
- *   editorRef?: import('react').Ref<PageEditorHandle> }} props
+ *   template: boolean, editorRef?: import('react').Ref<PageEditorHandle> }} props
  */
-function Editor({ pageId, rows, onOpenPage, onEmptyChange, editorRef }) {
+function Editor({ pageId, rows, onOpenPage, onEmptyChange, template, editorRef }) {
   const [container, setContainer] = useState(/** @type {HTMLDivElement | null} */ (null));
   const qc = useQueryClient();
   const editor = useEditor({
     extensions: bodyExtensions({
+      template,
       pages: {
         // Page blocks follow their page's cached title (renames show live).
         watchPage: (id, onChange) => {

@@ -1,13 +1,15 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from './client.js';
 import { pageKeys } from './pages.js';
+import { today } from './templates.js';
 
 /**
  * @typedef {import('@papier/core/props').PropertyDef & { order: string }} Property
  * @typedef {{ sorts: { propId: string, dir: 'asc' | 'desc' }[], filters: { propId: string, op: string, value?: string | number | boolean | null }[],
- *   hidden: string[], widths: Record<string, number>, propOrder: string[], groupBy: string | null }} ViewConfig
+ *   hidden: string[], widths: Record<string, number>, propOrder: string[], groupBy: string | null, template: string | null }} ViewConfig
  * @typedef {{ id: string, name: string, type: 'table' | 'board', config: ViewConfig, order: string }} View
- * @typedef {{ id: string, properties: Property[], views: View[] }} DatabaseSchema
+ * @typedef {{ id: string, title: string, titleContent: import('@papier/core').InlineContent | null, icon: string | null }} RowTemplate
+ * @typedef {{ id: string, properties: Property[], views: View[], templates: RowTemplate[] }} DatabaseSchema
  * @typedef {{ id: string, title: string, titleContent: import('@papier/core').InlineContent | null, icon: string | null,
  *   order: string, createdAt: number, updatedAt: number, props: Record<string, unknown> }} Row
  * @typedef {{ sorts?: ViewConfig['sorts'], filters?: ViewConfig['filters'], group?: { propId: string, value: string | null }, limit?: number }} RowQuery
@@ -123,11 +125,30 @@ export function useDatabaseMutations(dbId) {
       patchSchema((s) => ({ ...s, views: s.views.filter((v) => v.id !== viewId) }));
     },
 
-    /** @param {{ title?: string, props?: Record<string, unknown>, beforeId?: string, afterId?: string }} [body] */
-    addRow: async (body = {}) => {
-      const row = /** @type {Row} */ (await api(`/databases/${dbId}/rows`, { method: 'POST', body }));
+    /**
+     * A new row — blank, or a copy of a template (`templateId`).
+     * @param {{ title?: string, props?: Record<string, unknown>, beforeId?: string, afterId?: string, templateId?: string | null }} [body]
+     */
+    addRow: async ({ templateId, ...body } = {}) => {
+      const row = /** @type {Row} */ (
+        await api(`/databases/${dbId}/rows`, { method: 'POST', body: templateId ? { ...body, templateId, today: today() } : body })
+      );
       await refreshRows();
       return row;
+    },
+
+    /** A new, empty row template (open it to fill it in). */
+    addTemplate: async () => {
+      const t = /** @type {Row} */ (await api(`/databases/${dbId}/templates`, { method: 'POST' }));
+      refreshSchema();
+      return t;
+    },
+
+    /** @param {string} id */
+    deleteTemplate: async (id) => {
+      patchSchema((s) => ({ ...s, templates: s.templates.filter((t) => t.id !== id) }));
+      await api(`/pages/${id}`, { method: 'DELETE' });
+      refreshSchema();
     },
 
     /**

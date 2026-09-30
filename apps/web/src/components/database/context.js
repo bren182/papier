@@ -9,6 +9,7 @@ import { createContext, useContext } from 'react';
  * @typedef {{
  *   dbId: string,
  *   properties: Property[],
+ *   templates: import('../../api/databases.js').RowTemplate[],
  *   view: View,
  *   m: ReturnType<typeof import('../../api/databases.js').useDatabaseMutations>,
  *   setConfig: (patch: Partial<ViewConfig>) => void,
@@ -28,6 +29,15 @@ export function useDb() {
   const ctx = useContext(DbCtx);
   if (!ctx) throw new Error('useDb outside a database view');
   return ctx;
+}
+
+/**
+ * The template "New" uses in this view, if it still exists.
+ * @param {View} view @param {{ id: string }[]} templates
+ */
+export function defaultTemplate(view, templates) {
+  const id = view.config.template;
+  return id && templates.some((t) => t.id === id) ? id : null;
 }
 
 /** Title is a pseudo-property: always first, can't be hidden or deleted. */

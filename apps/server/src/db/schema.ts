@@ -12,6 +12,11 @@ export const pages = sqliteTable(
     icon: text('icon'),
     /** 'page' or 'database'. A database's child pages are its rows (no page blocks). */
     kind: text('kind').notNull().default('page'),
+    /**
+     * Templates: a root page (library) or a database's child (row template).
+     * Kept out of the sidebar, row queries and search, with everything under them.
+     */
+    isTemplate: integer('is_template', { mode: 'boolean' }).notNull().default(false),
     /** Fractional index among siblings; see orderBetween in @papier/core. */
     orderKey: text('order_key').notNull(),
     /** Set when moved to trash (ms since epoch). Descendants are hidden with it. */

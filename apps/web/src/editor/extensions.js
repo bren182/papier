@@ -1,3 +1,4 @@
+import { Extension } from '@tiptap/core';
 import Bold from '@tiptap/extension-bold';
 import Code from '@tiptap/extension-code';
 import HardBreak from '@tiptap/extension-hard-break';
@@ -21,6 +22,12 @@ import { suggestionMenu } from './SuggestionMenu.jsx';
  * `@` date menu — shared by the page body and the title. Spaces allowed so
  * "two days ago" works; the menu hides itself once nothing matches.
  */
+/** Marks an editor as editing a template (or a page inside one): dates may stay "today". */
+export const TemplateMode = Extension.create({
+  name: 'templateMode',
+  addOptions: () => ({ enabled: false }),
+});
+
 export const DateMenu = suggestionMenu({ name: 'dateMenu', char: '@', items: dateItems, allowSpaces: true }).extend({ priority: 300 });
 
 const SlashMenu = suggestionMenu({ name: 'slashMenu', char: '/', items: slashItems }).extend({ priority: 300 });
@@ -53,11 +60,12 @@ function placeholderFor(node) {
 
 /**
  * Everything the page body editor is made of.
- * @param {{ pages?: Partial<import('./PageBlock.js').PageBlockOptions>, databases?: Partial<import('./DatabaseBlock.jsx').DatabaseBlockOptions> }} [opts]
- *   page and database blocks' data and views (none in tests)
+ * @param {{ pages?: Partial<import('./PageBlock.js').PageBlockOptions>, databases?: Partial<import('./DatabaseBlock.jsx').DatabaseBlockOptions>,
+ *   template?: boolean }} [opts]  page and database blocks' data and views (none in tests); template: a template page
  */
-export function bodyExtensions({ pages = {}, databases = {} } = {}) {
+export function bodyExtensions({ pages = {}, databases = {}, template = false } = {}) {
   return [
+    TemplateMode.configure({ enabled: template }),
     PapierDocument,
     Text,
     ...BLOCK_NODES,

@@ -103,7 +103,7 @@ export function searchPages(db: Db, q: string, { limit, offset }: { limit: numbe
   // One extra row tells whether there's a next page.
   const rows = db.all<HitRow>(sql`
     with recursive dead(id) as (
-      select id from pages where archived_at is not null
+      select id from pages where archived_at is not null or is_template = 1
       union
       select p.id from pages p join dead d on p.parent_id = d.id
     ),

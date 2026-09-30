@@ -1,0 +1,1 @@
+ALTER TABLE `pages` ADD `is_template` integer DEFAULT false NOT NULL;

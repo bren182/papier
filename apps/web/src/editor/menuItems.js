@@ -1,6 +1,7 @@
 import { TextSelection } from '@tiptap/pm/state';
 import { blockAt, insertBlockAfter, setBlockType, withDescendants } from './blockOps.js';
 import { docToRows } from './convert.js';
+import { DYNAMIC_TODAY } from '@papier/core/props';
 import { dateSuggestions } from './dates.js';
 
 /** @typedef {import('./SuggestionMenu.jsx').MenuItem} MenuItem */
@@ -184,13 +185,23 @@ export function slashItems(query) {
   return all.filter((item) => item.title.toLowerCase().includes(q) || item.aliases?.some((a) => a.startsWith(q)));
 }
 
+/** Whether this editor edits a template (see TemplateMode). @param {Editor} editor */
+const isTemplateEditor = (editor) => Boolean(editor.extensionManager.extensions.find((e) => e.name === 'templateMode')?.options.enabled);
+
 /**
- * `@` menu: dates parsed from what's typed.
+ * `@` menu: dates parsed from what's typed — plus, in a template, "Today ↻",
+ * which stays dynamic and becomes the day the template is used.
  * @param {string} query
+ * @param {Editor} [editor]
  * @returns {MenuItem[]}
  */
-export function dateItems(query) {
-  return dateSuggestions(query).map(({ title, date, subtext }) => ({
+export function dateItems(query, editor) {
+  const q = query.trim().toLowerCase();
+  const dynamic =
+    editor && isTemplateEditor(editor) && (!q || 'today'.startsWith(q) || 'dynamic'.startsWith(q))
+      ? [{ title: 'Today ↻', date: DYNAMIC_TODAY, subtext: 'The day a page is made from this template' }]
+      : [];
+  return [...dynamic, ...dateSuggestions(query)].map(({ title, date, subtext }) => ({
     title,
     subtext,
     group: 'Date',

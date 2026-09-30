@@ -8,7 +8,7 @@ import { plainText } from '@papier/core/text';
 import { useUpdatePage } from '../api/pages.js';
 import { inlineFromPM, inlineToPM } from './convert.js';
 import { DateNode } from './DateNode.js';
-import { DateMenu } from './extensions.js';
+import { DateMenu, TemplateMode } from './extensions.js';
 
 /** @typedef {import('@papier/core').Page} PageData */
 
@@ -29,9 +29,9 @@ const TitleDoc = Document.extend({ content: 'titleLine' });
  * Page title, saved as you type (debounced). The sidebar and breadcrumbs update
  * immediately through the optimistic cache write in useUpdatePage. `@` inserts
  * a live date, same as in the body.
- * @param {{ page: PageData, onEnter: () => void }} props
+ * @param {{ page: PageData, onEnter: () => void, template?: boolean }} props  template: dates may stay "today"
  */
-export function TitleEditor({ page, onEnter }) {
+export function TitleEditor({ page, onEnter, template = false }) {
   const updatePage = useUpdatePage();
   const timer = useRef(/** @type {ReturnType<typeof setTimeout> | undefined} */ (undefined));
   const pending = useRef(/** @type {import('@papier/core').InlineContent | null} */ (null));
@@ -57,6 +57,7 @@ export function TitleEditor({ page, onEnter }) {
       Text,
       DateNode,
       DateMenu,
+      TemplateMode.configure({ enabled: template }),
       UndoRedo,
       Placeholder.configure({ placeholder: 'Untitled' }),
       Extension.create({

@@ -21,7 +21,7 @@ import Suggestion, { exitSuggestion } from '@tiptap/suggestion';
  * @param {{
  *   name: string,
  *   char: string,
- *   items: (query: string) => MenuItem[],
+ *   items: (query: string, editor: import('@tiptap/core').Editor) => MenuItem[],
  *   allowSpaces?: boolean,
  * }} opts
  */
@@ -38,7 +38,7 @@ export function suggestionMenu({ name, char, items, allowSpaces = false }) {
           allowSpaces,
           // Not inside code, and not inside other suggestions' text.
           allow: ({ state, range }) => !state.doc.resolve(range.from).parent.type.spec.code,
-          items: ({ query }) => items(query),
+          items: ({ query, editor }) => items(query, editor),
           command: ({ editor, range, props }) => /** @type {MenuItem} */ (props).run(editor, range),
           render: () => {
             /** @type {ReactRenderer<MenuHandle, MenuProps> | null} */

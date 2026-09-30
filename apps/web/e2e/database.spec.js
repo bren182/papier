@@ -166,9 +166,9 @@ test('a new empty page can start as a board database', async ({ page, request })
   const created = /** @type {{ id: string }} */ (await (await request.post('/api/pages', { data: { title: `Start ${uid()}` } })).json());
   await page.goto(`/?p=${created.id}`);
 
-  await page.getByRole('button', { name: 'Board' }).click();
+  await page.getByLabel('Start as').getByRole('button', { name: 'Board', exact: true }).click();
   await expect(page.getByRole('tab', { name: 'Board', selected: true })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Todo' })).toBeVisible();
-  await expect(page.getByRole('button', { name: /Or start as/ })).toHaveCount(0);
+  await expect(page.getByLabel('Start as')).toHaveCount(0);
   expect((await (await request.get(`/api/pages/${created.id}`)).json()).page.kind).toBe('database');
 });

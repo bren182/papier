@@ -7,9 +7,10 @@ import { menuItem, menuLabel, Popover } from './Popover.jsx';
 
 /**
  * A row page's property values, between its title and its content.
- * @param {{ page: { id: string, createdAt: number, updatedAt: number }, databaseId: string, values: Record<string, unknown> }} props
+ * @param {{ page: { id: string, createdAt: number, updatedAt: number }, databaseId: string, values: Record<string, unknown>, template?: boolean }} props
+ *   template: a row template, whose dates may stay "today"
  */
-export function RowProperties({ page, databaseId, values }) {
+export function RowProperties({ page, databaseId, values, template = false }) {
   const { data } = useDatabase(databaseId);
   const m = useDatabaseMutations(databaseId);
   const [adding, setAdding] = useState(false);
@@ -36,6 +37,7 @@ export function RowProperties({ page, databaseId, values }) {
             row={page}
             wrap
             placeholder="Empty"
+            template={template}
             onChange={(v) => m.setProps(page.id, { [p.id]: v })}
             onAddOption={addOption}
             className="min-h-[34px] flex-1 rounded-md px-2 py-1.5 text-[14px] text-fg hover:bg-hover focus-visible:outline focus-visible:outline-1 focus-visible:outline-accent"

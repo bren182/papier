@@ -80,6 +80,21 @@ lazy chunk; menus use `database/Popover.jsx` (portalled). An empty page can beco
 in place (`POST /api/pages/:id/convert`, the "Or start as a database" strip in `Page.jsx`). Drags inside a view set
 `DB_DRAG_TYPE` so the inline node view keeps them from ProseMirror.
 
+## Templates (`apps/server/src/db/duplicate.ts`)
+
+A template is a page with `is_template`: a root page (the library, `GET /api/templates`)
+or a database child (a row template, listed in `GET /api/databases/:id` → `templates`).
+Templates and everything under them are kept out of the sidebar, database queries and
+search (the `dead` CTE). One deep-copy engine, `duplicatePage`, backs Duplicate, Save as
+template and Use template (`POST /api/pages/:id/duplicate`) and rows from a template
+(`POST …/rows` with `templateId`): fresh block ids, owned sub-pages copied recursively,
+databases with remapped property/view ids; capped (`MAX_PAGES`/`MAX_BLOCKS`). Dates may be
+`DYNAMIC_TODAY` (`'@today'`, shown "Today ↻") inside templates only; copies resolve them to
+the client's `today`. A view's default template is `ViewConfig.template`. Shared value
+writes live in `db/props.ts` (`writeValue` keeps the sort columns right).
+Keyboard shortcuts are listed in `apps/web/src/shortcuts.js` (Ctrl+/ dialog) — update it
+when a binding changes.
+
 ## Search (`apps/server/src/db/search.ts`)
 
 The only SQLite-specific module. `search_rows` holds plain text per block (+ one row per

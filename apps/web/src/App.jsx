@@ -6,11 +6,15 @@ import { Sidebar } from './components/Sidebar.jsx';
 import { Topbar } from './components/Topbar.jsx';
 import { Page } from './components/Page.jsx';
 import { SearchDialog } from './components/SearchDialog.jsx';
+import { ShortcutsDialog } from './components/ShortcutsDialog.jsx';
+import { TemplateLibrary } from './components/TemplateLibrary.jsx';
 
 export function App() {
   const [prefs, updatePrefs] = usePrefs();
   const [selectedId, select] = useSelectedPage();
   const [searching, setSearching] = useState(false);
+  const [shortcuts, setShortcuts] = useState(false);
+  const [library, setLibrary] = useState(/** @type {import('./components/Page.jsx').LibraryTarget | null} */ (null));
 
   // Ctrl/Cmd-K anywhere opens search — unless something already used it
   // (over a text selection in the editor it makes a link).
@@ -21,7 +25,12 @@ export function App() {
         e.preventDefault();
         setSearching((open) => !open);
       }
-      // Ctrl/Cmd- shows or hides the sidebar (as in Notion).
+      // Ctrl/Cmd-/ lists every shortcut.
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key === '/') {
+        e.preventDefault();
+        setShortcuts((open) => !open);
+      }
+      // Ctrl/Cmd-\ shows or hides the sidebar (as in Notion).
       if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key === '\\') {
         e.preventDefault();
         updatePrefs((p) => ({ sidebar: !p.sidebar }));
@@ -40,13 +49,22 @@ export function App() {
         style={{ width: prefs.sidebar ? 260 : 0 }}
         inert={!prefs.sidebar}
       >
-        <Sidebar selectedId={selectedId} onSelect={select} onSearch={() => setSearching(true)} onCollapse={() => updatePrefs({ sidebar: false })} />
+        <Sidebar
+          selectedId={selectedId}
+          onSelect={select}
+          onSearch={() => setSearching(true)}
+          onTemplates={() => setLibrary({ parentId: null })}
+          onShortcuts={() => setShortcuts(true)}
+          onCollapse={() => updatePrefs({ sidebar: false })}
+        />
       </div>
       <main className="relative flex min-w-0 flex-1 flex-col">
         <Topbar selectedId={selectedId} onSelect={select} prefs={prefs} onChange={updatePrefs} />
-        <Page selectedId={selectedId} onSelect={select} />
+        <Page selectedId={selectedId} onSelect={select} onTemplates={setLibrary} />
       </main>
       {searching && <SearchDialog onClose={() => setSearching(false)} onOpen={select} />}
+      {shortcuts && <ShortcutsDialog onClose={() => setShortcuts(false)} />}
+      {library && <TemplateLibrary target={library} onClose={() => setLibrary(null)} onOpen={select} />}
     </div>
   );
 }

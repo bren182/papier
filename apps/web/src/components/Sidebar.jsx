@@ -39,8 +39,11 @@ const EXPAND_DELAY_MS = 600;
 const navButton =
   'flex h-8 items-center gap-2.5 rounded-md px-2.5 text-left text-sm text-muted hover:bg-s-active hover:text-fg';
 
-/** @param {{ selectedId: string | null, onSelect: (id: string | null) => void, onSearch: () => void, onCollapse: () => void }} props */
-export function Sidebar({ selectedId, onSelect, onSearch, onCollapse }) {
+/**
+ * @param {{ selectedId: string | null, onSelect: (id: string | null) => void, onSearch: () => void,
+ *   onTemplates: () => void, onShortcuts: () => void, onCollapse: () => void }} props
+ */
+export function Sidebar({ selectedId, onSelect, onSearch, onTemplates, onShortcuts, onCollapse }) {
   const [isExpanded, setExpanded] = useExpandedSet();
   const createPage = useCreatePage();
   const archivePage = useArchivePage();
@@ -109,9 +112,18 @@ export function Sidebar({ selectedId, onSelect, onSearch, onCollapse }) {
         <span className="flex-1">Search</span>
         <kbd className="font-mono text-[11px] text-faint">Ctrl K</kbd>
       </button>
+      <button type="button" className={navButton} onClick={onTemplates}>
+        <TemplateIcon />
+        <span>Templates</span>
+      </button>
       <button type="button" className={navButton}>
         <GearIcon />
         <span>Settings</span>
+      </button>
+      <button type="button" className={navButton} onClick={onShortcuts}>
+        <KeyboardIcon />
+        <span className="flex-1">Keyboard shortcuts</span>
+        <kbd className="font-mono text-[11px] text-faint">Ctrl /</kbd>
       </button>
 
       <div className="group/pages mt-4 flex h-[26px] items-center justify-between px-2.5 text-xs font-medium text-faint">
@@ -440,6 +452,24 @@ function SearchIcon() {
     <svg {...iconProps()}>
       <circle cx="11" cy="11" r="7" />
       <path d="M20 20l-3.5-3.5" />
+    </svg>
+  );
+}
+
+function TemplateIcon() {
+  return (
+    <svg {...iconProps()}>
+      <rect x="4" y="4" width="16" height="16" rx="2" strokeDasharray="3 2.5" />
+      <path d="M8 9h8M8 13h5" />
+    </svg>
+  );
+}
+
+function KeyboardIcon() {
+  return (
+    <svg {...iconProps()}>
+      <rect x="2.5" y="6" width="19" height="12" rx="2" />
+      <path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10" />
     </svg>
   );
 }

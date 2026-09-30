@@ -63,6 +63,8 @@ export const ViewConfig = z.object({
   propOrder: z.array(PropertyId).max(500).default([]),
   /** Board: the select property that defines the columns. */
   groupBy: PropertyId.nullable().default(null),
+  /** Template that "New" uses in this view (null = an empty row). */
+  template: z.string().min(1).max(64).nullable().default(null),
 });
 
 export const ViewCreate = z.object({
@@ -97,9 +99,15 @@ export const DatabaseQuery = z.object({
   tzOffset: z.number().int().min(-900).max(900).default(0),
 });
 
+/** The viewer's local date — resolves DYNAMIC_TODAY when copying templates. */
+export const Today = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+
 export const RowCreate = z.object({
   title: z.string().max(500).default(''),
   props: z.record(PropertyId, z.unknown()).default({}),
+  /** Start as a copy of this database template (props still apply on top). */
+  templateId: z.string().min(1).max(64).optional(),
+  today: Today.optional(),
   beforeId: z.string().min(1).max(64).optional(),
   afterId: z.string().min(1).max(64).optional(),
 });
@@ -107,6 +115,20 @@ export const RowCreate = z.object({
 export const RowMove = z
   .object({ beforeId: z.string().min(1).max(64).optional(), afterId: z.string().min(1).max(64).optional() })
   .refine((v) => !(v.beforeId && v.afterId), 'Give beforeId or afterId, not both');
+
+/**
+ * Deep-copy a page (content, sub-pages, a database's schema and rows):
+ * Duplicate (default: next to the original), Save as template (`asTemplate`),
+ * and Use template (the source is a template; `parentId` is where the copy goes).
+ */
+export const PageDuplicate = z.object({
+  /** Omitted: the source's own parent. Null: the top level. */
+  parentId: z.string().min(1).max(64).nullable().optional(),
+  asTemplate: z.boolean().default(false),
+  /** Append a page block to a page parent. False when the editor inserts its own. */
+  block: z.boolean().default(true),
+  today: Today,
+});
 
 /** Turn an empty page into a database, laid out as a table or a board. */
 export const PageConvert = z.object({ layout: z.enum(['table', 'board']).default('table') });

@@ -43,6 +43,13 @@
       "when": 1790749523871,
       "tag": "0005_databases",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1790753603613,
+      "tag": "0006_templates",
+      "breakpoints": true
     }
   ]
 }

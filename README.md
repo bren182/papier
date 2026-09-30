@@ -88,6 +88,8 @@ Tick boxes as they land. Anything unticked in a shipped milestone moves to the n
 - [ ] List, gallery, calendar views
 - [x] Inline databases embedded in a page
 - [ ] Relations + rollups (count, sum, % complete, etc.) — core, not optional. Scope carefully: this is where it explodes.
+- [x] Templates: save any page as a template (library), database templates with a default per view, "Today ↻" dates that resolve on use; Duplicate
+- [ ] Built-in template library — decided after importing + analysing my Notion workspace
 
 ### v0.4 — "not alone"
 
@@ -412,4 +414,5 @@ that I hate.*
 - Schedules or specials actions/automations. I can setup a system where if I click a button it updates a property. Values are dynamic, going off of the birthday calendar, I can click "celebrate" which will shift the date of remind one year back so I can be reminded next year. 
 - Notion has a huge library of prebuilt templates, it would be cool to add a similar "plugin" library, where we can add stuff like "plugin for a recipe book" which can be a combination of pages and some other external tools/integrations like a recipe API + cart API that can put things in a shopping list for you. 
 - Being able to setup a custom "Home" page. So where you land you can see certain important blocks that you can customise. 
-- Uploading images for backgrounds for the app, and background for headers, background for pages etc. For now we'll assume storage stays local on a user's computer so no syncing yet. 
+- Uploading images for backgrounds for the app, and background for headers, background for pages etc. For now we'll assume storage stays local on a user's computer so no syncing yet.
+- Shortcut minigame: a "Practice" button in the keyboard shortcuts dialog (Ctrl+/) starts a Dance Dance Revolution–style drill (like Discord's keybinds easter egg) — shortcuts scroll up as falling prompts, press the right combo in time, streaks + a best score. A fun way to actually learn them. 

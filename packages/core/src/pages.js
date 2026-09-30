@@ -18,6 +18,8 @@ export const Page = z.object({
   icon: z.string().nullable(),
   /** 'database' pages hold rows (their child pages) instead of sub-pages. */
   kind: PageKind,
+  /** A template: kept out of lists, copied by "Use template". */
+  isTemplate: z.boolean(),
   order: z.string(),
   hasChildren: z.boolean(),
   createdAt: z.number(),

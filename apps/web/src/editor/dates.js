@@ -5,6 +5,8 @@
  * then as a date. The exact date is always in the tooltip.
  */
 
+import { DYNAMIC_TODAY } from '@papier/core/props';
+
 const DAY_MS = 86_400_000;
 const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
@@ -109,6 +111,7 @@ const plural = (n, unit) => `${n} ${unit}${n === 1 ? '' : 's'}`;
  * @param {Date} [now]
  */
 export function formatDateMention(iso, now = new Date()) {
+  if (iso === DYNAMIC_TODAY) return 'Today ↻';
   const d = fromISODate(iso);
   if (!d) return iso || 'Invalid date';
   const diff = dayDiff(d, now);
@@ -129,6 +132,7 @@ export function formatDateMention(iso, now = new Date()) {
 
 /** Full date for tooltips and menus: "Wed, Sep 30, 2026". @param {string} iso */
 export function formatDateLong(iso) {
+  if (iso === DYNAMIC_TODAY) return 'The day a page is made from this template';
   const d = fromISODate(iso);
   return d ? d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : iso;
 }

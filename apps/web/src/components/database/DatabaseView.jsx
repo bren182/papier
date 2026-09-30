@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { useDatabase, useDatabaseMutations } from '../../api/databases.js';
-import { DbCtx, useDb } from './context.js';
+import { DbCtx, defaultTemplate, useDb } from './context.js';
 import { BoardView } from './BoardView.jsx';
 import { Icon, ICONS } from './meta.jsx';
 import { field, menuItem, Popover } from './Popover.jsx';
@@ -33,6 +33,7 @@ export function DatabaseView({ databaseId, inline = false, viewId, onViewChange,
       ? {
           dbId: databaseId,
           properties: data.properties,
+          templates: data.templates ?? [],
           view,
           m,
           inline,
@@ -50,9 +51,13 @@ export function DatabaseView({ databaseId, inline = false, viewId, onViewChange,
   if (isPending) return <div className="h-24" />;
   if (isError || !ctx || !view) return <p className="text-[14px] text-muted">Couldn’t load this database.</p>;
 
-  const newRow = async () => {
-    const row = await m.addRow({ props: prefill(view, data.properties) });
-    setNewRowId(row.id);
+  /** A new row: from `templateId`, else the view's default template, else blank (null = blank). @param {string | null} [templateId] */
+  const newRow = async (templateId) => {
+    const template = templateId === undefined ? defaultTemplate(view, data.templates ?? []) : templateId;
+    const row = await m.addRow({ props: prefill(view, data.properties), templateId: template });
+    // A templated row already has its title and content: open it rather than rename in place.
+    if (template) onOpenRow(row.id);
+    else setNewRowId(row.id);
   };
 
   return (
@@ -63,7 +68,7 @@ export function DatabaseView({ databaseId, inline = false, viewId, onViewChange,
           <ViewTabs views={views} active={view} onChoose={choose} />
           <Toolbar onNew={newRow} />
         </div>
-        {view.type === 'board' ? <BoardView /> : <TableView newRowId={newRowId} onNewRow={newRow} />}
+        {view.type === 'board' ? <BoardView /> : <TableView newRowId={newRowId} onNewRow={() => newRow()} />}
       </div>
     </DbCtx.Provider>
   );

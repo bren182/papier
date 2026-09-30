@@ -14,7 +14,6 @@ import {
   PropsPatch,
   RowCreate,
   RowMove,
-  sortKeys,
   splitNames,
   TITLE_PROP,
   validateValue,
@@ -24,26 +23,21 @@ import {
   ViewCreate,
   ViewUpdate,
   type Filter,
-  type PropertyDef,
   type PropValue,
   type Sort,
 } from '@papier/core';
 import type { Db } from '../db/index.ts';
+import { duplicatePage, TooBig } from '../db/duplicate.ts';
 import { liveLineage } from '../db/lineage.ts';
+import { properties, propFields, views, viewFields, writeValue, type Conn, type Prop, type Tx } from '../db/props.ts';
 import { indexTitle } from '../db/search.ts';
 import { blocks, dbProperties, dbViews, pageProps, pages } from '../db/schema.ts';
 import { rowDatabase } from './pages.ts';
 
-type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
-type Conn = Db | Tx;
-type Prop = PropertyDef & { order: string };
 type Option = { id: string; name: string };
 
 /** Thrown inside a transaction to roll it back with a 400. */
 class BadRequest extends Error {}
-
-const propFields = { id: dbProperties.id, name: dbProperties.name, type: dbProperties.type, config: dbProperties.config, order: dbProperties.orderKey };
-const viewFields = { id: dbViews.id, name: dbViews.name, type: dbViews.type, config: dbViews.config, order: dbViews.orderKey };
 
 /**
  * The views a new database starts with: a table — or, for a board, a Status
@@ -65,14 +59,6 @@ export function createDefaultView(db: Conn, databaseId: string, layout: 'table' 
   db.insert(dbViews)
     .values({ id: randomUUID(), databaseId, name: 'Table', type: 'table', config: ViewConfig.parse({}), orderKey: tableKey, createdAt: now })
     .run();
-}
-
-function properties(db: Conn, databaseId: string): Prop[] {
-  return db.select(propFields).from(dbProperties).where(eq(dbProperties.databaseId, databaseId)).orderBy(asc(dbProperties.orderKey)).all() as Prop[];
-}
-
-function views(db: Conn, databaseId: string) {
-  return db.select(viewFields).from(dbViews).where(eq(dbViews.databaseId, databaseId)).orderBy(asc(dbViews.orderKey)).all();
 }
 
 /** Give new select options ids; keep at most 500. */
@@ -100,27 +86,14 @@ function placeKey(
   return beforeId ? orderBetween(key(lt(col, ref), 'desc'), ref) : orderBetween(ref, key(gt(col, ref), 'asc'));
 }
 
-/** Write one row value (null deletes it). */
-function writeValue(db: Conn, pageId: string, prop: Prop, value: PropValue) {
-  if (value === null) {
-    db.delete(pageProps).where(and(eq(pageProps.pageId, pageId), eq(pageProps.propId, prop.id))).run();
-    return;
-  }
-  const { sortText, sortNum } = sortKeys(prop, value);
-  db.insert(pageProps)
-    .values({ pageId, propId: prop.id, value, sortText, sortNum })
-    .onConflictDoUpdate({ target: [pageProps.pageId, pageProps.propId], set: { value, sortText, sortNum } })
-    .run();
-}
-
 /** Validate and write a set of values for one row. */
-function writeValues(db: Conn, pageId: string, props: Prop[], values: Record<string, unknown>) {
+function writeValues(db: Conn, pageId: string, props: Prop[], values: Record<string, unknown>, { template = false } = {}) {
   const byId = new Map(props.map((p) => [p.id, p]));
   for (const [propId, raw] of Object.entries(values)) {
     const prop = byId.get(propId);
     if (!prop) throw new BadRequest(`Unknown property ${propId}`);
     try {
-      writeValue(db, pageId, prop, validateValue(prop, raw));
+      writeValue(db, pageId, prop, validateValue(prop, raw, { template }));
     } catch (err) {
       if (err instanceof InvalidValue) throw new BadRequest(err.message);
       throw err;
@@ -271,7 +244,7 @@ export function databaseRoutes(app: FastifyInstance, db: Db) {
     try {
       return db.transaction(fn);
     } catch (err) {
-      if (err instanceof BadRequest) {
+      if (err instanceof BadRequest || err instanceof TooBig) {
         reply.code(400).send({ error: err.message });
         return undefined;
       }
@@ -282,7 +255,14 @@ export function databaseRoutes(app: FastifyInstance, db: Db) {
   app.get<{ Params: { id: string } }>('/api/databases/:id', async (req, reply) => {
     const id = liveDatabase(req.params.id);
     if (!id) return reply.code(404).send({ error: 'Database not found' });
-    return { id, properties: properties(db, id), views: views(db, id) };
+    // Row templates, for "New ▾".
+    const templates = db
+      .select({ id: pages.id, title: pages.title, titleContent: pages.titleContent, icon: pages.icon })
+      .from(pages)
+      .where(and(eq(pages.parentId, id), eq(pages.isTemplate, true), isNull(pages.archivedAt)))
+      .orderBy(asc(pages.orderKey))
+      .all();
+    return { id, properties: properties(db, id), views: views(db, id), templates };
   });
 
   /**
@@ -465,7 +445,7 @@ export function databaseRoutes(app: FastifyInstance, db: Db) {
 
     const props = properties(db, id);
     const ctx: Ctx = { props: new Map(props.map((p) => [p.id, p])), joins: new Map(), tzOffset: q.tzOffset };
-    const where: SQL[] = [sql`p.parent_id = ${id}`, sql`p.archived_at is null`];
+    const where: SQL[] = [sql`p.parent_id = ${id}`, sql`p.archived_at is null`, sql`p.is_template = 0`];
     for (const f of filters ?? []) {
       const pred = filterSql(ctx, f);
       if (pred) where.push(pred);
@@ -517,17 +497,45 @@ export function databaseRoutes(app: FastifyInstance, db: Db) {
     const input = RowCreate.parse(req.body ?? {});
     const id = liveDatabase(req.params.id);
     if (!id) return reply.code(404).send({ error: 'Database not found' });
-    const rowId = randomUUID();
+    if (input.templateId) {
+      const t = db.select({ parentId: pages.parentId, isTemplate: pages.isTemplate, archivedAt: pages.archivedAt }).from(pages).where(eq(pages.id, input.templateId)).get();
+      if (!t || t.parentId !== id || !t.isTemplate || t.archivedAt !== null) return reply.code(400).send({ error: 'Not a template of this database' });
+      if (!input.today) return reply.code(400).send({ error: 'today is required with a template' });
+    }
+    let rowId: string = randomUUID();
     const done = write(reply, (tx) => {
       const now = Date.now();
       const orderKey = placeKey(tx, pages, and(eq(pages.parentId, id), isNull(pages.archivedAt)), input);
-      tx.insert(pages).values({ id: rowId, parentId: id, title: input.title, orderKey, createdAt: now, updatedAt: now }).run();
-      indexTitle(tx, rowId, input.title);
+      if (input.templateId) {
+        // A copy of the template (values, content, sub-pages); given values and title win.
+        rowId = duplicatePage(tx, input.templateId, { parentId: id, orderKey, isTemplate: false }, input.today as string);
+        if (input.title) {
+          tx.update(pages).set({ title: input.title, titleContent: null }).where(eq(pages.id, rowId)).run();
+          indexTitle(tx, rowId, input.title);
+        }
+      } else {
+        tx.insert(pages).values({ id: rowId, parentId: id, title: input.title, orderKey, createdAt: now, updatedAt: now }).run();
+        indexTitle(tx, rowId, input.title);
+      }
       writeValues(tx, rowId, properties(tx, id), input.props);
       return true;
     });
     if (!done) return reply;
     return reply.code(201).send(rowById(db, rowId));
+  });
+
+  /** A new, empty row template; the client opens it to fill in. */
+  app.post<{ Params: { id: string } }>('/api/databases/:id/templates', async (req, reply) => {
+    const id = liveDatabase(req.params.id);
+    if (!id) return reply.code(404).send({ error: 'Database not found' });
+    const templateId = randomUUID();
+    db.transaction((tx) => {
+      const now = Date.now();
+      const orderKey = placeKey(tx, pages, and(eq(pages.parentId, id), isNull(pages.archivedAt)), {});
+      tx.insert(pages).values({ id: templateId, parentId: id, isTemplate: true, title: '', orderKey, createdAt: now, updatedAt: now }).run();
+      indexTitle(tx, templateId, '');
+    });
+    return reply.code(201).send(rowById(db, templateId));
   });
 
   /** Manual reorder (board cards, table rows) within the database. */
@@ -551,8 +559,9 @@ export function databaseRoutes(app: FastifyInstance, db: Db) {
     const pageId = req.params.id;
     const database = rowDatabase(db, pageId);
     if (!database || !liveLineage(db, pageId)) return reply.code(404).send({ error: 'Row not found' });
+    const template = db.select({ t: pages.isTemplate }).from(pages).where(eq(pages.id, pageId)).get()?.t ?? false;
     const done = write(reply, (tx) => {
-      writeValues(tx, pageId, properties(tx, database.id), input);
+      writeValues(tx, pageId, properties(tx, database.id), input, { template });
       tx.update(pages).set({ updatedAt: Date.now() }).where(eq(pages.id, pageId)).run();
       return true;
     });

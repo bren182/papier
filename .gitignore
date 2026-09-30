@@ -14,3 +14,7 @@ Thumbs.db
 test-results/
 playwright-report/
 icon_spread.jpeg
+# Notion exports (personal data, imported locally, never committed)
+*_Export-*/
+*_Export-*.zip
+notion-export*/

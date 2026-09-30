@@ -21,6 +21,12 @@ describe('validateValue', () => {
     expect(validateValue(prop('date'), '2026-09-30')).toBe('2026-09-30');
   });
 
+  it('takes a dynamic "today" only in templates', () => {
+    expect(validateValue(prop('date'), '@today', { template: true })).toBe('@today');
+    expect(() => validateValue(prop('date'), '@today')).toThrow(InvalidValue);
+    expect(sortKeys(prop('date'), '@today')).toEqual({ sortText: null, sortNum: null });
+  });
+
   it('rejects wrong types, unknown options and computed properties', () => {
     expect(() => validateValue(prop('number'), '3')).toThrow(InvalidValue);
     expect(() => validateValue(status, 'nope')).toThrow(InvalidValue);
@@ -58,7 +64,7 @@ describe('coerceValue', () => {
 
 describe('ViewConfig', () => {
   it('defaults every field', () => {
-    expect(ViewConfig.parse({})).toEqual({ sorts: [], filters: [], hidden: [], widths: {}, propOrder: [], groupBy: null });
+    expect(ViewConfig.parse({})).toEqual({ sorts: [], filters: [], hidden: [], widths: {}, propOrder: [], groupBy: null, template: null });
   });
 
   it('rejects unknown filter operators', () => {

@@ -1,17 +1,20 @@
 import { useRef, useState } from 'react';
 import { FILTER_OPS, VALUELESS_OPS } from '@papier/core/props';
-import { orderedProperties, TITLE, useDb } from './context.js';
+import { defaultTemplate, orderedProperties, TITLE, useDb } from './context.js';
 import { Icon, ICONS, OP_LABELS, TypeIcon } from './meta.jsx';
 import { field, menuItem, menuLabel, Popover } from './Popover.jsx';
 
 const toolButton = 'flex h-7 items-center gap-1.5 rounded-md px-2 text-[13px] text-muted hover:bg-hover hover:text-fg';
 const activeTool = 'text-accent-text hover:text-accent-text';
 
-/** Sort, Filter, Properties and New — the strip above a view. @param {{ onNew: () => void }} props */
+/**
+ * Sort, Filter, Properties and New ▾ — the strip above a view.
+ * @param {{ onNew: (templateId?: string | null) => void }} props  undefined = the view's default
+ */
 export function Toolbar({ onNew }) {
   const { view } = useDb();
-  const [open, setOpen] = useState(/** @type {'sort' | 'filter' | 'props' | null} */ (null));
-  const refs = { sort: useRef(null), filter: useRef(null), props: useRef(null) };
+  const [open, setOpen] = useState(/** @type {'sort' | 'filter' | 'props' | 'new' | null} */ (null));
+  const refs = { sort: useRef(null), filter: useRef(null), props: useRef(null), new: useRef(null) };
   const close = () => setOpen(null);
   const { sorts, filters } = view.config;
 
@@ -29,14 +32,95 @@ export function Toolbar({ onNew }) {
         <Icon path={ICONS.eye} />
         Properties
       </button>
-      <button type="button" onClick={onNew} className="ml-1 flex h-7 items-center gap-1 rounded-md bg-accent px-2.5 text-[13px] font-medium text-[#141414] hover:bg-accent-text">
-        New
-      </button>
+      <span ref={refs.new} className="ml-1 flex h-7 items-stretch overflow-hidden rounded-md bg-accent text-[13px] font-medium text-[#141414]">
+        <button type="button" onClick={() => onNew()} className="px-2.5 hover:bg-accent-text">
+          New
+        </button>
+        <button type="button" aria-label="New from template" onClick={() => setOpen('new')} className="border-l border-black/15 px-1.5 hover:bg-accent-text">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M6 9l6 6 6-6" />
+          </svg>
+        </button>
+      </span>
 
       {open === 'sort' && <SortMenu anchor={refs.sort.current} onClose={close} />}
       {open === 'filter' && <FilterMenu anchor={refs.filter.current} onClose={close} />}
       {open === 'props' && <PropertiesMenu anchor={refs.props.current} onClose={close} />}
+      {open === 'new' && <NewMenu anchor={refs.new.current} onClose={close} onNew={onNew} />}
     </div>
+  );
+}
+
+/**
+ * New ▾: start from a template or blank, set the view's default, add or edit templates.
+ * @param {{ anchor: HTMLElement | null, onClose: () => void, onNew: (templateId?: string | null) => void }} props
+ */
+function NewMenu({ anchor, onClose, onNew }) {
+  const { templates, view, setConfig, m, openRow } = useDb();
+  const current = defaultTemplate(view, templates);
+  const small = 'rounded px-1.5 text-[11px] text-muted hover:bg-white/[0.08] hover:text-fg';
+  return (
+    <Popover anchor={anchor} onClose={onClose} width={300} align="end">
+      <div className={menuLabel}>Templates</div>
+      {templates.length === 0 && (
+        <div className="px-2 pb-1.5 text-[13px] text-muted">None yet. A template fills in a new row’s values and content.</div>
+      )}
+      {templates.map((t) => (
+        <div key={t.id} className="group/t flex items-center rounded-md hover:bg-hover">
+          <button
+            type="button"
+            className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1 text-left text-[13px] text-fg"
+            onClick={() => {
+              onClose();
+              onNew(t.id);
+            }}
+          >
+            <span className="truncate">{t.title || 'Untitled template'}</span>
+            {current === t.id && <span className="shrink-0 text-[11px] text-accent-text">Default</span>}
+          </button>
+          <span className="flex shrink-0 gap-0.5 pr-1 opacity-0 group-hover/t:opacity-100 focus-within:opacity-100">
+            <button type="button" className={small} onClick={() => setConfig({ template: current === t.id ? null : t.id })}>
+              {current === t.id ? 'Unset default' : 'Set default'}
+            </button>
+            <button
+              type="button"
+              className={small}
+              onClick={() => {
+                onClose();
+                openRow(t.id);
+              }}
+            >
+              Edit
+            </button>
+            <button type="button" className={small} aria-label={`Delete template ${t.title || 'Untitled'}`} onClick={() => m.deleteTemplate(t.id)}>
+              <Icon path={ICONS.trash} size={11} />
+            </button>
+          </span>
+        </div>
+      ))}
+      <div className="my-1 h-px bg-line" />
+      <button
+        type="button"
+        className={menuItem}
+        onClick={() => {
+          onClose();
+          onNew(null);
+        }}
+      >
+        Empty page
+      </button>
+      <button
+        type="button"
+        className={menuItem}
+        onClick={async () => {
+          onClose();
+          const t = await m.addTemplate();
+          openRow(t.id);
+        }}
+      >
+        <Icon path={ICONS.plus} /> New template
+      </button>
+    </Popover>
   );
 }
 

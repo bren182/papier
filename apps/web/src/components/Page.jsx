@@ -4,10 +4,13 @@ import { api } from '../api/client.js';
 import { ApiError } from '../api/client.js';
 import { useContentVersion } from '../api/blocks.js';
 import { pageKeys, useCreatePage, usePage } from '../api/pages.js';
+import { useDuplicatePage } from '../api/templates.js';
 import { TitleText } from './TitleText.jsx';
 
 /** @typedef {import('@papier/core').Page} PageData */
 /** @typedef {import('../editor/PageEditor.jsx').PageEditorHandle} PageEditorHandle */
+/** Where the template library's "Use" puts a page (`replaceId`: an empty page it replaces). */
+/** @typedef {{ parentId: string | null, replaceId?: string }} LibraryTarget */
 
 // The editors (TipTap/ProseMirror) are one lazy chunk; the shell and sidebar
 // paint without them.
@@ -20,12 +23,17 @@ const RowProperties = lazy(() => loadDatabases().then((m) => ({ default: m.RowPr
 
 const titleClass = 'font-display text-[40px] leading-[48px] font-semibold tracking-[-0.01em] text-fg-strong';
 
-/** @param {{ selectedId: string | null, onSelect: (id: string | null) => void }} props */
-export function Page({ selectedId, onSelect }) {
+/**
+ * @param {{ selectedId: string | null, onSelect: (id: string | null) => void,
+ *   onTemplates: (target: LibraryTarget) => void }} props
+ */
+export function Page({ selectedId, onSelect, onTemplates }) {
   const { data, isPending, error } = usePage(selectedId);
   const editorRef = useRef(/** @type {PageEditorHandle | null} */ (null));
   const contentVersion = useContentVersion(selectedId ?? '');
   const isDatabase = data?.page.kind === 'database';
+  // A template, or a page inside one: its dates may stay "today".
+  const isTemplate = Boolean(data && (data.page.isTemplate || data.inTemplate));
   const [empty, setEmpty] = useState(false);
   useEffect(() => setEmpty(false), [selectedId]);
   // A brand-new page can still become a database instead.
@@ -49,6 +57,9 @@ export function Page({ selectedId, onSelect }) {
             </Message>
           ) : isPending ? null : (
             <>
+              {(data.page.isTemplate || data.inTemplate) && (
+                <TemplateBanner page={data.page} database={data.database} inTemplate={data.inTemplate} onSelect={onSelect} />
+              )}
               <div className={titleClass}>
                 <Suspense
                   fallback={
@@ -57,13 +68,13 @@ export function Page({ selectedId, onSelect }) {
                     </h1>
                   }
                 >
-                  <TitleEditor key={data.page.id} page={data.page} onEnter={() => editorRef.current?.focusStart()} />
+                  <TitleEditor key={data.page.id} page={data.page} template={isTemplate} onEnter={() => editorRef.current?.focusStart()} />
                 </Suspense>
               </div>
               {data.database && (
                 <div className="mt-4">
                   <Suspense fallback={null}>
-                    <RowProperties page={data.page} databaseId={data.database.id} values={data.props ?? {}} />
+                    <RowProperties page={data.page} databaseId={data.database.id} values={data.props ?? {}} template={data.page.isTemplate} />
                   </Suspense>
                 </div>
               )}
@@ -77,12 +88,18 @@ export function Page({ selectedId, onSelect }) {
                       pageId={data.page.id}
                       onOpenPage={onSelect}
                       onEmptyChange={setEmpty}
+                      template={isTemplate}
                       ref={editorRef}
                     />
                   )}
                 </Suspense>
               </div>
-              {canStartAs && <StartAs pageId={data.page.id} />}
+              {canStartAs && (
+                <StartAs
+                  pageId={data.page.id}
+                  onTemplate={() => onTemplates({ parentId: data.page.parentId, replaceId: data.page.id })}
+                />
+              )}
             </>
           )}
         </article>
@@ -92,10 +109,41 @@ export function Page({ selectedId, onSelect }) {
 }
 
 /**
- * "Start as a table / board": turns a new, empty page into a database.
- * @param {{ pageId: string }} props
+ * Marks a template (or a page inside one) while you edit it, with the way out.
+ * @param {{ page: import('@papier/core').Page, database: { id: string, title: string } | null, inTemplate: boolean,
+ *   onSelect: (id: string | null) => void }} props
  */
-function StartAs({ pageId }) {
+function TemplateBanner({ page, database, inTemplate, onSelect }) {
+  const duplicate = useDuplicatePage();
+  const link = 'rounded px-1.5 py-0.5 text-fg hover:bg-white/[0.08]';
+  return (
+    <div className="mb-6 flex flex-wrap items-center gap-2 rounded-md border border-dashed border-line px-3 py-2 text-[13px] text-muted" role="note">
+      <span className="flex-1">
+        {inTemplate && !page.isTemplate
+          ? 'Part of a template — it’s copied along with it.'
+          : database
+            ? `Template in “${database.title || 'Untitled'}” — new rows can start as a copy of this.`
+            : 'Template — pages made from it start as a copy of this. Dates set to “Today ↻” become the day it’s used.'}
+      </span>
+      {page.isTemplate && !database && (
+        <button type="button" className={link} disabled={duplicate.isPending} onClick={() => duplicate.mutate({ id: page.id, parentId: null }, { onSuccess: (p) => onSelect(p.id) })}>
+          Use template
+        </button>
+      )}
+      {database && (
+        <button type="button" className={link} onClick={() => onSelect(database.id)}>
+          Back to database
+        </button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * "Start as a table / board / from a template": what a new, empty page can become.
+ * @param {{ pageId: string, onTemplate: () => void }} props
+ */
+function StartAs({ pageId, onTemplate }) {
   const qc = useQueryClient();
   const [busy, setBusy] = useState(false);
   /** @param {'table' | 'board'} layout */
@@ -111,12 +159,15 @@ function StartAs({ pageId }) {
   const option = 'flex h-8 items-center gap-2 rounded-md border border-line px-3 text-[13px] text-muted hover:bg-hover hover:text-fg disabled:opacity-50';
   return (
     <div className="mt-6 flex flex-wrap items-center gap-2" aria-label="Start as">
-      <span className="mr-1 text-[13px] text-faint">Or start as a database:</span>
+      <span className="mr-1 text-[13px] text-faint">Or start as:</span>
       <button type="button" className={option} disabled={busy} onClick={() => convert('table')}>
         <GridIcon path="M3.5 5.5h17v13h-17zM3.5 10h17M9.5 10v8.5" /> Table
       </button>
       <button type="button" className={option} disabled={busy} onClick={() => convert('board')}>
         <GridIcon path="M4 5h4v14H4zM10 5h4v9h-4zM16 5h4v11h-4z" /> Board
+      </button>
+      <button type="button" className={option} disabled={busy} onClick={onTemplate}>
+        <GridIcon path="M4 4h16v16H4zM8 9h8M8 13h5" /> Template…
       </button>
     </div>
   );

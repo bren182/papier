@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { and, asc, desc, eq, gt, isNull, lt, ne, sql } from 'drizzle-orm';
-import { orderBetween, PageCreate, PageMove, PageUpdate, plainText } from '@papier/core';
+import { orderBetween, PageCreate, PageDuplicate, PageMove, PageUpdate, plainText } from '@papier/core';
+import { duplicatePage, TooBig } from '../db/duplicate.ts';
 import type { Db } from '../db/index.ts';
 import { liveLineage } from '../db/lineage.ts';
 import { appendPageBlock, isSelfOrDescendant, removePageBlocks } from '../db/pageTree.ts';
@@ -16,12 +17,13 @@ const pageFields = {
   titleContent: pages.titleContent,
   icon: pages.icon,
   kind: pages.kind,
+  isTemplate: pages.isTemplate,
   order: pages.orderKey,
   // Qualified by hand: drizzle renders ${pages.id} unqualified in single-table
   // queries, which would bind to the subquery's own row. A database's children
   // are its rows, which the sidebar never lists.
   hasChildren: sql<boolean>`pages.kind <> 'database' and exists (
-    select 1 from pages c where c.parent_id = pages.id and c.archived_at is null
+    select 1 from pages c where c.parent_id = pages.id and c.archived_at is null and c.is_template = 0
   )`.mapWith(Boolean),
   createdAt: pages.createdAt,
   updatedAt: pages.updatedAt,
@@ -41,10 +43,21 @@ export function pageRoutes(app: FastifyInstance, db: Db) {
     return db
       .select(pageFields)
       .from(pages)
-      .where(and(parent ? eq(pages.parentId, parent) : isNull(pages.parentId), isNull(pages.archivedAt)))
+      .where(and(parent ? eq(pages.parentId, parent) : isNull(pages.parentId), isNull(pages.archivedAt), eq(pages.isTemplate, false)))
       .orderBy(asc(pages.orderKey))
       .all();
   });
+
+  /** The template library: page templates (database templates live in their database). */
+  app.get('/api/templates', async () =>
+    db
+      .select({ id: pages.id, title: pages.title, titleContent: pages.titleContent, icon: pages.icon, kind: pages.kind, updatedAt: pages.updatedAt })
+      .from(pages)
+      .where(and(isNull(pages.parentId), eq(pages.isTemplate, true), isNull(pages.archivedAt)))
+      .orderBy(asc(sql`lower(${pages.title})`))
+      .limit(200)
+      .all(),
+  );
 
   /** One page plus its ancestors (root first) for breadcrumbs. */
   app.get<{ Params: { id: string } }>('/api/pages/:id', async (req, reply) => {
@@ -60,7 +73,18 @@ export function pageRoutes(app: FastifyInstance, db: Db) {
             .map((v) => [v.propId, v.value]),
         )
       : null;
-    return { page, ancestors: lineage.slice(0, -1), database, props };
+    // Inside a template (not one itself): its dates stay dynamic too.
+    const inTemplate = Boolean(
+      db.get<{ hit: number }>(sql`
+        with recursive up(id, parent_id) as (
+          select id, parent_id from pages where id = ${req.params.id}
+          union all
+          select p.id, p.parent_id from pages p join up on p.id = up.parent_id
+        )
+        select exists (select 1 from up join pages p on p.id = up.id where up.id <> ${req.params.id} and p.is_template = 1) as hit
+      `)?.hit,
+    );
+    return { page, ancestors: lineage.slice(0, -1), database, props, inTemplate };
   });
 
   app.post('/api/pages', async (req, reply) => {
@@ -179,6 +203,51 @@ export function pageRoutes(app: FastifyInstance, db: Db) {
     });
 
     return db.select(pageFields).from(pages).where(eq(pages.id, id)).get();
+  });
+
+  /**
+   * Deep copy: Duplicate (next to the original), Save as template (a library
+   * template, or a row template in the row's database) and Use template.
+   */
+  app.post<{ Params: { id: string } }>('/api/pages/:id/duplicate', async (req, reply) => {
+    const input = PageDuplicate.parse(req.body ?? {});
+    const id = req.params.id;
+    if (!liveLineage(db, id)) return reply.code(404).send({ error: 'Page not found' });
+    const src = db.select({ parentId: pages.parentId, orderKey: pages.orderKey, isTemplate: pages.isTemplate }).from(pages).where(eq(pages.id, id)).get()!;
+    const srcDatabase = rowDatabase(db, id);
+
+    // Rows and row templates stay in their database; everything else can go anywhere.
+    const parentId = srcDatabase ? srcDatabase.id : input.asTemplate ? null : input.parentId === undefined ? src.parentId : input.parentId;
+    if (srcDatabase && input.parentId !== undefined && input.parentId !== srcDatabase.id) {
+      return reply.code(400).send({ error: 'Database templates and rows stay in their database' });
+    }
+    if (parentId && !srcDatabase) {
+      if (!liveLineage(db, parentId)) return reply.code(404).send({ error: 'Target page not found' });
+      const parent = db.select({ kind: pages.kind }).from(pages).where(eq(pages.id, parentId)).get();
+      if (parent?.kind === 'database') return reply.code(400).send({ error: 'Only rows and row templates go in a database' });
+    }
+
+    // Beside the original when duplicating in place; otherwise last.
+    const siblings = and(parentId ? eq(pages.parentId, parentId) : isNull(pages.parentId), isNull(pages.archivedAt));
+    const beside = parentId === src.parentId && !input.asTemplate && !src.isTemplate;
+    const after = beside
+      ? db.select({ k: pages.orderKey }).from(pages).where(and(siblings, gt(pages.orderKey, src.orderKey))).orderBy(asc(pages.orderKey)).limit(1).get()?.k ?? null
+      : null;
+    const before = beside ? src.orderKey : db.select({ k: pages.orderKey }).from(pages).where(siblings).orderBy(desc(pages.orderKey)).limit(1).get()?.k ?? null;
+
+    let newId: string;
+    try {
+      newId = db.transaction((tx) => {
+        const copy = duplicatePage(tx, id, { parentId, orderKey: orderBetween(before, after), isTemplate: input.asTemplate }, input.today);
+        const parentKind = parentId && tx.select({ kind: pages.kind }).from(pages).where(eq(pages.id, parentId)).get()?.kind;
+        if (parentId && parentKind === 'page' && input.block) appendPageBlock(tx, parentId, copy);
+        return copy;
+      });
+    } catch (err) {
+      if (err instanceof TooBig) return reply.code(400).send({ error: err.message });
+      throw err;
+    }
+    return reply.code(201).send(db.select(pageFields).from(pages).where(eq(pages.id, newId)).get());
   });
 
   /** Move to trash. Descendants stay attached and disappear with it; so does its page block. */

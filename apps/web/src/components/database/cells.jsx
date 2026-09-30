@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { valueToText } from '@papier/core/props';
+import { DYNAMIC_TODAY, valueToText } from '@papier/core/props';
 import { formatDateLong, formatDateMention, parseDateQuery, toISODate } from '../../editor/dates.js';
 import { field, menuItem, Popover } from './Popover.jsx';
 
@@ -16,7 +16,8 @@ import { field, menuItem, Popover } from './Popover.jsx';
  *   onChange: (value: unknown) => void,
  *   onAddOption: (prop: Property, name: string) => Promise<string | undefined>,
  *   className?: string,
- * }} CellProps
+ *   template?: boolean,
+ * }} CellProps  template: a template row, whose dates may stay "today"
  */
 
 /** A grey option chip (colour stays behind the glass). @param {{ name: string, onRemove?: () => void }} props */
@@ -112,7 +113,7 @@ function Check({ checked }) {
  * (checkbox), or pick from a popover (select, multi-select, date).
  * @param {CellProps & { placeholder?: string, wrap?: boolean }} props
  */
-export function ValueCell({ prop, value, row, onChange, onAddOption, className = '', placeholder = '', wrap = false }) {
+export function ValueCell({ prop, value, row, onChange, onAddOption, className = '', placeholder = '', wrap = false, template = false }) {
   const [editing, setEditing] = useState(false);
   const ref = useRef(/** @type {HTMLDivElement | null} */ (null));
   const readOnly = prop.type === 'created_time' || prop.type === 'edited_time';
@@ -173,6 +174,7 @@ export function ValueCell({ prop, value, row, onChange, onAddOption, className =
       {editing && prop.type === 'date' && (
         <Popover anchor={ref.current} onClose={() => setEditing(false)} width={260}>
           <DatePicker
+            template={template}
             value={typeof value === 'string' ? value : null}
             onChange={(v) => {
               onChange(v);
@@ -294,9 +296,9 @@ export function OptionPicker({ prop, value, onChange, onAddOption }) {
 /**
  * Type a date the same way as `@` mentions ("tomorrow", "oct 5", "next fri"),
  * or pick one.
- * @param {{ value: string | null, onChange: (v: string | null) => void }} props
+ * @param {{ value: string | null, onChange: (v: string | null) => void, template?: boolean }} props
  */
-export function DatePicker({ value, onChange }) {
+export function DatePicker({ value, onChange, template = false }) {
   const [q, setQ] = useState('');
   const parsed = q.trim() ? parseDateQuery(q) : null;
   const iso = parsed ? toISODate(parsed) : null;
@@ -326,6 +328,11 @@ export function DatePicker({ value, onChange }) {
         <button type="button" className={menuItem} onClick={() => onChange(toISODate(new Date()))}>
           Today
         </button>
+        {template && (
+          <button type="button" className={menuItem} title={formatDateLong(DYNAMIC_TODAY)} onClick={() => onChange(DYNAMIC_TODAY)}>
+            Today ↻
+          </button>
+        )}
         {value && (
           <button type="button" className={menuItem} onClick={() => onChange(null)}>
             Clear

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useRows } from '../../api/databases.js';
 import { TitleText } from '../TitleText.jsx';
 import { ValueDisplay } from './cells.jsx';
-import { DB_DRAG_TYPE, useDb, visibleColumns } from './context.js';
+import { DB_DRAG_TYPE, defaultTemplate, useDb, visibleColumns } from './context.js';
 import { Icon, ICONS } from './meta.jsx';
 import { field } from './Popover.jsx';
 
@@ -17,7 +17,7 @@ import { field } from './Popover.jsx';
  * reorders (manual order, when the view has no sorts).
  */
 export function BoardView() {
-  const { properties, view, setConfig, m } = useDb();
+  const { properties, view, setConfig, m, templates, openRow } = useDb();
   const groupable = properties.filter((p) => p.type === 'select' || p.type === 'multi_select');
   const group = groupable.find((p) => p.id === view.config.groupBy) ?? groupable[0];
   const [dragging, setDragging] = useState(/** @type {Dragging | null} */ (null));
@@ -98,8 +98,10 @@ export function BoardView() {
             }}
             newRowId={newRowId}
             onNew={async () => {
-              const row = await m.addRow({ props: { [group.id]: c.id === null ? null : group.type === 'multi_select' ? [c.id] : c.id } });
-              setNewRowId(row.id);
+              const templateId = defaultTemplate(view, templates);
+              const row = await m.addRow({ props: { [group.id]: c.id === null ? null : group.type === 'multi_select' ? [c.id] : c.id }, templateId });
+              if (templateId) openRow(row.id);
+              else setNewRowId(row.id);
             }}
           />
         ))}

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { usePage } from '../api/pages.js';
+import { PageMenu } from './PageMenu.jsx';
 import { TitleText } from './TitleText.jsx';
 
 /** @typedef {import('../usePrefs.js').Prefs} Prefs */
@@ -77,6 +78,7 @@ export function Topbar({ selectedId, onSelect, prefs, onChange }) {
       <button type="button" className={toggle} onClick={() => onChange({ motion: !prefs.motion })}>
         {prefs.motion ? 'Pause motion' : 'Play motion'}
       </button>
+      {data && <PageMenu page={data.page} isRow={Boolean(data.database)} onSelect={onSelect} />}
     </header>
   );
 }
