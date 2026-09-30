@@ -11,6 +11,7 @@ import { docToRows, rowsToDoc } from './convert.js';
 import { bodyExtensions } from './extensions.js';
 import { FormatToolbar } from './FormatToolbar.jsx';
 import { SideMenu } from './SideMenu.jsx';
+import { InlineDatabase } from '../components/database/InlineDatabase.jsx';
 
 /** @typedef {import('@papier/core').Block} Block */
 /** @typedef {{ focusStart: () => void }} PageEditorHandle */
@@ -46,12 +47,13 @@ function Editor({ pageId, rows, onOpenPage, editorRef }) {
           return observer.subscribe(report);
         },
         openPage: (id) => onOpenPage(id),
-        createPage: async () => {
-          const page = /** @type {Page} */ (await api('/pages', { method: 'POST', body: { parentId: pageId, block: false } }));
+        createPage: async (kind = 'page') => {
+          const page = /** @type {Page} */ (await api('/pages', { method: 'POST', body: { parentId: pageId, kind, block: false } }));
           qc.invalidateQueries({ queryKey: ['pages', 'children'] });
           return page.id;
         },
       },
+      databases: { View: InlineDatabase, openPage: (id) => onOpenPage(id) },
     }),
     content: rowsToDoc(rows),
     immediatelyRender: true,

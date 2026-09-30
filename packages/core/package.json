@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.js",
-    "./text": "./src/text.js"
+    "./text": "./src/text.js",
+    "./props": "./src/props.js"
   },
   "dependencies": {
     "fractional-indexing": "^4.0.0",

@@ -3,7 +3,7 @@ import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { BlockBatch } from '@papier/core';
 import type { Db } from '../db/index.ts';
 import { liveLineage } from '../db/lineage.ts';
-import { linkedChildren, syncChildren } from '../db/pageTree.ts';
+import { linkedChildren, OWNING_BLOCKS, syncChildren } from '../db/pageTree.ts';
 import { indexBlocks } from '../db/search.ts';
 import { blocks, pages } from '../db/schema.ts';
 
@@ -41,7 +41,7 @@ export function blockRoutes(app: FastifyInstance, db: Db) {
         tx.run(sql`pragma defer_foreign_keys = on`);
         const now = Date.now();
         // Sub-pages whose page block this batch removes go to the trash; re-added ones come back.
-        const touchesPages = deletes.length > 0 || upserts.some((b) => b.type === 'page');
+        const touchesPages = deletes.length > 0 || upserts.some((b) => OWNING_BLOCKS.includes(b.type));
         const children = touchesPages ? linkedChildren(tx, pageId) : null;
 
         if (upserts.length) {

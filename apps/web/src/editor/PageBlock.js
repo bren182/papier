@@ -11,12 +11,12 @@ import { formatDateMention } from './dates.js';
  * works headless (tests) too.
  */
 
-/** @typedef {{ title: string, titleContent: import('@papier/core').InlineContent | null } | null} PageInfo  null = deleted / missing */
+/** @typedef {{ title: string, titleContent: import('@papier/core').InlineContent | null, kind?: string } | null} PageInfo  null = deleted / missing */
 /**
  * @typedef {{
  *   watchPage: ((pageId: string, onChange: (page: PageInfo | undefined) => void) => () => void) | null,
  *   openPage: ((pageId: string) => void) | null,
- *   createPage: (() => Promise<string>) | null,
+ *   createPage: ((kind?: 'page' | 'database') => Promise<string>) | null,
  * }} PageBlockOptions
  */
 
@@ -30,6 +30,9 @@ function titleOf(page) {
 
 const PAGE_ICON =
   '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>';
+
+const DATABASE_ICON =
+  '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M3.5 9.5h17M9.5 9.5v10"/></svg>';
 
 export const PageBlock = Node.create({
   name: 'pageBlock',
@@ -80,6 +83,7 @@ export const PageBlock = Node.create({
       inner.className = 'pb-c pb-page';
       inner.contentEditable = 'false';
       inner.innerHTML = PAGE_ICON;
+      let isDatabase = false;
       const label = document.createElement('span');
       label.className = 'pb-page-title';
       inner.append(label);
@@ -92,6 +96,11 @@ export const PageBlock = Node.create({
         const text = page === undefined ? '' : page === null ? 'Deleted page' : titleOf(page) || 'Untitled';
         label.textContent = text;
         label.classList.toggle('is-muted', !page || !titleOf(page));
+        // A full-page database shows a table icon.
+        if (Boolean(page?.kind === 'database') !== isDatabase) {
+          isDatabase = !isDatabase;
+          /** @type {Element} */ (inner.firstElementChild).outerHTML = isDatabase ? DATABASE_ICON : PAGE_ICON;
+        }
       };
 
       /** @param {import('@tiptap/pm/model').Node} n */

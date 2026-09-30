@@ -62,6 +62,22 @@ between parents. A page block for a non-child is just a link. When the server ch
 open page's blocks, the client calls `reloadContent` (`api/blocks.js`) to remount it.
 Sidebar order (`pages.order_key`) and block order are independent.
 
+## Databases (`apps/server/src/routes/databases.ts`, `apps/web/src/components/database/`)
+
+A database is a page with `kind: 'database'`; its **rows are its child pages** — exempt
+from the page-block invariant (no blocks, never in the sidebar: `hasChildren` is false for
+databases, `backfillPageBlocks` skips them; `move` refuses rows in/out). Inline databases
+are a `database` block (`props.pageId`, `props.viewId`) that owns its database exactly like
+a page block (`OWNING_BLOCKS` in `pageTree.ts`). Properties: `db_properties`; values:
+`page_props` — `value` JSON is the truth, `sort_text`/`sort_num` come from `sortKeys` on
+every write (always go through `writeValue`). Title is the pseudo-property `title`.
+Type/option changes rewrite values (`coerceValue`) and scrub view configs. Views
+(`db_views`) hold sorts/filters/hidden/widths/propOrder/groupBy; `POST …/query` builds one
+SQL query (a left join per referenced property), offset-paginated. Value/filter helpers
+are zod-free in `@papier/core/props` (client-safe). Client: `api/databases.js`; the UI is a
+lazy chunk; menus use `database/Popover.jsx` (portalled). Drags inside a view set
+`DB_DRAG_TYPE` so the inline node view keeps them from ProseMirror.
+
 ## Search (`apps/server/src/db/search.ts`)
 
 The only SQLite-specific module. `search_rows` holds plain text per block (+ one row per
@@ -100,7 +116,12 @@ with `HIT_START`/`HIT_END` from `@papier/core` (render via `snippetParts`, not H
 - `@papier/core` pulls in zod; client code in the main bundle should import
   zod-free helpers from `@papier/core/text` to keep zod out of it.
 - HTML5 drag: never unmount or `preventDefault()` the mousedown of the drag source
-  (the block handle) — the drag silently dies and `dragend` never fires.
+  (the block handle) — the drag silently dies and `dragend` never fires. Don't insert
+  elements during `dragstart` either (e.g. a column that only shows while dragging).
+- React node views (`ReactNodeViewRenderer`) wrap the component in their own element:
+  put block classes/data attributes on it via the `className`/`attrs` options, so the
+  block stays a direct `.papier-editor > .pb` child.
+- e2e ports are overridable (`E2E_API_PORT`, `E2E_WEB_PORT`) when 3100/5174 are taken.
 
 ## Workflow
 

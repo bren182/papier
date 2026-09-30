@@ -4,6 +4,9 @@ import { InlineContent } from './blocks.js';
 
 export const PageId = z.string().min(1).max(64);
 
+export const PAGE_KINDS = /** @type {const} */ (['page', 'database']);
+export const PageKind = z.enum(PAGE_KINDS);
+
 /** A page as the sidebar and page view see it. */
 export const Page = z.object({
   id: PageId,
@@ -13,6 +16,8 @@ export const Page = z.object({
   /** Rich title (text + live date mentions); null for plain-text titles. */
   titleContent: InlineContent.nullable(),
   icon: z.string().nullable(),
+  /** 'database' pages hold rows (their child pages) instead of sub-pages. */
+  kind: PageKind,
   order: z.string(),
   hasChildren: z.boolean(),
   createdAt: z.number(),
@@ -22,6 +27,7 @@ export const Page = z.object({
 export const PageCreate = z.object({
   parentId: PageId.nullable().default(null),
   title: z.string().max(500).default(''),
+  kind: PageKind.default('page'),
   /** Append a page block to the parent's content. False when the editor inserts its own. */
   block: z.boolean().default(true),
 });

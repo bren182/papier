@@ -16,6 +16,7 @@
     "@papier/core": "workspace:*",
     "@papier/ui": "workspace:*",
     "@tanstack/react-query": "^5.104.0",
+    "@tanstack/react-virtual": "^3.14.13",
     "@tiptap/core": "^3.31.3",
     "@tiptap/extension-bold": "^3.31.3",
     "@tiptap/extension-bubble-menu": "^3.31.3",

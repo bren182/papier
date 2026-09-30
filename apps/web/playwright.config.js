@@ -2,8 +2,9 @@
 import { defineConfig, devices } from '@playwright/test';
 
 // Own ports so e2e runs never touch a `pnpm dev` session or its database.
-const API_PORT = 3100;
-const WEB_PORT = 5174;
+// Overridable when those ports are taken (E2E_API_PORT / E2E_WEB_PORT).
+const API_PORT = Number(process.env.E2E_API_PORT ?? 3100);
+const WEB_PORT = Number(process.env.E2E_WEB_PORT ?? 5174);
 
 export default defineConfig({
   testDir: 'e2e',

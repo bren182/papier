@@ -49,33 +49,62 @@ export const BLOCK_TYPES = [
 /** @type {MenuItem[]} */
 const BLOCK_ITEMS = BLOCK_TYPES.map(({ type, attrs, ...item }) => ({ ...item, group: 'Blocks', run: turnInto(type, attrs) }));
 
-/** A new sub-page, as a block where the `/page` was typed; then open it. @type {MenuItem['run']} */
-const newSubPage = async (editor, range) => {
+/**
+ * Create a page (or database) and put its block where the `/` was typed:
+ * replacing an empty paragraph, else below the current block.
+ * @param {Editor} editor @param {Range} range
+ * @param {'pageBlock' | 'databaseBlock'} nodeName @param {'page' | 'database'} kind
+ * @returns {Promise<string | undefined>} the new page's id
+ */
+const insertOwnedPage = async (editor, range, nodeName, kind) => {
   const opts = /** @type {import('./PageBlock.js').PageBlockOptions | undefined} */ (
     editor.extensionManager.extensions.find((e) => e.name === 'pageBlock')?.options
   );
   if (!opts?.createPage) return;
   editor.view.dispatch(editor.state.tr.delete(range.from, range.to));
-  const pageId = await opts.createPage();
+  const pageId = await opts.createPage(kind);
   if (editor.isDestroyed) return;
 
   const { state } = editor;
   const block = blockAt(state.doc, state.selection.from);
   if (!block) return;
   const tr = state.tr;
+  const type = state.schema.nodes[nodeName];
   if (block.node.type.name === 'paragraph' && block.node.content.size === 0) {
-    tr.replaceWith(block.pos, block.pos + block.node.nodeSize, state.schema.nodes.pageBlock.create({ ...block.node.attrs, pageId }));
+    tr.replaceWith(block.pos, block.pos + block.node.nodeSize, type.create({ id: block.node.attrs.id, indent: block.node.attrs.indent, pageId }));
   } else {
-    tr.insert(block.pos + block.node.nodeSize, state.schema.nodes.pageBlock.create({ indent: block.node.attrs.indent, pageId }));
+    tr.insert(block.pos + block.node.nodeSize, type.create({ indent: block.node.attrs.indent, pageId }));
   }
   editor.view.dispatch(tr);
-  opts.openPage?.(pageId);
+  return pageId;
 };
+
+/** A new sub-page, as a block where the `/page` was typed; then open it. @type {MenuItem['run']} */
+const newSubPage = async (editor, range) => {
+  const pageId = await insertOwnedPage(editor, range, 'pageBlock', 'page');
+  if (pageId) openPageOf(editor)?.(pageId);
+};
+
+/** A full-page database inside this page: a page block pointing at it; then open it. @type {MenuItem['run']} */
+const newDatabasePage = async (editor, range) => {
+  const pageId = await insertOwnedPage(editor, range, 'pageBlock', 'database');
+  if (pageId) openPageOf(editor)?.(pageId);
+};
+
+/** An inline database, right here in the content. @type {MenuItem['run']} */
+const newInlineDatabase = (editor, range) => insertOwnedPage(editor, range, 'databaseBlock', 'database');
+
+/** @param {Editor} editor */
+const openPageOf = (editor) =>
+  /** @type {import('./PageBlock.js').PageBlockOptions | undefined} */ (editor.extensionManager.extensions.find((e) => e.name === 'pageBlock')?.options)
+    ?.openPage;
 
 /** Slash-menu extras. */
 /** @type {MenuItem[]} */
 const PAGE_ITEMS = [
   { title: 'Page', icon: '▤', aliases: ['subpage', 'new page', 'child'], group: 'Pages', subtext: 'A sub-page inside this one', run: newSubPage },
+  { title: 'Database', icon: '▦', aliases: ['table', 'inline database', 'board', 'kanban'], group: 'Pages', subtext: 'A table or board, right here', run: newInlineDatabase },
+  { title: 'Database page', icon: '▦', aliases: ['full page database', 'table page'], group: 'Pages', subtext: 'A database as a sub-page', run: newDatabasePage },
 ];
 
 /** @type {MenuItem[]} */

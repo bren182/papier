@@ -5,6 +5,7 @@ import { openDb } from './db/index.ts';
 import { backfillPageBlocks } from './db/pageTree.ts';
 import { backfillSearch } from './db/search.ts';
 import { blockRoutes } from './routes/blocks.ts';
+import { databaseRoutes } from './routes/databases.ts';
 import { pageRoutes } from './routes/pages.ts';
 import { searchRoutes } from './routes/search.ts';
 
@@ -36,6 +37,7 @@ export function buildApp({ dbPath = ':memory:', logger = true }: AppOptions = {}
   app.get('/api/health', async () => ({ ok: true, blockTypes: BLOCK_TYPES.length }));
   pageRoutes(app, db);
   blockRoutes(app, db);
+  databaseRoutes(app, db);
   searchRoutes(app, db);
 
   return app;

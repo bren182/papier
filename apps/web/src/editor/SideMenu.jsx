@@ -305,6 +305,7 @@ function BlockMenu({ editor, at, onClose }) {
 
   const node = editor.state.doc.maybeChild(at.index);
   if (!node) return null;
+  const owning = node.type.name === 'pageBlock' || node.type.name === 'databaseBlock';
 
   /** @param {import('@tiptap/pm/state').Transaction} tr */
   const apply = (tr) => {
@@ -320,11 +321,11 @@ function BlockMenu({ editor, at, onClose }) {
       className="papier-popover absolute z-30 w-[220px] p-1"
       style={{ top: at.top + 28, left: at.left + 24 }}
     >
-      {/* A page block stays one: turning it into text would trash its sub-page. */}
-      {node.type.name !== 'pageBlock' && (
+      {/* Page and database blocks stay what they are: turning one into text would trash its page. */}
+      {!owning && (
         <div className="px-2 pt-1.5 pb-1 text-[11px] font-medium tracking-wide text-faint uppercase">Turn into</div>
       )}
-      {node.type.name !== 'pageBlock' && BLOCK_TYPES.map((t) => {
+      {!owning && BLOCK_TYPES.map((t) => {
         const current = node.type.name === t.type && (t.type !== 'heading' || node.attrs.level === t.attrs?.level);
         return (
           <button
@@ -344,7 +345,7 @@ function BlockMenu({ editor, at, onClose }) {
           </button>
         );
       })}
-      {node.type.name !== 'pageBlock' && <div className="my-1 h-px bg-line" />}
+      {!owning && <div className="my-1 h-px bg-line" />}
       <button
         type="button"
         role="menuitem"

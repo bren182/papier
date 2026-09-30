@@ -12,6 +12,9 @@ import { TitleText } from './TitleText.jsx';
 const loadEditors = () => import('../editor/index.js');
 const TitleEditor = lazy(() => loadEditors().then((m) => ({ default: m.TitleEditor })));
 const PageEditor = lazy(() => loadEditors().then((m) => ({ default: m.PageEditor })));
+const loadDatabases = () => import('./database/index.js');
+const DatabaseView = lazy(() => loadDatabases().then((m) => ({ default: m.DatabaseView })));
+const RowProperties = lazy(() => loadDatabases().then((m) => ({ default: m.RowProperties })));
 
 const titleClass = 'font-display text-[40px] leading-[48px] font-semibold tracking-[-0.01em] text-fg-strong';
 
@@ -20,6 +23,7 @@ export function Page({ selectedId, onSelect }) {
   const { data, isPending, error } = usePage(selectedId);
   const editorRef = useRef(/** @type {PageEditorHandle | null} */ (null));
   const contentVersion = useContentVersion(selectedId ?? '');
+  const isDatabase = data?.page.kind === 'database';
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
@@ -28,7 +32,7 @@ export function Page({ selectedId, onSelect }) {
 
       <div className="p-glass min-h-[calc(100%-170px)] border-t border-white/5 bg-s-page pb-24">
         {/* px-14: room for the block handles, inside the column */}
-        <article className="mx-auto flex w-full max-w-[784px] flex-col px-14 pt-10">
+        <article className={`mx-auto flex w-full flex-col px-14 pt-10 ${isDatabase ? 'max-w-[1240px]' : 'max-w-[784px]'}`}>
           {!selectedId ? (
             <EmptyState onSelect={onSelect} />
           ) : error ? (
@@ -50,9 +54,20 @@ export function Page({ selectedId, onSelect }) {
                   <TitleEditor key={data.page.id} page={data.page} onEnter={() => editorRef.current?.focusStart()} />
                 </Suspense>
               </div>
+              {data.database && (
+                <div className="mt-4">
+                  <Suspense fallback={null}>
+                    <RowProperties page={data.page} databaseId={data.database.id} values={data.props ?? {}} />
+                  </Suspense>
+                </div>
+              )}
               <div className="mt-4">
                 <Suspense fallback={null}>
-                  <PageEditor key={`${data.page.id}:${contentVersion}`} pageId={data.page.id} onOpenPage={onSelect} ref={editorRef} />
+                  {isDatabase ? (
+                    <DatabaseView key={data.page.id} databaseId={data.page.id} onOpenRow={onSelect} />
+                  ) : (
+                    <PageEditor key={`${data.page.id}:${contentVersion}`} pageId={data.page.id} onOpenPage={onSelect} ref={editorRef} />
+                  )}
                 </Suspense>
               </div>
             </>

@@ -1,0 +1,82 @@
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+
+/**
+ * A menu/popover anchored below an element, portalled to <body> so it escapes
+ * the table's overflow and the editor. Closes on outside mousedown or Escape.
+ * @param {{ anchor: HTMLElement | null, onClose: () => void, children: import('react').ReactNode,
+ *   width?: number, className?: string, align?: 'start' | 'end' }} props
+ */
+export function Popover({ anchor, onClose, children, width = 240, className = '', align = 'start' }) {
+  const ref = useRef(/** @type {HTMLDivElement | null} */ (null));
+  const [pos, setPos] = useState(/** @type {{ top: number, left: number } | null} */ (null));
+
+  useLayoutEffect(() => {
+    if (!anchor) return;
+    const place = () => {
+      const r = anchor.getBoundingClientRect();
+      const h = ref.current?.offsetHeight ?? 0;
+      const below = r.bottom + 4;
+      const top = below + h > window.innerHeight - 8 && r.top - h - 4 > 8 ? r.top - h - 4 : below;
+      const left = align === 'end' ? r.right - width : r.left;
+      setPos({ top, left: Math.max(8, Math.min(left, window.innerWidth - width - 8)) });
+    };
+    place();
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [anchor, width, align]);
+
+  useEffect(() => {
+    /** @param {MouseEvent} e */
+    const onDown = (e) => {
+      const t = /** @type {Node} */ (e.target);
+      // Nested popovers are portalled siblings; clicks inside any of them stay open.
+      if (ref.current?.contains(t) || anchor?.contains(t) || (t instanceof Element && t.closest('[data-popover]') && !ref.current?.contains(t) && isAbove(ref.current, t))) return;
+      onClose();
+    };
+    /** @param {KeyboardEvent} e */
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return;
+      // Only the topmost popover closes.
+      const all = document.querySelectorAll('[data-popover]');
+      if (all[all.length - 1] === ref.current) {
+        e.stopPropagation();
+        onClose();
+      }
+    };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey, true);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey, true);
+    };
+  }, [anchor, onClose]);
+
+  return createPortal(
+    <div
+      ref={ref}
+      data-popover=""
+      className={`papier-popover fixed z-50 p-1 ${className}`}
+      style={{ width, top: pos?.top ?? -9999, left: pos?.left ?? -9999 }}
+      // Keep ProseMirror (inline databases) from treating these as editor events.
+      onMouseDown={(e) => e.stopPropagation()}
+    >
+      {children}
+    </div>,
+    document.body,
+  );
+}
+
+/** Whether popover `b` was opened after `a` (later in the DOM = on top). @param {Element | null} a @param {Node} t */
+function isAbove(a, t) {
+  const b = t instanceof Element ? t.closest('[data-popover]') : null;
+  return Boolean(a && b && a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+}
+
+export const menuItem = 'flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-[13px] text-fg hover:bg-hover disabled:opacity-40';
+export const menuLabel = 'px-2 pt-1.5 pb-1 text-[11px] font-medium tracking-wide text-faint uppercase';
+export const field = 'h-7 w-full rounded-md border border-line bg-root/60 px-2 text-[13px] text-fg outline-none focus:border-accent';

@@ -17,6 +17,7 @@ export const BLOCK_TYPES = /** @type {const} */ ([
   'code',
   'divider',
   'page', // a sub-page (or a link to another page): props.pageId
+  'database', // an inline database: props.pageId (the database page), props.viewId
 ]);
 
 export const BlockType = z.enum(BLOCK_TYPES);

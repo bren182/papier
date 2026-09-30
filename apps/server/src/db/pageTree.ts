@@ -8,8 +8,15 @@ import { blocks, pages } from './schema.ts';
  * Sub-pages live in their parent's content as `page` blocks (props.pageId).
  * The invariant: a child page is live exactly when its parent's content holds a
  * page block pointing at it. A page block pointing at any other page is just a
- * link and never changes that page.
+ * link and never changes that page. An inline database's `database` block
+ * (also props.pageId) owns its database the same way.
+ *
+ * Rows are exempt: a database's child pages are its rows and have no blocks.
  */
+
+/** Block types that own the page in props.pageId. */
+export const OWNING_BLOCKS = ['page', 'database'];
+const owning = sql`(${sql.join(OWNING_BLOCKS.map((t) => sql`${t}`), sql`, `)})`;
 
 type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 type Conn = Db | Tx;
@@ -39,10 +46,10 @@ export function appendPageBlock(db: Conn, parentId: string, pageId: string) {
     .run();
 }
 
-/** Remove every page block in `parentId`'s content that points at `pageId`. */
+/** Remove every page/database block in `parentId`'s content that points at `pageId`. */
 export function removePageBlocks(db: Conn, parentId: string, pageId: string) {
   db.delete(blocks)
-    .where(and(eq(blocks.pageId, parentId), eq(blocks.type, 'page'), sql`json_extract(${blocks.props}, '$.pageId') = ${pageId}`))
+    .where(and(eq(blocks.pageId, parentId), inArray(blocks.type, OWNING_BLOCKS), sql`json_extract(${blocks.props}, '$.pageId') = ${pageId}`))
     .run();
 }
 
@@ -51,7 +58,7 @@ export function linkedChildren(db: Conn, parentId: string): Set<string> {
   const rows = db.all<{ id: string }>(sql`
     select distinct c.id from blocks b
     join pages c on c.id = json_extract(b.props, '$.pageId') and c.parent_id = b.page_id
-    where b.page_id = ${parentId} and b.type = 'page'
+    where b.page_id = ${parentId} and b.type in ${owning}
   `);
   return new Set(rows.map((r) => r.id));
 }
@@ -100,10 +107,11 @@ export function isSelfOrDescendant(db: Conn, ancestorId: string, id: string): bo
 export function backfillPageBlocks(db: Db) {
   const orphans = db.all<{ id: string; parent_id: string }>(sql`
     select c.id, c.parent_id from pages c
-    where c.parent_id is not null and c.archived_at is null
+    join pages p on p.id = c.parent_id and p.kind <> 'database'
+    where c.archived_at is null
       and not exists (
         select 1 from blocks b
-        where b.page_id = c.parent_id and b.type = 'page' and json_extract(b.props, '$.pageId') = c.id
+        where b.page_id = c.parent_id and b.type in ${owning} and json_extract(b.props, '$.pageId') = c.id
       )
     order by c.parent_id, c.order_key
   `);

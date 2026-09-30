@@ -45,10 +45,10 @@ export function Sidebar({ selectedId, onSelect, onSearch }) {
   const archivePage = useArchivePage();
   const qc = useQueryClient();
 
-  /** @param {string | null} parentId */
-  const addPage = (parentId) =>
+  /** @param {string | null} parentId @param {'page' | 'database'} [kind] */
+  const addPage = (parentId, kind = 'page') =>
     createPage.mutate(
-      { parentId },
+      { parentId, kind },
       {
         onSuccess: (page) => {
           if (parentId) setExpanded(parentId, true);
@@ -126,6 +126,10 @@ export function Sidebar({ selectedId, onSelect, onSearch }) {
         <PlusIcon />
         <span>New page</span>
       </button>
+      <button type="button" className={navButton} onClick={() => addPage(null, 'database')} disabled={createPage.isPending}>
+        <DatabaseIcon />
+        <span>New database</span>
+      </button>
 
       {moving && (
         <SearchDialog
@@ -183,6 +187,7 @@ function TreeItem({ page, depth, path, ctx }) {
   const title = page.title || 'Untitled';
   const { dnd } = ctx;
   const drop = dnd.drop?.id === page.id ? dnd.drop.where : null;
+  const isDatabase = page.kind === 'database';
 
   /** @param {import('react').DragEvent<HTMLDivElement>} e @returns {DropWhere} */
   const whereOf = (e) => {
@@ -232,26 +237,30 @@ function TreeItem({ page, depth, path, ctx }) {
             style={{ left: 6 + depth * 18 }}
           />
         )}
-        <button
-          type="button"
-          aria-label={expanded ? `Collapse ${title}` : `Expand ${title}`}
-          onClick={() => ctx.setExpanded(page.id, !expanded)}
-          className="flex size-5 shrink-0 items-center justify-center rounded text-muted hover:bg-white/10"
-        >
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.4"
-            strokeLinecap="round"
-            className="transition-transform"
-            style={{ transform: `rotate(${expanded ? 90 : 0}deg)`, opacity: page.hasChildren ? 1 : 0.45 }}
+        {isDatabase ? (
+          <span className="size-5 shrink-0" />
+        ) : (
+          <button
+            type="button"
+            aria-label={expanded ? `Collapse ${title}` : `Expand ${title}`}
+            onClick={() => ctx.setExpanded(page.id, !expanded)}
+            className="flex size-5 shrink-0 items-center justify-center rounded text-muted hover:bg-white/10"
           >
-            <path d="M9 6l6 6-6 6" />
-          </svg>
-        </button>
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.4"
+              strokeLinecap="round"
+              className="transition-transform"
+              style={{ transform: `rotate(${expanded ? 90 : 0}deg)`, opacity: page.hasChildren ? 1 : 0.45 }}
+            >
+              <path d="M9 6l6 6-6 6" />
+            </svg>
+          </button>
+        )}
 
         <button
           type="button"
@@ -259,7 +268,7 @@ function TreeItem({ page, depth, path, ctx }) {
           onClick={() => ctx.onSelect(page.id)}
           className="flex h-full min-w-0 flex-1 items-center gap-1.5 text-left"
         >
-          <PageIcon />
+          {isDatabase ? <DatabaseIcon /> : <PageIcon />}
           <span className={`truncate ${page.title ? '' : 'text-faint'}`}>
             <TitleText title={page.title} titleContent={page.titleContent} />
           </span>
@@ -283,18 +292,20 @@ function TreeItem({ page, depth, path, ctx }) {
           >
             <TrashIcon size={14} />
           </button>
-          <button
-            type="button"
-            aria-label={`Add a page inside ${title}`}
-            onClick={() => ctx.onAddChild(page.id)}
-            className="flex size-6 items-center justify-center rounded text-muted hover:bg-white/10 hover:text-fg"
-          >
-            <PlusIcon size={14} />
-          </button>
+          {!isDatabase && (
+            <button
+              type="button"
+              aria-label={`Add a page inside ${title}`}
+              onClick={() => ctx.onAddChild(page.id)}
+              className="flex size-6 items-center justify-center rounded text-muted hover:bg-white/10 hover:text-fg"
+            >
+              <PlusIcon size={14} />
+            </button>
+          )}
         </span>
       </div>
 
-      {expanded && <PageList parentId={page.id} depth={depth + 1} path={[...path, page.id]} ctx={ctx} />}
+      {expanded && !isDatabase && <PageList parentId={page.id} depth={depth + 1} path={[...path, page.id]} ctx={ctx} />}
     </li>
   );
 }
@@ -319,6 +330,8 @@ function useTreeDnd(setExpanded) {
     start: (page) => setDragging(page),
     over: (page, path, where) => {
       if (!dragging || page.id === dragging.id || path.includes(dragging.id)) return false;
+      // A database's children are its rows; pages don't go inside one.
+      if (where === 'inside' && page.kind === 'database') where = 'after';
       if (drop?.id !== page.id || drop.where !== where) {
         setDrop({ id: page.id, where });
         clearTimer();
@@ -424,6 +437,15 @@ function GearIcon() {
     <svg {...iconProps()}>
       <circle cx="12" cy="12" r="3" />
       <path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" />
+    </svg>
+  );
+}
+
+function DatabaseIcon() {
+  return (
+    <svg {...iconProps()} strokeWidth={1.8} className="shrink-0 opacity-75">
+      <rect x="3.5" y="4.5" width="17" height="15" rx="2" />
+      <path d="M3.5 9.5h17M9.5 9.5v10" />
     </svg>
   );
 }

@@ -126,3 +126,13 @@ describe('page blocks', () => {
     expect(byId(docToRows(doc, byId(pageRows)))).toEqual(byId(pageRows));
   });
 });
+
+describe('database blocks', () => {
+  it('round-trip with their database and view', () => {
+    /** @type {Block[]} */
+    const dbRows = [{ id: 'db', type: 'database', parentId: null, order: 'a0', props: { pageId: 'tasks', viewId: 'v1' }, content: [] }];
+    const doc = rowsToDoc(dbRows);
+    expect(doc.content?.[0]).toEqual({ type: 'databaseBlock', attrs: { id: 'db', indent: 0, pageId: 'tasks', viewId: 'v1' } });
+    expect(byId(docToRows(doc, byId(dbRows)))).toEqual(byId(dbRows));
+  });
+});

@@ -82,11 +82,11 @@ Tick boxes as they land. Anything unticked in a shipped milestone moves to the n
 
 ### v0.3 — "databases"
 
-- [ ] Typed properties: text, number, select, multi-select, date, checkbox, URL, person, file, created/edited time
-- [ ] Table view with sort, filter, group, hide/show columns
-- [ ] Board (kanban) view grouped by select property
+- [ ] Typed properties: text, number, select, multi-select, date, checkbox, URL, person, file, created/edited time — all but person + file landed (those wait on auth + uploads)
+- [ ] Table view with sort, filter, group, hide/show columns — all but group landed (plus column resize/reorder, manual row order)
+- [x] Board (kanban) view grouped by select property
 - [ ] List, gallery, calendar views
-- [ ] Inline databases embedded in a page
+- [x] Inline databases embedded in a page
 - [ ] Relations + rollups (count, sum, % complete, etc.) — core, not optional. Scope carefully: this is where it explodes.
 
 ### v0.4 — "not alone"
@@ -233,7 +233,9 @@ pages        (id, workspace_id, parent_page_id, title, icon, cover,
               created_by, created_at, updated_at)
 blocks       (id, page_id, parent_block_id, type, order_key,
               props_json, text_json, created_at, updated_at)
-page_props   (page_id, prop_id, value_json)                 -- database row values
+page_props   (page_id, prop_id, value_json, sort_text, sort_num)  -- database row values
+db_properties (id, database_id, name, type, config_json, order_key)
+db_views     (id, database_id, name, type, config_json, order_key)  -- table|board + sorts/filters/…
 ydocs        (page_id, state_vector BLOB, update_log BLOB)  -- CRDT persistence
 uploads      (id, workspace_id, page_id, filename, mime, size, path, created_at)
 sessions     (id, user_id, expires_at, user_agent)
@@ -278,6 +280,11 @@ This has to hold a decade of notes, not a demo. Design for a heavy 10-year works
 - **Uploads behind a storage interface** (`local` | `gcs`) from day one. Store
   content-hashed keys in the DB, not disk paths. Backups incremental (`gsutil rsync` /
   restic), not a full nightly tar.
+- **Databases (landed v0.3 slice 1):** a database is a page with `kind = 'database'`; its
+  child pages are its rows. Values live in `page_props` with typed `sort_text` /
+  `sort_num` columns derived on write and indexed per property; filters and sorts are
+  built into one SQL query. Views are saved per database and shared by every place that
+  shows it.
 - **Database props must be indexable.** `page_props.value_json` alone means full scans
   on filter/sort. Add typed columns (`value_text`, `value_num`, `value_date`) or SQLite
   generated columns + indexes. Filter/sort in SQL, never client-side over all rows.

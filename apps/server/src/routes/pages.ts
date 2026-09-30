@@ -6,7 +6,8 @@ import type { Db } from '../db/index.ts';
 import { liveLineage } from '../db/lineage.ts';
 import { appendPageBlock, isSelfOrDescendant, removePageBlocks } from '../db/pageTree.ts';
 import { indexTitle } from '../db/search.ts';
-import { pages } from '../db/schema.ts';
+import { createDefaultView } from './databases.ts';
+import { pageProps, pages } from '../db/schema.ts';
 
 const pageFields = {
   id: pages.id,
@@ -14,15 +15,24 @@ const pageFields = {
   title: pages.title,
   titleContent: pages.titleContent,
   icon: pages.icon,
+  kind: pages.kind,
   order: pages.orderKey,
   // Qualified by hand: drizzle renders ${pages.id} unqualified in single-table
-  // queries, which would bind to the subquery's own row.
-  hasChildren: sql<boolean>`exists (
+  // queries, which would bind to the subquery's own row. A database's children
+  // are its rows, which the sidebar never lists.
+  hasChildren: sql<boolean>`pages.kind <> 'database' and exists (
     select 1 from pages c where c.parent_id = pages.id and c.archived_at is null
   )`.mapWith(Boolean),
   createdAt: pages.createdAt,
   updatedAt: pages.updatedAt,
 };
+
+/** The database a page is a row of, if any. */
+export function rowDatabase(db: Db, pageId: string) {
+  return db.get<{ id: string; title: string }>(sql`
+    select d.id, d.title from pages p join pages d on d.id = p.parent_id and d.kind = 'database' where p.id = ${pageId}
+  `) ?? null;
+}
 
 export function pageRoutes(app: FastifyInstance, db: Db) {
   /** Children of one parent (root when `parent` is omitted). The sidebar loads lazily. */
@@ -42,7 +52,15 @@ export function pageRoutes(app: FastifyInstance, db: Db) {
     if (!lineage) return reply.code(404).send({ error: 'Page not found' });
 
     const page = db.select(pageFields).from(pages).where(eq(pages.id, req.params.id)).get();
-    return { page, ancestors: lineage.slice(0, -1) };
+    const database = rowDatabase(db, req.params.id);
+    // A row carries its property values (the database's schema is loaded separately).
+    const props = database
+      ? Object.fromEntries(
+          db.select({ propId: pageProps.propId, value: pageProps.value }).from(pageProps).where(eq(pageProps.pageId, req.params.id)).all()
+            .map((v) => [v.propId, v.value]),
+        )
+      : null;
+    return { page, ancestors: lineage.slice(0, -1), database, props };
   });
 
   app.post('/api/pages', async (req, reply) => {
@@ -50,11 +68,12 @@ export function pageRoutes(app: FastifyInstance, db: Db) {
 
     if (input.parentId) {
       const parent = db
-        .select({ id: pages.id })
+        .select({ id: pages.id, kind: pages.kind })
         .from(pages)
         .where(and(eq(pages.id, input.parentId), isNull(pages.archivedAt)))
         .get();
       if (!parent) return reply.code(404).send({ error: 'Parent page not found' });
+      if (parent.kind === 'database') return reply.code(400).send({ error: 'Add rows through /api/databases/:id/rows' });
     }
 
     const last = db
@@ -73,12 +92,14 @@ export function pageRoutes(app: FastifyInstance, db: Db) {
           id,
           parentId: input.parentId,
           title: input.title,
+          kind: input.kind,
           orderKey: orderBetween(last?.orderKey ?? null, null),
           createdAt: now,
           updatedAt: now,
         })
         .run();
       indexTitle(tx, id, input.title);
+      if (input.kind === 'database') createDefaultView(tx, id);
       // The sub-page shows up in its parent's content.
       if (input.parentId && input.block) appendPageBlock(tx, input.parentId, id);
     });
@@ -123,6 +144,9 @@ export function pageRoutes(app: FastifyInstance, db: Db) {
       if (!liveLineage(db, parentId)) return reply.code(404).send({ error: 'Target page not found' });
       if (isSelfOrDescendant(db, id, parentId)) return reply.code(400).send({ error: 'Can’t move a page inside itself' });
     }
+    // Rows stay in their database (reorder them through the database routes).
+    const intoDatabase = parentId && db.select({ kind: pages.kind }).from(pages).where(eq(pages.id, parentId)).get()?.kind === 'database';
+    if (intoDatabase || rowDatabase(db, id)) return reply.code(400).send({ error: 'Rows can’t move between databases and pages' });
 
     const inTarget = and(parentId ? eq(pages.parentId, parentId) : isNull(pages.parentId), isNull(pages.archivedAt), ne(pages.id, id));
     const refId = beforeId ?? afterId;

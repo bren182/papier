@@ -6,6 +6,10 @@ import { api, ApiError } from './client.js';
 /** @typedef {import('@papier/core').Page} Page */
 /** @typedef {{ id: string, title: string, titleContent: import('@papier/core').InlineContent | null, icon: string | null }} Crumb */
 /** @typedef {{ title?: string, titleContent?: import('@papier/core').InlineContent, icon?: string | null }} PagePatch */
+/**
+ * A page, its ancestors, and — for a database row — its database and values.
+ * @typedef {{ page: Page, ancestors: Crumb[], database: { id: string, title: string } | null, props: Record<string, unknown> | null }} PageDetail
+ */
 
 export const pageKeys = {
   all: ['pages'],
@@ -34,7 +38,7 @@ export function useChildPages(parentId, enabled = true) {
  */
 export const pageQuery = (id) => ({
   queryKey: pageKeys.detail(id),
-  queryFn: () => /** @type {Promise<{ page: Page, ancestors: Crumb[] }>} */ (api(`/pages/${id}`)),
+  queryFn: () => /** @type {Promise<PageDetail>} */ (api(`/pages/${id}`)),
   retry: (/** @type {number} */ count, /** @type {Error} */ err) => !(err instanceof ApiError && err.status === 404) && count < 2,
 });
 
@@ -46,7 +50,7 @@ export function usePage(id) {
 export function useCreatePage() {
   const qc = useQueryClient();
   return useMutation({
-    /** @param {{ parentId?: string | null, title?: string }} input */
+    /** @param {{ parentId?: string | null, title?: string, kind?: 'page' | 'database', block?: boolean }} input */
     mutationFn: (input) => /** @type {Promise<Page>} */ (api('/pages', { method: 'POST', body: input })),
     // The parent's own row changes too (hasChildren), so refresh every list.
     onSuccess: () => qc.invalidateQueries({ queryKey: ['pages', 'children'] }),

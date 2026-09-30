@@ -36,6 +36,13 @@
       "when": 1790744122710,
       "tag": "0004_search_fts",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1790749523871,
+      "tag": "0005_databases",
+      "breakpoints": true
     }
   ]
 }
