@@ -74,7 +74,8 @@ test('database templates: New uses the view’s default template', async ({ page
   const menu = page.locator('[data-popover]');
   await menu.getByText('Untitled template').hover();
   await menu.getByRole('button', { name: 'Set default' }).click();
-  await expect(menu.getByText('Default')).toBeVisible();
+  // Exact: while hovered, the row also shows “Unset default”.
+  await expect(menu.getByText('Default', { exact: true })).toBeVisible();
   await page.keyboard.press('Escape');
 
   await page.getByRole('button', { name: 'New', exact: true }).first().click();

@@ -12,6 +12,8 @@ import { PageBlock } from './PageBlock.js';
 import { PageMention } from './PageMention.js';
 import { ButtonBlock } from './ButtonBlock.jsx';
 import { DatabaseBlock } from './DatabaseBlock.jsx';
+import { LinkedDatabaseBlock } from './LinkedDatabaseBlock.jsx';
+import { WidgetBlock } from './WidgetBlock.jsx';
 import { BlockInputRules } from './inputRules.js';
 import { BlockKeymap } from './keymap.js';
 import { dateItems, mentionItems, pageLinkItems, slashItems } from './menuItems.js';
@@ -74,11 +76,12 @@ function placeholderFor(node) {
  * Everything the page body editor is made of.
  * @param {{ pages?: Partial<import('./PageBlock.js').PageBlockOptions>, databases?: Partial<import('./DatabaseBlock.jsx').DatabaseBlockOptions>,
  *   buttons?: Partial<import('./ButtonBlock.jsx').ButtonBlockOptions>, callouts?: Partial<import('./schema.js').CalloutOptions>,
+ *   widgets?: Partial<import('./WidgetBlock.jsx').WidgetBlockOptions>, linked?: Partial<import('./LinkedDatabaseBlock.jsx').LinkedDatabaseOptions>,
  *   links?: Partial<Pick<import('./PageMention.js').PageMentionOptions, 'searchPages' | 'recentPages'>>, template?: boolean }} [opts]
  *   page, database and button blocks' data and views, the callout icon picker, page search for inline links (none in tests);
  *   template: a template page
  */
-export function bodyExtensions({ pages = {}, databases = {}, buttons = {}, callouts = {}, links = {}, template = false } = {}) {
+export function bodyExtensions({ pages = {}, databases = {}, buttons = {}, callouts = {}, widgets = {}, linked = {}, links = {}, template = false } = {}) {
   return [
     TemplateMode.configure({ enabled: template }),
     PapierDocument,
@@ -87,6 +90,8 @@ export function bodyExtensions({ pages = {}, databases = {}, buttons = {}, callo
     PageBlock.configure(pages),
     DatabaseBlock.configure(databases),
     ButtonBlock.configure(buttons),
+    WidgetBlock.configure(widgets),
+    LinkedDatabaseBlock.configure(linked),
     DateNode,
     PageMention.configure({ watchPage: pages.watchPage ?? null, openPage: pages.openPage ?? null, ...links }),
     SoftBreak,

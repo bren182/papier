@@ -51,6 +51,9 @@ export const OP_LABELS = /** @type {Record<string, string>} */ ({
   after: 'is after',
   on_or_before: 'is on or before',
   on_or_after: 'is on or after',
+  within_next: 'is within the next',
+  within_past: 'is within the past',
+  anniversary_within: 'comes round within',
 });
 
 /** @param {number} [size] */

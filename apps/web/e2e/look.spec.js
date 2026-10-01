@@ -52,9 +52,10 @@ test('the command palette runs commands: new page, theme', async ({ page, reques
   await expect(page.getByRole('option', { name: 'New page' })).toBeVisible();
   await page.keyboard.press('Enter');
   await expect.poll(() => new URL(page.url()).searchParams.get('p')).not.toBe(id);
+  // The new page's title takes focus; let it, so it doesn't take it back from the palette.
+  await expect(page.getByLabel('Page title')).toBeFocused();
 
   await page.keyboard.press('Control+k');
-  // The new page's title takes focus first; wait for the palette's input.
   await expect(page.getByRole('combobox', { name: 'Search pages' })).toBeFocused();
   await page.keyboard.type('theme dusk');
   await page.keyboard.press('Enter');

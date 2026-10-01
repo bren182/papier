@@ -20,7 +20,9 @@ export const BLOCK_TYPES = /** @type {const} */ ([
   'divider',
   'page', // a sub-page (or a link to another page): props.pageId
   'database', // an inline database: props.pageId (the database page), props.viewId
-  'button', // a button: props.label, props.actions (row-less actions: add rows)
+  'button', // a button: props.label, props.actions (row-less actions: add rows), props.open (open the row it adds)
+  'widget', // a live widget: props.kind ('greeting' | 'recent' | 'favorites')
+  'linked_database', // a view of a database that lives elsewhere: props.databaseId, props.view ({ type, config }, this block's own)
 ]);
 
 export const BlockType = z.enum(BLOCK_TYPES);

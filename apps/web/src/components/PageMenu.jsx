@@ -1,6 +1,7 @@
 import { lazy, Suspense, useRef, useState } from 'react';
 import { useArchivePage, useMovePage } from '../api/pages.js';
 import { useDuplicatePage } from '../api/templates.js';
+import { useUpdateWorkspace, useWorkspace } from '../api/workspaces.js';
 import { usePageAction } from '../pageActions.js';
 import { menuItem, Popover } from './database/Popover.jsx';
 import { SearchDialog } from './SearchDialog.jsx';
@@ -10,7 +11,7 @@ import { SearchDialog } from './SearchDialog.jsx';
 const TransferDialog = lazy(() => import('./database/TransferDialog.jsx').then((m) => ({ default: m.TransferDialog })));
 
 /**
- * The open page's ⋯ menu: Duplicate, Save as template, Move to…, Delete —
+ * The open page's ⋯ menu: Duplicate, Set as Home, Save as template, Move to…, Delete —
  * and for a database row, Move / Copy to another database.
  * @param {{ page: Page, databaseId: string | null, onSelect: (id: string | null) => void }} props
  */
@@ -24,6 +25,9 @@ export function PageMenu({ page, databaseId, onSelect }) {
   const duplicate = useDuplicatePage();
   const archive = useArchivePage();
   const move = useMovePage();
+  const { workspace } = useWorkspace();
+  const setHome = useUpdateWorkspace();
+  const isHome = workspace?.homePageId === page.id;
   const close = () => setOpen(false);
   // The command palette's "Move to…".
   usePageAction('move', () => !isRow && !page.isTemplate && setMoving(true));
@@ -55,6 +59,18 @@ export function PageMenu({ page, databaseId, onSelect }) {
           >
             Duplicate
           </button>
+          {!isRow && !page.isTemplate && workspace && workspace.role !== 'viewer' && (
+            <button
+              type="button"
+              className={menuItem}
+              onClick={() => {
+                close();
+                setHome.mutate({ id: workspace.id, homePageId: isHome ? null : page.id });
+              }}
+            >
+              {isHome ? 'Remove as Home' : 'Set as Home'}
+            </button>
+          )}
           {!page.isTemplate && (
             <button
               type="button"

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { pageKeys, useArchivePage, useChildPages, useCreatePage, useFavorites, useMovePage, useSetFavorite } from '../api/pages.js';
 import { useRecentPages } from '../recentPages.js';
+import { ServerStatus } from './ServerStatus.jsx';
+import { WorkspaceMenu } from './WorkspaceMenu.jsx';
 import { SearchDialog } from './SearchDialog.jsx';
 import { TitleText } from './TitleText.jsx';
 import { SidebarIcon, StarIcon } from './Topbar.jsx';
@@ -40,11 +42,11 @@ const EXPAND_DELAY_MS = 600;
 const navButton = 'flex h-8 items-center gap-2.5 rounded-md px-2.5 text-left text-sm text-muted hover:bg-s-active hover:text-fg';
 
 /**
- * @param {{ selectedId: string | null, onSelect: (id: string | null) => void, onSearch: () => void,
+ * @param {{ selectedId: string | null, atHome: boolean, onSelect: (id: string | null) => void, onSearch: () => void,
  *   onTemplates: () => void, onShortcuts: () => void, onCollapse: () => void,
  *   onSettings: (anchor: HTMLElement) => void, onTrash: () => void }} props
  */
-export function Sidebar({ selectedId, onSelect, onSearch, onTemplates, onShortcuts, onCollapse, onSettings, onTrash }) {
+export function Sidebar({ selectedId, atHome, onSelect, onSearch, onTemplates, onShortcuts, onCollapse, onSettings, onTrash }) {
   const [isExpanded, setExpanded] = useExpandedSet();
   const createPage = useCreatePage();
   const archivePage = useArchivePage();
@@ -96,14 +98,8 @@ export function Sidebar({ selectedId, onSelect, onSearch, onTemplates, onShortcu
   return (
     <nav aria-label="Workspace" className="p-glass relative flex w-[260px] shrink-0 flex-col gap-0.5 border-r border-white/5 bg-s-sidebar px-2 py-3">
       <div className="group/head flex items-center">
-        <button
-          type="button"
-          onClick={() => onSelect(null)}
-          className="flex h-10 min-w-0 flex-1 items-center gap-2.5 rounded-md px-2.5 text-left hover:bg-s-active"
-        >
-          <span className="flex size-[22px] items-center justify-center rounded-[5px] bg-hover font-display text-sm text-fg-strong">P</span>
-          <span className="flex-1 text-sm font-semibold text-fg-strong">Papier</span>
-        </button>
+        <WorkspaceMenu onHome={() => onSelect(null)} />
+        <ServerStatus />
         <button
           type="button"
           aria-label="Hide sidebar"
@@ -115,6 +111,15 @@ export function Sidebar({ selectedId, onSelect, onSearch, onTemplates, onShortcu
         </button>
       </div>
 
+      <button
+        type="button"
+        onClick={() => onSelect(null)}
+        aria-current={atHome ? 'page' : undefined}
+        className={`${navButton} ${atHome ? 'bg-s-active text-fg-strong' : ''}`}
+      >
+        <HomeIcon />
+        <span>Home</span>
+      </button>
       <button type="button" onClick={onSearch} className={navButton}>
         <SearchIcon />
         <span className="flex-1">Search</span>
@@ -581,6 +586,14 @@ function MoveIcon() {
   return (
     <svg {...iconProps(14)}>
       <path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20" />
+    </svg>
+  );
+}
+
+function HomeIcon() {
+  return (
+    <svg {...iconProps()}>
+      <path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-4.5v-6h-5v6H5a1 1 0 0 1-1-1z" />
     </svg>
   );
 }

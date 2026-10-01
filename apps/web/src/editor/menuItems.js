@@ -23,7 +23,7 @@ const turnInto = (typeName, attrs = {}) => (editor, range) => {
   if (!block) return;
   const type = /** @type {any} */ (state.schema.nodes[typeName]);
   // Atoms (a divider, a button) get an empty line after them to keep typing in.
-  const atom = typeName === 'divider' || typeName === 'buttonBlock';
+  const atom = ['divider', 'buttonBlock', 'widgetBlock', 'linkedDatabase'].includes(typeName);
   if (block.node.content.size === 0 || block.node.type.name === 'divider') {
     setBlockType(tr, block.pos, type, attrs);
     if (atom) insertBlockAfter(tr, block.pos, 'paragraph');
@@ -169,7 +169,15 @@ const PAGE_ITEMS = [
   { title: 'Page', icon: '▤', aliases: ['subpage', 'new page', 'child'], group: 'Pages', subtext: 'A sub-page inside this one', run: newSubPage },
   { title: 'Database', icon: '▦', aliases: ['table', 'inline database', 'board', 'kanban'], group: 'Pages', subtext: 'A table or board, right here', run: newInlineDatabase },
   { title: 'Database page', icon: '▦', aliases: ['full page database', 'table page'], group: 'Pages', subtext: 'A database as a sub-page', run: newDatabasePage },
-  { title: 'Button', icon: '⏵', aliases: ['action', 'automation', 'log'], group: 'Pages', subtext: 'Adds rows to a database in one click', run: turnInto('buttonBlock') },
+  { title: 'Button', icon: '⏵', aliases: ['action', 'automation', 'log', 'quick capture'], group: 'Pages', subtext: 'Adds rows to a database in one click', run: turnInto('buttonBlock') },
+  { title: 'Linked view of a database', icon: '↗', aliases: ['linked database', 'view', 'existing database'], group: 'Pages', subtext: 'Show a database from elsewhere, with its own filters', run: turnInto('linkedDatabase') },
+];
+
+/** Live widgets (made for Home). @type {MenuItem[]} */
+const WIDGET_ITEMS = [
+  { title: 'Greeting', icon: '☀', aliases: ['hello', 'welcome', 'date', 'home'], group: 'Widgets', subtext: 'Hello, and today’s date', run: turnInto('widgetBlock', { kind: 'greeting' }) },
+  { title: 'Recent pages', icon: '◷', aliases: ['recent', 'history', 'home'], group: 'Widgets', subtext: 'What you opened lately', run: turnInto('widgetBlock', { kind: 'recent' }) },
+  { title: 'Favourites', icon: '★', aliases: ['favorites', 'starred', 'home'], group: 'Widgets', subtext: 'Your starred pages', run: turnInto('widgetBlock', { kind: 'favorites' }) },
 ];
 
 /** @type {MenuItem[]} */
@@ -198,7 +206,7 @@ const INLINE_ITEMS = [
  */
 export function slashItems(query) {
   const q = query.toLowerCase().trim();
-  const all = [...BLOCK_ITEMS, ...PAGE_ITEMS, ...INLINE_ITEMS];
+  const all = [...BLOCK_ITEMS, ...PAGE_ITEMS, ...WIDGET_ITEMS, ...INLINE_ITEMS];
   if (!q) return all;
   return all.filter((item) => item.title.toLowerCase().includes(q) || item.aliases?.some((a) => a.startsWith(q)));
 }

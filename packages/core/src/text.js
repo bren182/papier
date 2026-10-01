@@ -49,3 +49,6 @@ export function snippetParts(snippet) {
   if (run) parts.push({ text: run, hit });
   return parts;
 }
+
+/** Shortest password an account accepts (the server's `AuthSetup` / `PasswordChange`). */
+export const MIN_PASSWORD = 8;

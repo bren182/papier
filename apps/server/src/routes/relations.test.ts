@@ -4,13 +4,14 @@ import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../app.ts';
+import { testApp } from '../testing.ts';
 
 // Relations (links between rows, two-way by default) and rollups over them.
 
 let app: ReturnType<typeof buildApp>;
 
 beforeEach(() => {
-  app = buildApp({ logger: false });
+  app = testApp();
 });
 afterEach(async () => {
   await app.close();
@@ -116,7 +117,7 @@ describe('relations', () => {
     await app.close();
     const dir = mkdtempSync(join(tmpdir(), 'papier-relations-'));
     const file = join(dir, 'test.db');
-    app = buildApp({ dbPath: file, logger: false });
+    app = testApp({ dbPath: file });
     try {
       const s = await seed();
       await call('DELETE', `/api/pages/${s.alpha}`, undefined, 204);
@@ -130,7 +131,7 @@ describe('relations', () => {
     } finally {
       await app.close();
       rmSync(dir, { recursive: true, force: true });
-      app = buildApp({ logger: false });
+      app = testApp();
     }
   });
 

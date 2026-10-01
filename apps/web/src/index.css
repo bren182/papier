@@ -359,10 +359,16 @@ body {
   box-shadow: 0 0 0 2px var(--p-accent-soft);
   background: var(--p-accent-soft);
 }
-/* a selected inline database keeps the page background: just an outline */
-.papier-editor .ProseMirror-selectednode[data-type='databaseBlock'] {
+/* a selected inline or linked database keeps the page background: just an outline */
+.papier-editor .ProseMirror-selectednode:is([data-type='databaseBlock'], [data-type='linkedDatabase']) {
   background: none;
   box-shadow: 0 0 0 1px var(--p-line);
+}
+/* A page that starts with an atom (Home's greeting) opens with it selected:
+   only show that once you're actually editing. */
+.papier-editor:not(.ProseMirror-focused) .ProseMirror-selectednode:is([data-type='widgetBlock'], [data-type='linkedDatabase'], [data-type='buttonBlock']) {
+  background: none;
+  box-shadow: none;
 }
 
 /* placeholder: after the text column so it never fights the ::before markers */

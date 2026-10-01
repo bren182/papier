@@ -2,9 +2,9 @@ import { lazy, Suspense, useEffect, useImperativeHandle, useRef, useState } from
 import { QueryObserver, useQueryClient } from '@tanstack/react-query';
 import { EditorContent, useEditor } from '@tiptap/react';
 import { TextSelection } from '@tiptap/pm/state';
-import { api, ApiError } from '../api/client.js';
+import { api, ApiError, SIGNED_IN_EVENT } from '../api/client.js';
 import { pageQuery } from '../api/pages.js';
-import { useTargetBlock } from '../useSelectedPage.js';
+import { openPeek, useTargetBlock } from '../useSelectedPage.js';
 import { saveBlocks, usePageBlocks } from '../api/blocks.js';
 import { createBlockSaver } from './blockSaver.js';
 import { docToRows, rowsToDoc } from './convert.js';
@@ -12,6 +12,8 @@ import { bodyExtensions } from './extensions.js';
 import { FormatToolbar } from './FormatToolbar.jsx';
 import { SideMenu } from './SideMenu.jsx';
 import { InlineDatabase } from '../components/database/InlineDatabase.jsx';
+import { LinkedDatabase } from '../components/database/LinkedDatabase.jsx';
+import { HomeWidget } from '../components/HomeWidgets.jsx';
 import { ButtonBlockSettings } from '../components/database/ButtonBlockSettings.jsx';
 import { Popover } from '../components/database/Popover.jsx';
 import { useRunButton } from '../api/actions.js';
@@ -74,6 +76,8 @@ function Editor({ pageId, rows, onOpenPage, onEmptyChange, template, editorRef }
         saveContent: (id, rows) => saveBlocks(id, { upserts: rows, deletes: [] }),
       },
       databases: { View: InlineDatabase, openPage: (id) => onOpenPage(id) },
+      linked: { View: LinkedDatabase, openPage: (id) => onOpenPage(id) },
+      widgets: { View: HomeWidget, openPage: (id) => onOpenPage(id) },
       links: {
         searchPages: async (q) => {
           const res = /** @type {{ items: { page: import('./PageMention.js').PageHit }[] }} */ (await api(`/search?q=${encodeURIComponent(q)}&limit=8`));
@@ -88,6 +92,7 @@ function Editor({ pageId, rows, onOpenPage, onEmptyChange, template, editorRef }
           await saverRef.current?.flush();
           return runBlockRef.current(id);
         },
+        openRow: (id) => openPeek(id),
       },
     }),
     content: rowsToDoc(rows),
@@ -131,9 +136,12 @@ function Editor({ pageId, rows, onOpenPage, onEmptyChange, template, editorRef }
     const onHide = () => saver.flushOnExit();
     editor.on('update', onUpdate);
     window.addEventListener('pagehide', onHide);
+    // A save refused while signed out resends once signed back in.
+    window.addEventListener(SIGNED_IN_EVENT, onUpdate);
     return () => {
       editor.off('update', onUpdate);
       window.removeEventListener('pagehide', onHide);
+      window.removeEventListener(SIGNED_IN_EVENT, onUpdate);
       saver.flush();
       saver.dispose();
       if (saverRef.current === saver) saverRef.current = null;

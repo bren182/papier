@@ -4,6 +4,7 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { orderBetween } from '@papier/core';
+import { internalHeaders } from '../../auth/plugin.ts';
 import { textToValue } from '@papier/core/props';
 import { planDatabase, type DatabasePlan } from './database.ts';
 import { parseNotionDate } from './dates.ts';
@@ -42,7 +43,7 @@ export async function importNotion(app: FastifyInstance, source: ExportSource, o
   const rootPaths = new Set(roots.map((r) => r.path));
 
   const api = async <T>(method: 'POST' | 'PATCH' | 'GET', url: string, payload?: object, what = url): Promise<T> => {
-    const res = await app.inject({ method, url, payload });
+    const res = await app.inject({ method, url, payload, headers: internalHeaders(app) });
     if (res.statusCode >= 300) throw new Error(`${method} ${url} (${what}) → ${res.statusCode}: ${res.body}`);
     return res.json() as T;
   };

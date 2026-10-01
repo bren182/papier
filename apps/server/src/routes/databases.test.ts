@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app.ts';
+import { testApp } from '../testing.ts';
 import { openDb } from '../db/index.ts';
 import { backfillPageBlocks } from '../db/pageTree.ts';
 import { pages } from '../db/schema.ts';
@@ -9,7 +10,7 @@ import { pages } from '../db/schema.ts';
 let app: ReturnType<typeof buildApp>;
 
 beforeEach(() => {
-  app = buildApp({ logger: false });
+  app = testApp();
 });
 afterEach(async () => {
   await app.close();
@@ -133,6 +134,39 @@ describe('query', () => {
       expect(await titles(db.id, { sorts, tzOffset: 0 })).toEqual(['Yesterday', 'Today', 'Dec', 'Jan', 'Unknown']);
       // Non-date properties read it as ascending.
       expect(await titles(db.id, { sorts: [{ propId: 'title', dir: 'upcoming' }] })).toEqual(['Dec', 'Jan', 'Today', 'Unknown', 'Yesterday']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('filters dates relative to today: within next/past days, and anniversaries (birthdays)', async () => {
+    // Fake days in the past: the test session (made at the real time) must not have expired.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(new Date('2025-12-20T12:00:00Z'));
+      const db = await createDatabase('Birthdays');
+      const born = await addProp(db.id, { name: 'Born', type: 'date' });
+      await addRow(db.id, 'NewYear', { [born.id]: '1990-01-02' }); // 13 days away, across the year end
+      await addRow(db.id, 'Today', { [born.id]: '2001-12-20' });
+      await addRow(db.id, 'Passed', { [born.id]: '1985-12-19' }); // a year away
+      await addRow(db.id, 'Leap', { [born.id]: '2000-02-29' });
+      await addRow(db.id, 'Soon', { [born.id]: '2025-12-25' });
+      await addRow(db.id, 'Unknown');
+      const sorts = [{ propId: born.id, dir: 'upcoming' }];
+      const within = (op: string, value: unknown) => titles(db.id, { sorts, filters: [{ propId: born.id, op, value }] });
+
+      expect(await within('anniversary_within', 30)).toEqual(['Today', 'Soon', 'NewYear']);
+      expect(await within('anniversary_within', 0)).toEqual(['Today']);
+      // The dates themselves: only this year's 25 December is ahead; 26 years back reaches 2000 but not 1990.
+      expect(await within('within_next', 10)).toEqual(['Soon']);
+      expect(await within('within_past', 9500)).toEqual(['Today', 'Leap']);
+      // No usable number of days: the filter is ignored.
+      expect(await within('within_next', 'soon')).toHaveLength(6);
+
+      vi.setSystemTime(new Date('2026-02-20T12:00:00Z'));
+      // 29 Feb counts as 1 March in a common year: 9 days away.
+      expect(await within('anniversary_within', 9)).toEqual(['Leap']);
+      expect(await within('anniversary_within', 8)).toEqual([]);
     } finally {
       vi.useRealTimers();
     }

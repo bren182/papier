@@ -10,10 +10,12 @@ import { NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
  */
 
 /**
- * @typedef {{ label: string, actions: import('@papier/core/actions').Action[] }} ButtonSettings
+ * @typedef {{ label: string, actions: import('@papier/core/actions').Action[], open: boolean }} ButtonSettings
+ *   open: after a run, open the first row it added (quick capture)
  * @typedef {{
  *   Settings: import('react').ComponentType<ButtonSettings & { anchor: HTMLElement | null, onChange: (patch: Partial<ButtonSettings>) => void, onClose: () => void }> | null,
- *   onRun: ((blockId: string) => Promise<unknown> | void) | null,
+ *   onRun: ((blockId: string) => Promise<{ created: { id: string }[] } | null | void> | void) | null,
+ *   openRow: ((rowId: string) => void) | null,
  * }} ButtonBlockOptions
  */
 
@@ -35,7 +37,7 @@ export const ButtonBlock = Node.create({
   draggable: false,
 
   /** @returns {ButtonBlockOptions} */
-  addOptions: () => ({ Settings: null, onRun: null }),
+  addOptions: () => ({ Settings: null, onRun: null, openRow: null }),
 
   addAttributes: () => ({
     id: {
@@ -59,6 +61,11 @@ export const ButtonBlock = Node.create({
       default: [],
       parseHTML: parseActions,
       renderHTML: (/** @type {Record<string, any>} */ a) => (a.actions?.length ? { 'data-actions': JSON.stringify(a.actions) } : {}),
+    },
+    open: {
+      default: false,
+      parseHTML: (/** @type {HTMLElement} */ el) => el.hasAttribute('data-open'),
+      renderHTML: (/** @type {Record<string, any>} */ a) => (a.open ? { 'data-open': '' } : {}),
     },
   }),
 
@@ -90,8 +97,8 @@ export const ButtonBlock = Node.create({
 
 /** @param {import('@tiptap/react').ReactNodeViewProps} props */
 function ButtonBlockView({ node, updateAttributes, extension, editor }) {
-  const { Settings, onRun } = /** @type {ButtonBlockOptions} */ (extension.options);
-  const { id, label, actions } = /** @type {{ id: string | null, label: string, actions: ButtonSettings['actions'] }} */ (node.attrs);
+  const { Settings, onRun, openRow } = /** @type {ButtonBlockOptions} */ (extension.options);
+  const { id, label, actions, open: openNew } = /** @type {{ id: string | null } & ButtonSettings} */ (node.attrs);
   // A brand-new button opens its settings.
   const [open, setOpen] = useState(!label && !actions.length && editor.isEditable);
   const [busy, setBusy] = useState(false);
@@ -102,7 +109,9 @@ function ButtonBlockView({ node, updateAttributes, extension, editor }) {
     if (!id || !onRun || busy) return;
     setBusy(true);
     try {
-      await onRun(id);
+      const result = await onRun(id);
+      const created = result?.created[0];
+      if (openNew && created) openRow?.(created.id);
     } finally {
       setBusy(false);
     }
@@ -134,7 +143,7 @@ function ButtonBlockView({ node, updateAttributes, extension, editor }) {
           </button>
         )}
         {open && Settings && (
-          <Settings anchor={ref.current} label={label} actions={actions} onChange={(patch) => updateAttributes(patch)} onClose={() => setOpen(false)} />
+          <Settings anchor={ref.current} label={label} actions={actions} open={openNew} onChange={(patch) => updateAttributes(patch)} onClose={() => setOpen(false)} />
         )}
       </div>
     </NodeViewWrapper>

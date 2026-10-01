@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../app.ts';
+import { testApp } from '../testing.ts';
 
 // Buttons: actions stored as data, run on a row (button property) or row-less (button block).
 
 let app: ReturnType<typeof buildApp>;
 
 beforeEach(() => {
-  app = buildApp({ logger: false });
+  app = testApp();
 });
 afterEach(async () => {
   await app.close();

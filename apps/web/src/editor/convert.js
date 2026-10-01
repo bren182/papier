@@ -33,10 +33,12 @@ const TO_NODE = {
   page: 'pageBlock',
   database: 'databaseBlock',
   button: 'buttonBlock',
+  widget: 'widgetBlock',
+  linked_database: 'linkedDatabase',
 };
 
 /** Node types without inline content. */
-const ATOMS = new Set(['divider', 'pageBlock', 'databaseBlock', 'buttonBlock']);
+const ATOMS = new Set(['divider', 'pageBlock', 'databaseBlock', 'buttonBlock', 'widgetBlock', 'linkedDatabase']);
 
 /** @type {Record<string, BlockTypeName>} */
 const FROM_NODE = Object.fromEntries(Object.entries(TO_NODE).map(([ours, node]) => [node, /** @type {BlockTypeName} */ (ours)]));
@@ -51,7 +53,9 @@ const PROPS = {
   code: ['language'],
   page: ['pageId'],
   database: ['pageId', 'viewId'],
-  button: ['label', 'actions'],
+  button: ['label', 'actions', 'open'],
+  widget: ['kind'],
+  linked_database: ['databaseId', 'view'],
 };
 
 /** Inline styles, in the fixed order they're stored (keeps saves diff-stable). */

@@ -10,7 +10,7 @@ before planning a feature; tick its checkboxes when items land.
 pnpm dev                                   # server :3000 + web :5173 (Vite proxies /api)
 pnpm test                                  # Vitest, all packages
 pnpm test:e2e                              # Playwright (apps/web/e2e), own server + DB
-pnpm --filter @papier/web shot "/?p=<id>" out.png   # screenshot a running `pnpm dev`
+pnpm --filter @papier/web shot "/?p=<id>" out.png   # screenshot a running `pnpm dev` (PAPIER_EMAIL/PAPIER_PASSWORD sign in)
 pnpm typecheck                             # tsc on server (TS) and web (JSDoc via jsconfig)
 pnpm build
 pnpm --filter @papier/server db:generate   # drizzle-kit: new SQL migration from schema.ts
@@ -55,6 +55,21 @@ TipTap v3 with our own schema, not a kit. Lazy-loaded as one chunk (`editor/inde
   geometric (drag-and-drop, handles, menus) goes in Playwright: `apps/web/e2e/`, specs
   seed pages via the API (`createPage` in `helpers.js`) and compare `outline(page)`.
   e2e boots its own server (:3100, `:memory:` DB) and Vite (:5174) — no dev DB touched.
+
+## Auth (`apps/server/src/auth/`, `routes/auth.ts`, `apps/web/src/components/AuthGate.jsx`)
+
+Local accounts (email + scrypt password, `auth/password.ts`); OAuth later links on a verified email.
+`authPlugin` (an `onRequest` hook) signs in every `/api` request from the `papier_session` cookie
+(browser/PWA) or `Authorization: Bearer` (desktop, `login { client: 'desktop' }`) and sets `req.user`;
+only health, `auth/state`, `auth/setup` and `auth/login` are public. **Every non-GET needs `X-Papier: 1`**
+(CSRF; `api()` sends it). Sessions store the token's sha256 and slide 30 days. The first account needs
+the **setup token** (`PAPIER_SETUP_TOKEN`, else random and logged at boot while no user exists) and
+owns the `default` workspace, which migration 0011 put every existing page in (`pages.workspace_id`).
+Recovery CLI: `pnpm --filter @papier/server user list|add|reset-password --db <file>`. In-process
+callers (the Notion importer) use `internalHeaders(app)`. Route tests use `testApp()` (`src/testing.ts`),
+whose `inject` is signed in as an owner; e2e signs in once in `e2e/global-setup.js` (storage state).
+Client: `AuthGate` shows `AuthScreen` (sign-in / setup) or the app; a 401 fires `papier:unauthorized`
+and keeps the app mounted under a sign-in dialog, then `papier:signed-in` makes autosave resend.
 
 ## Page hierarchy (`apps/server/src/db/pageTree.ts`)
 
@@ -275,6 +290,7 @@ tests use synthetic fixtures only.
   put block classes/data attributes on it via the `className`/`attrs` options, so the
   block stays a direct `.papier-editor > .pb` child.
 - e2e ports are overridable (`E2E_API_PORT`, `E2E_WEB_PORT`) when 3100/5174 are taken.
+- Git Bash turns a bare `/` argument into `C:/Program Files/Git/`: run `shot /` with `MSYS_NO_PATHCONV=1`.
 
 ## Workflow
 

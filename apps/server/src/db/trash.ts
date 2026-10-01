@@ -4,7 +4,7 @@ import type { Db } from './index.ts';
 import { liveLineage, type Crumb } from './lineage.ts';
 import { appendPageBlock, OWNING_BLOCKS } from './pageTree.ts';
 import type { Tx } from './props.ts';
-import { automations, blocks, dbProperties, dbViews, pageProps, pages, propertyLinks, searchRows } from './schema.ts';
+import { automations, blocks, dbProperties, dbViews, pageProps, pages, propertyLinks, searchRows, workspaces } from './schema.ts';
 
 /**
  * The trash. Trashing sets `archived_at` on one page; everything under it is
@@ -137,6 +137,7 @@ export function purgePages(tx: Tx, rootIds: string[]) {
     tx.delete(dbViews).where(inArray(dbViews.databaseId, chunk)).run();
     // Values, links and search rows of these properties cascade.
     tx.delete(dbProperties).where(inArray(dbProperties.databaseId, chunk)).run();
+    tx.update(workspaces).set({ homePageId: null }).where(inArray(workspaces.homePageId, chunk)).run();
   }
   // Deepest first, so each page goes after its children.
   for (const id of ids) tx.delete(pages).where(eq(pages.id, id)).run();

@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../app.ts';
+import { testApp } from '../testing.ts';
 import { MAX_PAGES } from '../db/duplicate.ts';
 
 // Duplicate, Save as template, Use template — one deep-copy engine.
 
 let app: ReturnType<typeof buildApp>;
 beforeEach(() => {
-  app = buildApp({ logger: false });
+  app = testApp();
 });
 afterEach(async () => {
   await app.close();

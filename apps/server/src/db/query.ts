@@ -1,5 +1,5 @@
 import { sql, type SQL } from 'drizzle-orm';
-import { DYNAMIC_TODAY, filterOps, FormulaError, TITLE_PROP, VALUELESS_OPS, type Filter, type Sort } from '@papier/core';
+import { DYNAMIC_TODAY, filterOps, FormulaError, RELATIVE_DATE_OPS, TITLE_PROP, VALUELESS_OPS, type Filter, type Sort } from '@papier/core';
 import { compileFormula } from './formula.ts';
 import { properties, type Conn, type Prop } from './props.ts';
 
@@ -49,7 +49,7 @@ export function filterSql(ctx: Ctx, f: Filter): SQL | null {
     if (r.empty) return f.op === 'is_empty' ? r.empty : sql`not ${r.empty}`;
     if (f.op === 'is_empty') return sql`${r.expr} is null`;
     if (f.op === 'is_not_empty') return sql`${r.expr} is not null`;
-    if (r.result === 'date') return compareDate(r.expr, f.op, String(v));
+    if (r.result === 'date') return compareDate(r.expr, f.op, v, localToday(ctx.tzOffset));
     // Percentages are stored 0–1 and filtered as shown (0–100).
     return compareNum(r.result === 'percent' ? sql`${r.expr} * 100` : r.expr, f.op, Number(v));
   }
@@ -60,7 +60,7 @@ export function filterSql(ctx: Ctx, f: Filter): SQL | null {
     if (f.op === 'is_empty') return sql`${fx.sql} is null`;
     if (f.op === 'is_not_empty') return sql`${fx.sql} is not null`;
     if (fx.type === 'number') return compareNum(fx.sql, f.op, Number(v));
-    if (fx.type === 'date') return compareDate(fx.sql, f.op, String(v));
+    if (fx.type === 'date') return compareDate(fx.sql, f.op, v, localToday(ctx.tzOffset));
     if (fx.type === 'boolean') return v === true || v === 'true' ? sql`${fx.sql} = 1` : sql`coalesce(${fx.sql}, 0) = 0`;
     const text = String(v ?? '').toLowerCase();
     const col = sql`lower(${fx.sql})`;
@@ -75,7 +75,7 @@ export function filterSql(ctx: Ctx, f: Filter): SQL | null {
 
   if (type === 'created_time' || type === 'edited_time') {
     const day = dayOf(type === 'created_time' ? 'created_at' : 'updated_at', ctx.tzOffset);
-    return compareDate(day, f.op, String(v));
+    return compareDate(day, f.op, v, localToday(ctx.tzOffset));
   }
 
   if (type === 'title' || type === 'text' || type === 'url') {
@@ -106,7 +106,7 @@ export function filterSql(ctx: Ctx, f: Filter): SQL | null {
       return f.op === 'contains' ? has : sql`not ${has}`;
     }
     case 'date':
-      return compareDate(sql`${a}.sort_text`, f.op, String(v));
+      return compareDate(sql`${a}.sort_text`, f.op, v, localToday(ctx.tzOffset));
     case 'checkbox':
       return v === true || v === 'true' ? sql`${a}.sort_num = 1` : sql`${a}.sort_num is null`;
   }
@@ -129,7 +129,26 @@ function compareNum(col: SQL, op: string, n: number): SQL | null {
 /** YYYY-MM-DD in the viewer's timezone (`Date#getTimezoneOffset()` minutes). */
 export const localToday = (tzOffset: number, now = Date.now()) => new Date(now - tzOffset * 60_000).toISOString().slice(0, 10);
 
-function compareDate(col: SQL, op: string, day: string): SQL | null {
+/**
+ * Date predicates. `within_next` / `within_past` take a number of days around
+ * `today`; `anniversary_within` matches dates whose next yearly recurrence (from
+ * today) is at most that many days away — birthdays. A 29 February counts as
+ * 1 March in other years (SQLite normalises the invalid date).
+ */
+function compareDate(col: SQL, op: string, value: unknown, today: string): SQL | null {
+  if (RELATIVE_DATE_OPS.has(op)) {
+    const days = Number(value);
+    if (!Number.isInteger(days) || days < 0 || days > 36_600) return null;
+    // Bound as text: better-sqlite3 binds numbers as REAL ('+30.0 days' still works, but keep it exact).
+    const n = String(days);
+    if (op === 'within_next') return sql`(${col} >= ${today} and ${col} <= date(${today}, '+' || ${n} || ' days'))`;
+    if (op === 'within_past') return sql`(${col} <= ${today} and ${col} >= date(${today}, '-' || ${n} || ' days'))`;
+    const md = sql`substr(${col}, 6, 5)`;
+    const year = today.slice(0, 4);
+    const next = sql`(case when ${md} >= ${today.slice(5)} then ${year} else ${String(Number(year) + 1)} end || '-' || ${md})`;
+    return sql`(${col} is not null and julianday(${next}) - julianday(${today}) <= ${days})`;
+  }
+  const day = String(value);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
   const ops: Record<string, SQL> = {
     is: sql`${col} = ${day}`,

@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../app.ts';
+import { testApp } from '../testing.ts';
 
 // Many rows at once (fill down, bulk set, bulk delete) and moving/copying rows between databases.
 
 let app: ReturnType<typeof buildApp>;
 
 beforeEach(() => {
-  app = buildApp({ logger: false });
+  app = testApp();
 });
 afterEach(async () => {
   await app.close();

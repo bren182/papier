@@ -8,7 +8,7 @@ import { field, menuLabel, Popover } from './Popover.jsx';
  * @param {import('../../editor/ButtonBlock.jsx').ButtonSettings & { anchor: HTMLElement | null,
  *   onChange: (patch: Partial<import('../../editor/ButtonBlock.jsx').ButtonSettings>) => void, onClose: () => void }} props
  */
-export function ButtonBlockSettings({ anchor, label, actions, onChange, onClose }) {
+export function ButtonBlockSettings({ anchor, label, actions, open, onChange, onClose }) {
   return (
     <Popover anchor={anchor} onClose={onClose} width={340}>
       <div className="flex flex-col gap-1 p-1">
@@ -23,6 +23,12 @@ export function ButtonBlockSettings({ anchor, label, actions, onChange, onClose 
           className={field}
         />
         <ActionsEditor actions={actions} properties={[]} rowless onChange={(next) => onChange({ actions: next })} />
+        {actions.some((a) => a.type === 'add_row') && (
+          <label className="flex items-center gap-2 px-1 pt-1 text-[13px] text-fg">
+            <input type="checkbox" checked={open} onChange={(e) => onChange({ open: e.target.checked })} className="accent-[var(--p-accent)]" />
+            Open the new row
+          </label>
+        )}
       </div>
     </Popover>
   );

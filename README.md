@@ -59,7 +59,7 @@ Tick boxes as they land. Anything unticked in a shipped milestone moves to the n
 
 ### v0.1 — "it holds my notes" (MVP)
 
-- [ ] Auth: single owner account, email + password, session cookie
+- [x] Auth: single owner account, email + password, session cookie (setup token on first run, bearer tokens for the desktop app, `user` CLI for recovery)
 - [x] Page tree sidebar: create / rename / nest / drag-reorder / delete to trash
 - [x] Block editor: paragraph, H1–H3, bullet + numbered list, todo, quote, code, divider
 - [x] Markdown-style input rules (`# `, `- `, `[] `, ` ``` `) and `/` slash menu

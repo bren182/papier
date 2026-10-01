@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../app.ts';
+import { testApp } from '../testing.ts';
 import { localToday } from '../db/query.ts';
 
 // Formula properties: parsed and checked in core, compiled to SQL here.
@@ -7,7 +8,7 @@ import { localToday } from '../db/query.ts';
 let app: ReturnType<typeof buildApp>;
 
 beforeEach(() => {
-  app = buildApp({ logger: false });
+  app = testApp();
 });
 afterEach(async () => {
   await app.close();

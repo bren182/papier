@@ -10,14 +10,34 @@ import { Toolbar } from './Toolbar.jsx';
 
 /** @typedef {import('../../api/databases.js').View} View */
 
+/** Every ViewConfig key, empty: what a linked view's partial config is read over. */
+const EMPTY_CONFIG = /** @type {import('../../api/databases.js').ViewConfig} */ ({
+  sorts: [],
+  filters: [],
+  hidden: [],
+  widths: {},
+  propOrder: [],
+  groupBy: null,
+  hideEmptyGroups: false,
+  dateBy: null,
+  template: null,
+});
+
+/**
+ * @typedef {{ view: { type: string, config: Partial<import('../../api/databases.js').ViewConfig> } | null,
+ *   onConfig: (view: { type: string, config: import('../../api/databases.js').ViewConfig }) => void }} LocalView
+ *   A linked database block's own view: not one of the database's saved views (no tabs, never saved there).
+ */
+
 /**
  * One database through one of its saved views: tabs, toolbar, table or board.
  * Full-page databases keep the chosen view locally; an inline database block
- * stores it in the block (`viewId` / `onViewChange`).
+ * stores it in the block (`viewId` / `onViewChange`). A linked database block
+ * brings its own view instead (`local`).
  * @param {{ databaseId: string, inline?: boolean, viewId?: string | null, onViewChange?: (id: string) => void,
- *   onOpenRow: (id: string, ids: string[]) => void, header?: import('react').ReactNode }} props
+ *   local?: LocalView, onOpenRow: (id: string, ids: string[]) => void, header?: import('react').ReactNode }} props
  */
-export function DatabaseView({ databaseId, inline = false, viewId, onViewChange, onOpenRow, header }) {
+export function DatabaseView({ databaseId, inline = false, viewId, onViewChange, local, onOpenRow, header }) {
   const { data, isPending, isError } = useDatabase(databaseId);
   const m = useDatabaseMutations(databaseId);
   const [localViewId, setLocalViewId] = useState(/** @type {string | null} */ (null));
@@ -31,7 +51,16 @@ export function DatabaseView({ databaseId, inline = false, viewId, onViewChange,
 
   const views = data?.views ?? [];
   const chosen = viewId ?? localViewId;
-  const view = views.find((v) => v.id === chosen) ?? views[0];
+  /** @type {View | undefined} */
+  const view = local
+    ? {
+        id: `linked:${databaseId}`,
+        name: 'Linked view',
+        type: /** @type {View['type']} */ (local.view?.type ?? 'table'),
+        config: { ...EMPTY_CONFIG, ...local.view?.config },
+        order: '',
+      }
+    : (views.find((v) => v.id === chosen) ?? views[0]);
   /** @param {string} id */
   const choose = (id) => (onViewChange ? onViewChange(id) : setLocalViewId(id));
 
@@ -46,7 +75,8 @@ export function DatabaseView({ databaseId, inline = false, viewId, onViewChange,
           inline,
           openRow,
           /** @param {Partial<import('../../api/databases.js').ViewConfig>} patch */
-          setConfig: (patch) => m.updateView(view, { config: { ...view.config, ...patch } }),
+          setConfig: (patch) =>
+            local ? local.onConfig({ type: view.type, config: { ...view.config, ...patch } }) : m.updateView(view, { config: { ...view.config, ...patch } }),
           /** @param {import('./context.js').Property} prop @param {string} name */
           addOption: async (prop, name) => {
             const updated = await m.updateProperty(prop.id, { config: { ...prop.config, options: [...(prop.config.options ?? []), { name }] } });
@@ -76,7 +106,7 @@ export function DatabaseView({ databaseId, inline = false, viewId, onViewChange,
       <div ref={root} className="flex flex-col gap-2" data-database={databaseId}>
         {header}
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-1">
-          <ViewTabs views={views} active={view} onChoose={choose} />
+          {local ? <span /> : <ViewTabs views={views} active={view} onChoose={choose} />}
           <Toolbar onNew={newRow} />
         </div>
         {view.type === 'board' ? (

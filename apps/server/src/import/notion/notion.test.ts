@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../../app.ts';
+import { testApp } from '../../testing.ts';
 import { parseCsv } from './csv.ts';
 import { inferColumn } from './database.ts';
 import { parseNotionDate } from './dates.ts';
@@ -132,7 +133,7 @@ describe('column types', () => {
 
 let app: ReturnType<typeof buildApp>;
 beforeEach(() => {
-  app = buildApp({ logger: false });
+  app = testApp();
 });
 afterEach(async () => {
   await app.close();

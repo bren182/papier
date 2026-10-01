@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { DYNAMIC_TODAY, filterOps, rollupResultType, VALUELESS_OPS } from '@papier/core/props';
+import { DYNAMIC_TODAY, filterOps, RELATIVE_DATE_OPS, rollupResultType, VALUELESS_OPS } from '@papier/core/props';
 import { useAutomations } from '../../api/automations.js';
 import { AutomationsPanel } from './AutomationsPanel.jsx';
 import { formatDateLong } from '../../editor/dates.js';
@@ -298,7 +298,17 @@ export function ConditionRow({ filter: f, properties, onChange, onRemove }) {
           onChange({ propId, op: filterOps(next ?? { type: 'text' })[0] ?? 'is', value: next?.type === 'checkbox' ? true : undefined });
         }}
       />
-      <select value={f.op} aria-label="Condition" onChange={(e) => onChange({ op: e.target.value })} className={`${field} w-[130px] max-w-[130px] shrink-0`}>
+      <select
+        value={f.op}
+        aria-label="Condition"
+        onChange={(e) => {
+          const op = e.target.value;
+          // Relative ops count days; switching to or from one resets the value.
+          const relative = RELATIVE_DATE_OPS.has(op);
+          onChange(relative === RELATIVE_DATE_OPS.has(f.op) ? { op } : { op, value: relative ? 30 : undefined });
+        }}
+        className={`${field} w-[130px] max-w-[130px] shrink-0`}
+      >
         {ops.map((op) => (
           <option key={op} value={op}>
             {OP_LABELS[op]}
@@ -306,9 +316,39 @@ export function ConditionRow({ filter: f, properties, onChange, onRemove }) {
         ))}
       </select>
       {/* Keyed by property: a new property starts a fresh value box. */}
-      {!VALUELESS_OPS.has(f.op) && <FilterValue key={f.propId} prop={prop} value={f.value} onChange={(value) => onChange({ value })} />}
+      {RELATIVE_DATE_OPS.has(f.op) ? (
+        <DaysValue key={f.propId} value={f.value} onChange={(value) => onChange({ value })} />
+      ) : (
+        !VALUELESS_OPS.has(f.op) && <FilterValue key={f.propId} prop={prop} value={f.value} onChange={(value) => onChange({ value })} />
+      )}
       {onRemove && <RemoveButton label="Remove filter" onClick={onRemove} />}
     </div>
+  );
+}
+
+/**
+ * A number of days, for the relative date operators ("within the next 30 days").
+ * @param {{ value: unknown, onChange: (v: number | null) => void }} props
+ */
+function DaysValue({ value, onChange }) {
+  const [text, setText] = useState(typeof value === 'number' ? String(value) : '');
+  return (
+    <span className="flex min-w-0 flex-1 items-center gap-1.5">
+      <input
+        type="number"
+        min={0}
+        step={1}
+        value={text}
+        aria-label="Days"
+        onChange={(e) => {
+          setText(e.target.value);
+          const n = Number(e.target.value);
+          onChange(e.target.value !== '' && Number.isInteger(n) && n >= 0 ? n : null);
+        }}
+        className={`${field} w-16 min-w-0`}
+      />
+      <span className="shrink-0 text-[13px] text-muted">days</span>
+    </span>
   );
 }
 

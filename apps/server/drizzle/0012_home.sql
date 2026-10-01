@@ -1,0 +1,1 @@
+ALTER TABLE `workspaces` ADD `home_page_id` text;

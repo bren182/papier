@@ -88,10 +88,10 @@ export const FILTER_OPS = {
   number: ['=', '!=', '>', '<', '>=', '<=', 'is_empty', 'is_not_empty'],
   select: ['is', 'is_not', 'is_empty', 'is_not_empty'],
   multi_select: ['contains', 'not_contains', 'is_empty', 'is_not_empty'],
-  date: ['is', 'before', 'after', 'on_or_before', 'on_or_after', 'is_empty', 'is_not_empty'],
+  date: ['is', 'before', 'after', 'on_or_before', 'on_or_after', 'within_next', 'within_past', 'anniversary_within', 'is_empty', 'is_not_empty'],
   checkbox: ['is'],
-  created_time: ['is', 'before', 'after', 'on_or_before', 'on_or_after'],
-  edited_time: ['is', 'before', 'after', 'on_or_before', 'on_or_after'],
+  created_time: ['is', 'before', 'after', 'on_or_before', 'on_or_after', 'within_past'],
+  edited_time: ['is', 'before', 'after', 'on_or_before', 'on_or_after', 'within_past'],
   relation: ['contains', 'not_contains', 'is_empty', 'is_not_empty'],
   rollup_list: ['is_empty', 'is_not_empty'],
 };
@@ -122,6 +122,13 @@ export const DYNAMIC_TODAY = '@today';
 
 /** Operators that take no value. */
 export const VALUELESS_OPS = new Set(['is_empty', 'is_not_empty']);
+
+/**
+ * Date operators whose value is a number of days from the viewer's today:
+ * `within_next` / `within_past` (the date itself), `anniversary_within` (its next
+ * yearly recurrence — birthdays).
+ */
+export const RELATIVE_DATE_OPS = new Set(['within_next', 'within_past', 'anniversary_within']);
 
 /**
  * @typedef {{ id: string, name: string }} SelectOption

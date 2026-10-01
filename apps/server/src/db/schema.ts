@@ -1,6 +1,9 @@
 import { sql } from 'drizzle-orm';
 import { index, integer, primaryKey, real, sqliteTable, text, uniqueIndex, type AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 
+/** The workspace migration 0011 created to adopt every existing page. */
+export const DEFAULT_WORKSPACE_ID = 'default';
+
 export const pages = sqliteTable(
   'pages',
   {
@@ -25,10 +28,16 @@ export const pages = sqliteTable(
     favoriteKey: text('favorite_key'),
     /** Set when moved to trash (ms since epoch). Descendants are hidden with it. */
     archivedAt: integer('archived_at'),
+    /**
+     * The workspace this page lives in: denormalised onto every page (rows too),
+     * always equal to its parent's. No FK clause: SQLite can't add one with a
+     * non-null default, so the invariant is kept in code.
+     */
+    workspaceId: text('workspace_id').notNull().default(DEFAULT_WORKSPACE_ID),
     createdAt: integer('created_at').notNull(),
     updatedAt: integer('updated_at').notNull(),
   },
-  (t) => [index('pages_parent_order').on(t.parentId, t.orderKey)],
+  (t) => [index('pages_workspace_parent_order').on(t.workspaceId, t.parentId, t.orderKey), index('pages_parent_order').on(t.parentId, t.orderKey)],
 );
 
 export const blocks = sqliteTable(
@@ -194,4 +203,62 @@ export const dbViews = sqliteTable(
     createdAt: integer('created_at').notNull(),
   },
   (t) => [index('db_views_database_order').on(t.databaseId, t.orderKey)],
+);
+
+export const users = sqliteTable('users', {
+  id: text('id').primaryKey(),
+  /** Lowercased; the login name. OAuth providers will link on a verified email. */
+  email: text('email').notNull().unique(),
+  name: text('name').notNull(),
+  /** scrypt, see src/auth/password.ts. */
+  passwordHash: text('password_hash').notNull(),
+  /** Deployment admin (the account created at setup). */
+  isAdmin: integer('is_admin', { mode: 'boolean' }).notNull().default(false),
+  createdAt: integer('created_at').notNull(),
+});
+
+/**
+ * Login sessions. `id` is the sha256 of the token the client holds, so a leaked
+ * database holds no live sessions. `kind`: 'cookie' (browser, PWA) or 'token'
+ * (desktop app, `Authorization: Bearer`).
+ */
+export const sessions = sqliteTable(
+  'sessions',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    kind: text('kind').notNull(),
+    userAgent: text('user_agent'),
+    createdAt: integer('created_at').notNull(),
+    lastSeenAt: integer('last_seen_at').notNull(),
+    expiresAt: integer('expires_at').notNull(),
+  },
+  (t) => [index('sessions_user').on(t.userId)],
+);
+
+export const workspaces = sqliteTable('workspaces', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  icon: text('icon'),
+  /** The page you land on (`/` with no `?p`); null = none. Cleared when that page is purged. */
+  homePageId: text('home_page_id'),
+  createdAt: integer('created_at').notNull(),
+});
+
+/** Workspace membership: role is 'owner' | 'editor' | 'viewer'. */
+export const members = sqliteTable(
+  'members',
+  {
+    workspaceId: text('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    role: text('role').notNull(),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.workspaceId, t.userId] }), index('members_user').on(t.userId)],
 );

@@ -1,3 +1,4 @@
+export * from './auth.js';
 export * from './blocks.js';
 export * from './databases.js';
 export * from './pages.js';

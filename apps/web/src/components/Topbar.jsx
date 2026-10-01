@@ -1,11 +1,9 @@
-import { useEffect, useState } from 'react';
 import { usePage, useSetFavorite } from '../api/pages.js';
 import { PageMenu } from './PageMenu.jsx';
+import { ServerStatus } from './ServerStatus.jsx';
 import { TitleText } from './TitleText.jsx';
 
 /** @typedef {import('../usePrefs.js').Prefs} Prefs */
-
-const toggle = 'h-7 rounded-md border border-white/10 bg-white/[0.04] px-2.5 text-[13px] text-fg hover:bg-white/[0.08]';
 
 /**
  * @param {{
@@ -16,8 +14,6 @@ const toggle = 'h-7 rounded-md border border-white/10 bg-white/[0.04] px-2.5 tex
  * }} props
  */
 export function Topbar({ selectedId, onSelect, prefs, onChange }) {
-  const online = useServerHealth();
-  const ambient = prefs.mode === 'ambient';
   const { data } = usePage(selectedId);
 
   return (
@@ -60,55 +56,12 @@ export function Topbar({ selectedId, onSelect, prefs, onChange }) {
           })}
       </nav>
 
-      <span className="flex items-center gap-1.5 text-[13px] text-muted" title="API server status">
-        <span className={`size-2 rounded-full ${online ? 'bg-accent' : 'bg-faint'}`} />
-        {online === null ? 'Connecting…' : online ? 'Server online' : 'Server offline'}
-      </span>
-
-      <button type="button" className={toggle} onClick={() => onChange({ mode: ambient ? 'grayscale' : 'ambient' })}>
-        {ambient ? 'Grayscale' : 'Ambient'}
-      </button>
-      {ambient && (
-        <button
-          type="button"
-          className={toggle}
-          aria-pressed={prefs.glass === 'clear'}
-          onClick={() => onChange({ glass: prefs.glass === 'clear' ? 'frosted' : 'clear' })}
-        >
-          {prefs.glass === 'clear' ? 'Frosted glass' : 'Clear glass'}
-        </button>
-      )}
-      <button type="button" className={toggle} onClick={() => onChange({ motion: !prefs.motion })}>
-        {prefs.motion ? 'Pause motion' : 'Play motion'}
-      </button>
+      {/* With the sidebar hidden, its server status (offline only) shows here. */}
+      {!prefs.sidebar && <ServerStatus />}
       {data && !data.page.isTemplate && !data.inTemplate && <FavoriteButton page={data.page} />}
       {data && <PageMenu page={data.page} databaseId={data.database?.id ?? null} onSelect={onSelect} />}
     </header>
   );
-}
-
-/** @returns {boolean | null} null while the first check is in flight */
-function useServerHealth() {
-  const [online, setOnline] = useState(/** @type {boolean | null} */ (null));
-
-  useEffect(() => {
-    let cancelled = false;
-    const check = () =>
-      fetch('/api/health')
-        .then((res) => res.ok)
-        .catch(() => false)
-        .then((ok) => {
-          if (!cancelled) setOnline(ok);
-        });
-    check();
-    const id = setInterval(check, 15_000);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
-  }, []);
-
-  return online;
 }
 
 /** A panel-with-sidebar glyph for the show/hide sidebar buttons. */

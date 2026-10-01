@@ -307,6 +307,26 @@ describe('page blocks', () => {
   });
 });
 
+describe('Home widgets', () => {
+  it('`/greeting` and `/linked` turn an empty line into their blocks, with a line to keep typing', async () => {
+    const e = setup(['']);
+    type(e, '/greeting');
+    await slashItems('greeting').find((i) => i.title === 'Greeting')?.run(e, { from: 1, to: 10 });
+    expect(blocks(e).map((b) => b.split(':')[0])).toEqual(['widgetBlock', 'paragraph']);
+    expect(e.state.doc.child(0).attrs.kind).toBe('greeting');
+
+    type(e, '/linked');
+    const at = e.state.doc.child(0).nodeSize + 1;
+    await slashItems('linked').find((i) => i.title === 'Linked view of a database')?.run(e, { from: at, to: at + 7 });
+    expect(blocks(e).map((b) => b.split(':')[0])).toEqual(['widgetBlock', 'linkedDatabase', 'paragraph']);
+    expect(e.state.doc.child(1).attrs.databaseId).toBeNull();
+  });
+
+  it('lists the widgets in the slash menu', () => {
+    expect(slashItems('home').map((i) => i.title)).toEqual(['Greeting', 'Recent pages', 'Favourites']);
+  });
+});
+
 describe('toggles', () => {
   /** Setup where block `index` gets extra attrs (e.g. collapsed). @param {string[]} specs @param {number} index @param {Record<string, unknown>} attrs */
   const withAttrs = (specs, index, attrs) => {

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Backdrop } from '@papier/ui';
 import { usePrefs } from './usePrefs.js';
+import { useWorkspace } from './api/workspaces.js';
 import { useSelectedPage } from './useSelectedPage.js';
 import { Sidebar } from './components/Sidebar.jsx';
 import { Topbar } from './components/Topbar.jsx';
@@ -16,6 +17,10 @@ import { Toaster } from './components/Toaster.jsx';
 export function App() {
   const [prefs, updatePrefs] = usePrefs();
   const [selectedId, select] = useSelectedPage();
+  // No page in the URL: the workspace's Home, if it has one.
+  const { workspace } = useWorkspace();
+  const atHome = !selectedId;
+  const pageId = selectedId ?? workspace?.homePageId ?? null;
   const [searching, setSearching] = useState(false);
   const [shortcuts, setShortcuts] = useState(false);
   const [library, setLibrary] = useState(/** @type {import('./components/Page.jsx').LibraryTarget | null} */ (null));
@@ -57,7 +62,8 @@ export function App() {
         inert={!prefs.sidebar}
       >
         <Sidebar
-          selectedId={selectedId}
+          selectedId={pageId}
+          atHome={atHome}
           onSelect={select}
           onSearch={() => setSearching(true)}
           onTemplates={() => setLibrary({ parentId: null })}
@@ -68,9 +74,9 @@ export function App() {
         />
       </div>
       <main className="relative flex min-w-0 flex-1 flex-col">
-        <Topbar selectedId={selectedId} onSelect={select} prefs={prefs} onChange={updatePrefs} />
+        <Topbar selectedId={pageId} onSelect={select} prefs={prefs} onChange={updatePrefs} />
         <div className="relative flex min-h-0 flex-1">
-          <Page selectedId={selectedId} onSelect={select} onTemplates={setLibrary} />
+          <Page selectedId={pageId} onSelect={select} onTemplates={setLibrary} />
           <RowPeek onSelect={select} />
         </div>
       </main>
@@ -78,7 +84,7 @@ export function App() {
         <CommandPalette
           onClose={() => setSearching(false)}
           onSelect={select}
-          selectedId={selectedId}
+          selectedId={pageId}
           prefs={prefs}
           onPrefs={updatePrefs}
           onTrash={() => setTrash(true)}

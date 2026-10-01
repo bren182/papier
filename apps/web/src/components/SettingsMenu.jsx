@@ -1,9 +1,67 @@
+import { useState } from 'react';
 import { THEMES } from '@papier/ui';
-import { menuItem, menuLabel, Popover } from './database/Popover.jsx';
+import { MIN_PASSWORD } from '@papier/core/text';
+import { useAuthState, useChangePassword, useLogout, useUpdateProfile } from '../api/auth.js';
+import { field, menuItem, menuLabel, Popover } from './database/Popover.jsx';
 import { MoodOption } from './PageHeader.jsx';
 
+/** Who is signed in: rename, change password, sign out. */
+function Account() {
+  const { data } = useAuthState();
+  const rename = useUpdateProfile();
+  const logout = useLogout();
+  const change = useChangePassword();
+  const [pw, setPw] = useState(/** @type {{ current: string, next: string } | null} */ (null));
+  const user = data?.user;
+  if (!user) return null;
+  return (
+    <>
+      <div className={menuLabel}>Account</div>
+      <div className="flex flex-col gap-1 px-2 pb-1">
+        <input
+          key={user.name}
+          className={field}
+          defaultValue={user.name}
+          aria-label="Your name"
+          onBlur={(e) => {
+            const name = e.target.value.trim();
+            if (name && name !== user.name) rename.mutate({ name });
+          }}
+          onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+        />
+        <div className="truncate text-[12px] text-faint">{user.email}</div>
+      </div>
+      {pw ? (
+        <form
+          className="flex flex-col gap-1.5 px-2 pb-1.5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            change.mutate(pw, { onSuccess: () => setPw(null) });
+          }}
+        >
+          <input className={field} type="password" autoComplete="current-password" placeholder="Current password" autoFocus required value={pw.current} onChange={(e) => setPw({ ...pw, current: e.target.value })} />
+          <input className={field} type="password" autoComplete="new-password" placeholder={`New password (${MIN_PASSWORD}+ characters)`} minLength={MIN_PASSWORD} required value={pw.next} onChange={(e) => setPw({ ...pw, next: e.target.value })} />
+          {change.isError && <div className="text-[12px] text-fg">{change.error.message}</div>}
+          <div className="flex justify-end gap-1">
+            <button type="button" className="rounded-md px-2 py-1 text-[12px] text-muted hover:bg-hover" onClick={() => setPw(null)}>Cancel</button>
+            <button type="submit" className="rounded-md px-2 py-1 text-[12px] text-accent hover:bg-hover" disabled={change.isPending}>Change</button>
+          </div>
+        </form>
+      ) : (
+        <button type="button" className={menuItem} onClick={() => { change.reset(); setPw({ current: '', next: '' }); }}>
+          {change.isSuccess ? 'Password changed ✓ — other devices signed out' : 'Change password…'}
+        </button>
+      )}
+      <button type="button" className={menuItem} onClick={() => logout.mutate()} disabled={logout.isPending}>
+        Sign out
+      </button>
+      <div className="my-1 h-px bg-line" />
+    </>
+  );
+}
+
 /**
- * Display settings (this device): colour theme, ambient or grayscale, glass,
+ * Settings: the account, then display settings (this device): colour theme, ambient or grayscale, glass,
  * motion. The same prefs the top bar toggles.
  * @param {{ anchor: HTMLElement | null, onClose: () => void, prefs: import('../usePrefs.js').Prefs,
  *   onChange: (patch: Partial<import('../usePrefs.js').Prefs>) => void }} props
@@ -17,6 +75,7 @@ export function SettingsMenu({ anchor, onClose, prefs, onChange }) {
   );
   return (
     <Popover anchor={anchor} onClose={onClose} width={260}>
+      <Account />
       <div className={menuLabel}>Theme</div>
       <div className="flex flex-col gap-0.5 px-1 pb-1" aria-label="Themes">
         {THEMES.map((t) => (

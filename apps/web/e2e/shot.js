@@ -3,6 +3,7 @@
 //   pnpm --filter @papier/web shot [path] [out.png] [--width=1280] [--height=800] [--full]
 //     [--press=Control+k] [--type=text]   keys, then typing, before the shot (menus, dialogs)
 //   BASE_URL=http://127.0.0.1:5174 pnpm --filter @papier/web shot "/?p=<id>" page.png
+// Signs in first when PAPIER_EMAIL and PAPIER_PASSWORD are set (otherwise you get the sign-in screen).
 import { chromium } from '@playwright/test';
 
 const args = process.argv.slice(2);
@@ -21,6 +22,11 @@ try {
     viewport: { width: Number(flags.width ?? 1280), height: Number(flags.height ?? 800) },
     reducedMotion: 'reduce', // still backdrop, so shots are comparable
   });
+  const { PAPIER_EMAIL: email, PAPIER_PASSWORD: password } = process.env;
+  if (email && password) {
+    const res = await page.request.post(new URL('/api/auth/login', base).href, { data: { email, password }, headers: { 'x-papier': '1' } });
+    if (!res.ok()) throw new Error(`sign-in failed: ${res.status()}`);
+  }
   await page.goto(new URL(path, base).href, { waitUntil: 'networkidle' });
   await page.evaluate(() => document.fonts.ready);
   if (flags.press) await page.keyboard.press(flags.press);

@@ -5,6 +5,8 @@ import { ApiError } from '../api/client.js';
 import { useContentVersion } from '../api/blocks.js';
 import { pageKeys, useCreatePage, usePage, useRestorePage } from '../api/pages.js';
 import { useDuplicatePage } from '../api/templates.js';
+import { authKey } from '../api/auth.js';
+import { useWorkspace } from '../api/workspaces.js';
 import { rememberRecent } from '../recentPages.js';
 import { openPeek } from '../useSelectedPage.js';
 import { hasCover, layoutClasses, PageCover, PageDecor, usePageMood } from './PageHeader.jsx';
@@ -192,21 +194,64 @@ function GridIcon({ path }) {
   );
 }
 
-/** @param {{ onSelect: (id: string | null) => void }} props */
+/**
+ * No page open and no Home yet: set one up (from the starter), or start a page.
+ * @param {{ onSelect: (id: string | null) => void }} props
+ */
 function EmptyState({ onSelect }) {
   const createPage = useCreatePage();
+  const qc = useQueryClient();
+  const { workspace } = useWorkspace();
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const canSetUp = workspace && workspace.role !== 'viewer';
+
+  const setUp = async () => {
+    if (!workspace) return;
+    setBusy(true);
+    setFailed(false);
+    try {
+      const { setUpHome } = await import('./homeStarter.js');
+      await setUpHome(workspace.id);
+      await qc.invalidateQueries({ queryKey: authKey });
+      qc.invalidateQueries({ queryKey: pageKeys.all });
+      onSelect(null);
+    } catch {
+      setFailed(true);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="flex flex-col items-start gap-4">
-      <h1 className="font-display text-[40px] leading-[48px] font-semibold text-fg-strong">Papier</h1>
-      <p className="text-[15px] leading-6 text-muted">Pick a page in the sidebar, or start a new one.</p>
-      <button
-        type="button"
-        disabled={createPage.isPending}
-        onClick={() => createPage.mutate({ parentId: null }, { onSuccess: (page) => onSelect(page.id) })}
-        className="h-9 rounded-md bg-accent px-4 text-sm font-medium text-[#141414] hover:bg-accent-text disabled:opacity-60"
-      >
-        New page
-      </button>
+      <h1 className="font-display text-[40px] leading-[48px] font-semibold text-fg-strong">{workspace?.name ?? 'Papier'}</h1>
+      <p className="max-w-[520px] text-[15px] leading-6 text-muted">
+        {canSetUp
+          ? 'Set up a Home to land on: a greeting, your favourite and recent pages, upcoming birthdays and a quick-capture button — all ordinary blocks you can change.'
+          : 'Pick a page in the sidebar.'}
+      </p>
+      <div className="flex gap-2">
+        {canSetUp && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={setUp}
+            className="h-9 rounded-md bg-accent px-4 text-sm font-medium text-[#141414] hover:bg-accent-text disabled:opacity-60"
+          >
+            {busy ? 'Setting up…' : 'Set up Home'}
+          </button>
+        )}
+        <button
+          type="button"
+          disabled={createPage.isPending}
+          onClick={() => createPage.mutate({ parentId: null }, { onSuccess: (page) => onSelect(page.id) })}
+          className="h-9 rounded-md border border-line px-4 text-sm text-fg hover:bg-hover disabled:opacity-60"
+        >
+          New page
+        </button>
+      </div>
+      {failed && <p role="alert" className="text-[14px] text-fg">Couldn’t set up Home. Try again?</p>}
     </div>
   );
 }

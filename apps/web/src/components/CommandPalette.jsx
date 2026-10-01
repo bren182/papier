@@ -1,6 +1,7 @@
 import { THEMES } from '@papier/ui';
 import { useArchivePage, useCreatePage, usePage, useSetFavorite, useUpdatePage } from '../api/pages.js';
 import { useDuplicatePage } from '../api/templates.js';
+import { useUpdateWorkspace, useWorkspace } from '../api/workspaces.js';
 import { requestPageAction } from '../pageActions.js';
 import { recentPages } from '../recentPages.js';
 import { keyLabel } from '../shortcuts.js';
@@ -31,6 +32,8 @@ export function CommandPalette({ onClose, onSelect, selectedId, prefs, onPrefs, 
   const archive = useArchivePage();
   const duplicate = useDuplicatePage();
   const setFavorite = useSetFavorite();
+  const { workspace } = useWorkspace();
+  const setHome = useUpdateWorkspace();
   const { data } = usePage(selectedId);
   const page = data?.page;
   const isRow = Boolean(data?.database);
@@ -43,6 +46,7 @@ export function CommandPalette({ onClose, onSelect, selectedId, prefs, onPrefs, 
   const commands = [
     { id: 'new-page', title: 'New page', keywords: 'create add', common: true, run: () => quietly(createPage.mutateAsync({ parentId: null }).then((p) => onSelect(p.id))) },
     { id: 'new-database', title: 'New database', keywords: 'create add table board', common: true, run: () => quietly(createPage.mutateAsync({ parentId: null, kind: 'database' }).then((p) => onSelect(p.id))) },
+    { id: 'home', title: 'Go to Home', keywords: 'start landing dashboard', common: true, run: () => onSelect(null) },
     { id: 'trash', title: 'Open trash', keywords: 'deleted restore bin', common: true, run: onTrash },
     { id: 'templates', title: 'Templates', keywords: 'library', run: onTemplates },
     { id: 'settings', title: 'Settings', keywords: 'theme display preferences', run: onSettings },
@@ -69,6 +73,13 @@ export function CommandPalette({ onClose, onSelect, selectedId, prefs, onPrefs, 
     const setLook = (/** @type {import('../api/pages.js').Appearance} */ appearance) => updatePage.mutate({ id: page.id, patch: { appearance } });
     return [
       { id: 'icon', title: page.icon ? 'Change icon' : 'Add icon', keywords: 'emoji page', common: true, run: () => requestPageAction('icon') },
+      ...(workspace && workspace.role !== 'viewer' && !isRow && !page.isTemplate
+        ? [
+            workspace.homePageId === page.id
+              ? { id: 'unset-home', title: 'Remove as Home', keywords: 'landing start', run: () => quietly(setHome.mutateAsync({ id: workspace.id, homePageId: null })) }
+              : { id: 'set-home', title: 'Set as Home', keywords: 'landing start dashboard', run: () => quietly(setHome.mutateAsync({ id: workspace.id, homePageId: page.id })) },
+          ]
+        : []),
       { id: 'cover', title: look.cover ? 'Change cover' : 'Add cover', keywords: 'page header', run: () => requestPageAction('cover') },
       { id: 'customise', title: 'Customise page', keywords: 'font mood layout', run: () => requestPageAction('customise') },
       { id: 'full-width', title: look.fullWidth ? 'Normal width' : 'Full width', keywords: 'page layout', run: () => setLook({ fullWidth: look.fullWidth ? null : true }) },

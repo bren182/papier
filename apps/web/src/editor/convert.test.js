@@ -158,3 +158,21 @@ describe('button blocks', () => {
     expect(byId(docToRows(doc, byId(buttonRows)))).toEqual(byId(buttonRows));
   });
 });
+
+describe('Home blocks', () => {
+  it('round-trip widgets, linked databases (with their own view) and a quick-capture button', () => {
+    const view = { type: 'table', config: { sorts: [{ propId: 'born', dir: 'upcoming' }], filters: [{ propId: 'born', op: 'anniversary_within', value: 30 }] } };
+    /** @type {Block[]} */
+    const homeRows = [
+      { id: 'hi', type: 'widget', parentId: null, order: 'a0', props: { kind: 'greeting' }, content: [] },
+      { id: 'fav', type: 'widget', parentId: null, order: 'a1', props: { kind: 'favorites' }, content: [] },
+      { id: 'bd', type: 'linked_database', parentId: null, order: 'a2', props: { databaseId: 'birthdays', view }, content: [] },
+      { id: 'new', type: 'linked_database', parentId: null, order: 'a3', props: {}, content: [] },
+      { id: 'cap', type: 'button', parentId: null, order: 'a4', props: { label: 'Note', actions: [], open: true }, content: [] },
+    ];
+    const doc = rowsToDoc(homeRows);
+    expect(doc.content?.map((n) => n.type)).toEqual(['widgetBlock', 'widgetBlock', 'linkedDatabase', 'linkedDatabase', 'buttonBlock']);
+    expect(doc.content?.[2]).toEqual({ type: 'linkedDatabase', attrs: { id: 'bd', indent: 0, databaseId: 'birthdays', view } });
+    expect(byId(docToRows(doc, byId(homeRows)))).toEqual(byId(homeRows));
+  });
+});
