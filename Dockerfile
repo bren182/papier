@@ -1,7 +1,8 @@
 # ── Stage 1: install & build ──────────────────────────────────────────────────
 FROM node:24-slim AS builder
 
-# pnpm via corepack
+# pnpm via corepack; disable strict packageManager version enforcement
+ENV COREPACK_ENABLE_STRICT=0
 RUN corepack enable && corepack prepare pnpm@9 --activate
 
 WORKDIR /app
@@ -24,6 +25,7 @@ RUN pnpm --filter @papier/web build
 # ── Stage 2: production runtime ───────────────────────────────────────────────
 FROM node:24-slim AS runner
 
+ENV COREPACK_ENABLE_STRICT=0
 RUN corepack enable && corepack prepare pnpm@9 --activate
 
 WORKDIR /app
