@@ -6,9 +6,23 @@
 
 import { useEffect, useState } from 'react';
 
-const KEY = 'papier.recentPages';
 const MAX = 8;
 const EVENT = 'papier:recents';
+
+/** The signed-in user's ID, set by AuthGate so recents are per-account. */
+let _userId = /** @type {string | null} */ (null);
+
+/** Called by AuthGate when the signed-in user changes. Fires the recents event so hooks re-read. */
+export function setRecentUser(/** @type {string | null} */ userId) {
+  if (_userId === userId) return;
+  _userId = userId;
+  window.dispatchEvent(new Event(EVENT));
+}
+
+/** Storage key scoped by user; null when no user is set (returns empty list). */
+function storageKey() {
+  return _userId ? `papier.recentPages.${_userId}` : null;
+}
 
 /** Recent pages, kept current as pages are opened (the sidebar's Recent). */
 export function useRecentPages() {
@@ -27,8 +41,10 @@ export function useRecentPages() {
 
 /** @param {RecentPage[]} list */
 function save(list) {
+  const key = storageKey();
+  if (!key) return;
   try {
-    localStorage.setItem(KEY, JSON.stringify(list.slice(0, MAX)));
+    localStorage.setItem(key, JSON.stringify(list.slice(0, MAX)));
   } catch {
     // no storage: no recents
   }
@@ -37,8 +53,10 @@ function save(list) {
 
 /** @returns {RecentPage[]} */
 export function recentPages() {
+  const key = storageKey();
+  if (!key) return [];
   try {
-    const v = JSON.parse(localStorage.getItem(KEY) ?? '[]');
+    const v = JSON.parse(localStorage.getItem(key) ?? '[]');
     return Array.isArray(v) ? v.slice(0, MAX) : [];
   } catch {
     return [];

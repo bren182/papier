@@ -70,10 +70,12 @@ export function Page({ selectedId, onSelect, onTemplates }) {
           {!selectedId ? (
             <EmptyState onSelect={onSelect} />
           ) : error ? (
-            error instanceof ApiError && error.status === 404 && error.data.trashed ? (
+            error instanceof ApiError && error.status === 403 ? (
+              <AccessRestricted />
+            ) : error instanceof ApiError && error.status === 404 && error.data.trashed ? (
               <Trashed id={selectedId} onSelect={onSelect} />
             ) : (
-              <Message>{error instanceof ApiError && error.status === 404 ? 'This page doesn’t exist.' : 'Couldn’t load this page.'}</Message>
+              <Message>{error instanceof ApiError && error.status === 404 ? "This page doesn’t exist." : "Couldn’t load this page."}</Message>
             )
           ) : isPending ? null : (
             <>
@@ -301,4 +303,14 @@ function Trashed({ id, onSelect }) {
 /** @param {{ children: import('react').ReactNode }} props */
 function Message({ children }) {
   return <p className="text-[15px] leading-6 text-muted">{children}</p>;
+}
+
+function AccessRestricted() {
+  return (
+    <div className="flex flex-col gap-2 pt-2">
+      <div className="text-[28px] leading-none">🔒</div>
+      <h2 className="text-[22px] font-semibold text-fg-strong">Access restricted</h2>
+      <p className="text-[15px] leading-6 text-muted">This page belongs to a different workspace. Sign in to the correct account to view it.</p>
+    </div>
+  );
 }

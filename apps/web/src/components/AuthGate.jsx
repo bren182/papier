@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { authKey, useAuthState, useDemoStart } from '../api/auth.js';
 import { SIGNED_IN_EVENT, UNAUTHORIZED_EVENT } from '../api/client.js';
+import { setRecentUser } from '../recentPages.js';
 import { AuthScreen, SessionExpired } from './AuthScreen.jsx';
 import { LandingPage } from './LandingPage.jsx';
 
@@ -23,6 +24,9 @@ export function AuthGate({ children }) {
     window.addEventListener(UNAUTHORIZED_EVENT, onUnauthorized);
     return () => window.removeEventListener(UNAUTHORIZED_EVENT, onUnauthorized);
   }, []);
+
+  // Scope recent pages to the signed-in user so accounts don't share history.
+  useEffect(() => { setRecentUser(data?.user?.id ?? null); }, [data?.user?.id]);
 
   if (isError) {
     return (

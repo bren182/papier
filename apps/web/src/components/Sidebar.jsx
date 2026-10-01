@@ -215,7 +215,7 @@ function Recent({ selectedId, onSelect }) {
   const recent = useRecentPages().slice(0, 5);
   if (recent.length === 0) return null;
   return (
-    <SideSection label="Recent" storageKey="papier.sidebar.recent">
+    <SideSection label="Recent" storageKey="papier.sidebar.recent" defaultOpen={false}>
       {recent.map((p) => (
         <SideLink key={p.id} page={{ ...p, kind: 'page' }} active={p.id === selectedId} onSelect={onSelect} />
       ))}
@@ -225,14 +225,15 @@ function Recent({ selectedId, onSelect }) {
 
 /**
  * A small sidebar section whose header folds it (remembered per device).
- * @param {{ label: string, storageKey: string, children: import('react').ReactNode }} props
+ * @param {{ label: string, storageKey: string, defaultOpen?: boolean, children: import('react').ReactNode }} props
  */
-function SideSection({ label, storageKey, children }) {
+function SideSection({ label, storageKey, defaultOpen = true, children }) {
   const [open, setOpen] = useState(() => {
     try {
-      return localStorage.getItem(storageKey) !== 'closed';
+      const stored = localStorage.getItem(storageKey);
+      return stored !== null ? stored !== 'closed' : defaultOpen;
     } catch {
-      return true;
+      return defaultOpen;
     }
   });
   const toggle = () => {

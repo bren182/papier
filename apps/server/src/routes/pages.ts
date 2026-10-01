@@ -93,6 +93,13 @@ export function pageRoutes(app: FastifyInstance, db: Db) {
       const exists = db.select({ id: pages.id }).from(pages).where(eq(pages.id, req.params.id)).get();
       return reply.code(404).send({ error: 'Page not found', trashed: Boolean(exists) });
     }
+    // Workspace isolation: deny access to pages in other workspaces.
+    if (req.workspaceId) {
+      const ws = db.select({ workspaceId: pages.workspaceId }).from(pages).where(eq(pages.id, req.params.id)).get();
+      if (ws && ws.workspaceId !== req.workspaceId) {
+        return reply.code(403).send({ error: 'Access restricted' });
+      }
+    }
 
     const page = db.select(pageFields).from(pages).where(eq(pages.id, req.params.id)).get();
     const database = rowDatabase(db, req.params.id);
