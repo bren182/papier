@@ -109,9 +109,9 @@ function SetupForm() {
 
 /**
  * Full-screen sign-in (or first-run setup) over the ambient backdrop.
- * @param {{ setup: boolean }} props
+ * @param {{ setup: boolean, onBack?: () => void }} props
  */
-export function AuthScreen({ setup }) {
+export function AuthScreen({ setup, onBack }) {
   usePrefs(); // theme, mode and glass for the backdrop; the app isn't mounted yet
   return (
     <div className="relative grid h-full place-items-center overflow-y-auto px-4 py-10">
@@ -129,6 +129,15 @@ export function AuthScreen({ setup }) {
       ) : (
         <Card title="Sign in">
           <LoginForm />
+          {onBack && (
+            <button
+              type="button"
+              onClick={onBack}
+              className="mt-4 w-full text-center text-[13px] text-faint hover:text-muted"
+            >
+              ← Back
+            </button>
+          )}
         </Card>
       )}
     </div>

@@ -2,6 +2,7 @@
   "name": "papier",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@9",
   "engines": {
     "node": ">=24"
   },

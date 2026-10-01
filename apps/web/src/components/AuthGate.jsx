@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { authKey, useAuthState } from '../api/auth.js';
 import { SIGNED_IN_EVENT, UNAUTHORIZED_EVENT } from '../api/client.js';
 import { AuthScreen, SessionExpired } from './AuthScreen.jsx';
+import { LandingPage } from './LandingPage.jsx';
 
 /**
  * Shows the app only to a signed-in user; otherwise the sign-in (or, on a
@@ -14,6 +15,7 @@ export function AuthGate({ children }) {
   const qc = useQueryClient();
   const { data, isError, refetch } = useAuthState();
   const [expired, setExpired] = useState(false);
+  const [showLogin, setShowLogin] = useState(false);
 
   useEffect(() => {
     const onUnauthorized = () => setExpired(true);
@@ -34,7 +36,11 @@ export function AuthGate({ children }) {
     );
   }
   if (!data) return null;
-  if (!data.user) return <AuthScreen setup={data.setupNeeded} />;
+  if (!data.user) {
+    // First-run setup goes straight to the setup form; existing-server visitors see the landing page first.
+    if (data.setupNeeded || showLogin) return <AuthScreen setup={data.setupNeeded} onBack={data.setupNeeded ? undefined : () => setShowLogin(false)} />;
+    return <LandingPage onSignIn={() => setShowLogin(true)} />;
+  }
 
   return (
     <>

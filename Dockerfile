@@ -2,7 +2,7 @@
 FROM node:24-slim AS builder
 
 # pnpm via corepack
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@9 --activate
 
 WORKDIR /app
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
@@ -24,7 +24,7 @@ RUN pnpm --filter @papier/web build
 # ── Stage 2: production runtime ───────────────────────────────────────────────
 FROM node:24-slim AS runner
 
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@9 --activate
 
 WORKDIR /app
 
