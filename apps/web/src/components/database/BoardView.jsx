@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTapGuard } from '../../useTapGuard.js';
 import { useRows } from '../../api/databases.js';
 import { TitleText } from '../TitleText.jsx';
 import { ValueCell, ValueDisplay } from './cells.jsx';
@@ -295,6 +296,7 @@ const hasValue = (v) => v !== undefined && v !== null && v !== false && v !== ''
  */
 function Card({ row, props, editTitle, dragging, onDragStart, onDragEnd, onMenu }) {
   const { openRow, m, addOption } = useDb();
+  const tapProps = useTapGuard(() => openRow(row.id));
   const [editing, setEditing] = useState(editTitle);
   const values = props.filter((p) => p.type !== 'button' && (p.type === 'created_time' || p.type === 'edited_time' || hasValue(row.props[p.id])));
   const buttons = props.filter((p) => p.type === 'button');
@@ -335,7 +337,7 @@ function Card({ row, props, editTitle, dragging, onDragStart, onDragEnd, onMenu 
         onDragStart();
       }}
       onDragEnd={onDragEnd}
-      onClick={() => openRow(row.id)}
+      {...tapProps}
       onKeyDown={(e) => e.target === e.currentTarget && e.key === 'Enter' && openRow(row.id)}
       onContextMenu={(e) => {
         e.preventDefault();

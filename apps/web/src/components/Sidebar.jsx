@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTapGuard } from '../useTapGuard.js';
 import { useQueryClient } from '@tanstack/react-query';
 import { pageKeys, useArchivePage, useChildPages, useCreatePage, useFavorites, useMovePage, useSetFavorite } from '../api/pages.js';
 import { useAuthState } from '../api/auth.js';
@@ -281,11 +282,12 @@ function SideSection({ label, storageKey, children }) {
  *   onSelect: (id: string) => void, children?: import('react').ReactNode }} props
  */
 function SideLink({ page, active, onSelect, children }) {
+  const tapProps = useTapGuard(() => onSelect(page.id));
   return (
     <li
       className={`group flex h-11 md:h-[30px] items-center gap-0.5 rounded-md pr-1 pl-[6px] text-sm ${active ? 'bg-s-active text-fg-strong' : 'text-[#a3a3a3] hover:bg-s-active hover:text-fg'}`}
     >
-      <button type="button" onClick={() => onSelect(page.id)} className="flex h-full min-w-0 flex-1 items-center gap-1.5 pl-[22px] text-left">
+      <button type="button" {...tapProps} className="flex h-full min-w-0 flex-1 items-center gap-1.5 pl-[22px] text-left">
         {page.icon ? (
           <span className="flex w-4 shrink-0 justify-center text-[14px] leading-none">{page.icon}</span>
         ) : page.kind === 'database' ? (
@@ -357,6 +359,7 @@ function Collapsible({ open, children }) {
 function TreeItem({ page, depth, path, ctx }) {
   const expanded = ctx.isExpanded(page.id);
   const active = ctx.selectedId === page.id;
+  const tapProps = useTapGuard(() => ctx.onSelect(page.id));
   const title = page.title || 'Untitled';
   const { dnd } = ctx;
   const drop = dnd.drop?.id === page.id ? dnd.drop.where : null;
@@ -437,7 +440,7 @@ function TreeItem({ page, depth, path, ctx }) {
         <button
           type="button"
           aria-current={active ? 'page' : undefined}
-          onClick={() => ctx.onSelect(page.id)}
+          {...tapProps}
           className="flex h-full min-w-0 flex-1 items-center gap-1.5 text-left"
         >
           {page.icon ? (

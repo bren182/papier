@@ -55,6 +55,13 @@ html[data-motion="off"] * {
   animation-duration: 0ms !important;
 }
 
+/* Vertical-only scroll on touch: prevents a sideways drift from triggering
+ * navigation or link clicks while the user is trying to scroll. */
+.overflow-y-auto,
+.overflow-auto {
+  touch-action: pan-y;
+}
+
 /* Sidebar tree: animate expand/collapse with the grid-template-rows trick */
 .tree-children {
   display: grid;
