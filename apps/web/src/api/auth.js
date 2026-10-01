@@ -72,17 +72,20 @@ export function useLogout() {
 
 /** Start (or reset) the demo session — no account needed. */
 export function useDemoStart() {
-  const done = useSignedIn();
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: () => api('/demo/start', { method: 'POST' }),
     onSuccess: () => {
-      // Clear any open-page URL params so the demo doesn't try to open the previous user's page.
+      // Clear any open-page URL params so the demo doesn't open the previous user's page.
       const url = new URL(window.location.href);
       url.searchParams.delete('p');
       url.searchParams.delete('b');
       url.searchParams.delete('peek');
       window.history.replaceState(null, '', url.toString());
-      done();
+      // Flush all cached queries (pages, workspaces, etc.) so no real-user data bleeds in,
+      // then re-fetch auth to mount the app as the fresh demo user.
+      qc.removeQueries({ predicate: (q) => q.queryKey[0] !== authKey[0] });
+      qc.invalidateQueries({ queryKey: authKey });
     },
   });
 }
