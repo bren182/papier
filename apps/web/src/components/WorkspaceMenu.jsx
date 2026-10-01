@@ -11,8 +11,8 @@ const EmojiPicker = lazy(() => import('./EmojiPicker.jsx').then((m) => ({ defaul
 export function WorkspaceBadge({ workspace, size = 22 }) {
   return (
     <span
-      className="flex shrink-0 items-center justify-center rounded-[5px] bg-hover font-display text-fg-strong"
-      style={{ width: size, height: size, fontSize: size * 0.64 }}
+      className="flex shrink-0 items-center justify-center leading-none rounded-[5px] bg-hover text-fg-strong"
+      style={{ width: size, height: size, fontSize: size * (workspace?.icon ? 0.72 : 0.6) }}
       aria-hidden="true"
     >
       {workspace?.icon ?? (workspace?.name.trim()[0] ?? 'P').toUpperCase()}

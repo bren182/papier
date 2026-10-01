@@ -70,7 +70,9 @@ export function BoardView() {
     );
   }
 
-  const columns = [{ id: null, name: `No ${group.name}` }, ...(group.config.options ?? []).map((o) => ({ id: o.id, name: o.name }))];
+  const allColumns = [{ id: null, name: `No ${group.name}` }, ...(group.config.options ?? []).map((o) => ({ id: o.id, name: o.name }))];
+  const hidden = view.config.hiddenGroups ?? [];
+  const columns = allColumns.filter((c) => !hidden.includes(c.id === null ? '__none__' : c.id));
 
   /** Move the dragged card into `target`. */
   const commit = async () => {
@@ -96,18 +98,30 @@ export function BoardView() {
 
   return (
     <div className="flex flex-col gap-2">
-      {groupable.length > 1 && (
-        <label className="flex items-center gap-2 text-[12px] text-muted">
-          Group by
-          <select value={group.id} onChange={(e) => setConfig({ groupBy: e.target.value })} className={`${field} h-6 w-auto`}>
-            {groupable.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
+      <div className="flex flex-wrap items-center gap-3">
+        {groupable.length > 1 && (
+          <label className="flex items-center gap-2 text-[12px] text-muted">
+            Group by
+            <select value={group.id} onChange={(e) => setConfig({ groupBy: e.target.value })} className={`${field} h-6 w-auto`}>
+              {groupable.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        {hidden.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setConfig({ hiddenGroups: [] })}
+            className="flex items-center gap-1 rounded-md border border-dashed border-line px-2 py-0.5 text-[12px] text-muted hover:border-accent/60 hover:text-fg"
+          >
+            <Icon path={ICONS.eyeOff} size={12} />
+            {hidden.length} hidden · Show all
+          </button>
+        )}
+      </div>
       <div className="-mx-1 flex items-start gap-3 overflow-x-auto px-1 pb-3">
         {columns.map((c) => (
           <Column
@@ -137,6 +151,10 @@ export function BoardView() {
               if (templateId) openRow(row.id);
               else setNewRowId(row.id);
             }}
+            onHide={() => {
+              const key = c.id === null ? '__none__' : c.id;
+              setConfig({ hiddenGroups: [...(view.config.hiddenGroups ?? []), key] });
+            }}
             colDragging={colDragging}
             colTarget={colTarget}
             onColDragStart={(id) => setColDragging(id)}
@@ -156,11 +174,12 @@ export function BoardView() {
  * @param {{ group: Property, value: string | null, name: string, dragging: Dragging | null, drop: BoardDrop | null,
  *   onDragStart: (row: Row) => void, onDragOver: (d: BoardDrop) => void, onDrop: () => void, onDragEnd: () => void,
  *   newRowId: string | null, onNew: () => void, onMenu: (row: Row, at: HTMLElement | { x: number, y: number }) => void,
+ *   onHide: () => void,
  *   colDragging: string | null, colTarget: string | null,
  *   onColDragStart: (id: string) => void, onColDragOver: (id: string) => void,
  *   onColDrop: () => void, onColDragEnd: () => void }} props
  */
-function Column({ group, value, name, dragging, drop, onDragStart, onDragOver, onDrop, onDragEnd, newRowId, onNew, onMenu,
+function Column({ group, value, name, dragging, drop, onDragStart, onDragOver, onDrop, onDragEnd, newRowId, onNew, onMenu, onHide,
   colDragging, colTarget, onColDragStart, onColDragOver, onColDrop, onColDragEnd }) {
   const { dbId, view, properties } = useDb();
   const { sorts, filters } = view.config;
@@ -189,6 +208,7 @@ function Column({ group, value, name, dragging, drop, onDragStart, onDragOver, o
       onDragOver={(e) => {
         if (!dragging && !colDragging) return;
         e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
         if (colDragging) {
           if (value !== null && colDragging !== value) onColDragOver(value);
           return;
@@ -229,9 +249,18 @@ function Column({ group, value, name, dragging, drop, onDragStart, onDragOver, o
         <span className="text-faint">{total}</span>
         <button
           type="button"
+          onClick={onHide}
+          aria-label={`Hide ${name}`}
+          title="Hide column"
+          className="ml-auto flex size-6 items-center justify-center rounded text-faint opacity-0 group-hover/col:opacity-100 hover:bg-hover hover:text-fg"
+        >
+          <Icon path={ICONS.eyeOff} />
+        </button>
+        <button
+          type="button"
           onClick={onNew}
           aria-label={`New in ${name}`}
-          className="ml-auto flex size-6 items-center justify-center rounded text-faint hover:bg-hover hover:text-fg"
+          className="flex size-6 items-center justify-center rounded text-faint hover:bg-hover hover:text-fg"
         >
           <Icon path={ICONS.plus} />
         </button>
@@ -245,6 +274,7 @@ function Column({ group, value, name, dragging, drop, onDragStart, onDragOver, o
             if (!dragging) return;
             e.preventDefault();
             e.stopPropagation();
+            e.dataTransfer.dropEffect = 'move';
             const box = e.currentTarget.getBoundingClientRect();
             onDragOver(e.clientY < box.top + box.height / 2 ? { value, beforeId: row.id } : { value, afterId: row.id });
           }}

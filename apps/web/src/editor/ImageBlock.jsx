@@ -14,7 +14,11 @@ import { NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
  * @typedef {{ src?: string, caption?: string, align?: 'left'|'center'|'right', animation?: unknown }} ImageProps
  * @typedef {{
  *   onSearch?: ((query: string) => Promise<{ url: string, preview: string }[]>) | null,
+ *   onSearchPhotos?: ((query: string) => Promise<{ preview: string, regular: string, downloadLocation: string, alt: string }[]>) | null,
+ *   onPickPhoto?: ((photo: { preview: string, regular: string, downloadLocation: string, alt: string }) => Promise<string>) | null,
  *   onUpload?: ((file: File) => Promise<string>) | null,
+ *   giphyConfigured?: boolean,
+ *   unsplashConfigured?: boolean,
  * }} ImageBlockOptions
  */
 
@@ -26,7 +30,7 @@ export const ImageBlock = Node.create({
   draggable: false,
 
   /** @returns {ImageBlockOptions} */
-  addOptions: () => ({ onSearch: null, onUpload: null }),
+  addOptions: () => ({ onSearch: null, onSearchPhotos: null, onPickPhoto: null, onUpload: null, giphyConfigured: false, unsplashConfigured: false }),
 
   addAttributes: () => ({
     id: {
@@ -75,6 +79,19 @@ export const ImageBlock = Node.create({
   },
 });
 
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
+/** Lock message shown when an integration isn't configured. @param {{ service: string }} props */
+function IntegrationLocked({ service }) {
+  return (
+    <div className="flex flex-col items-center gap-2 py-4 text-center">
+      <span className="text-[22px]">🔒</span>
+      <p className="text-[13px] font-medium text-muted">{service} not configured</p>
+      <p className="text-[12px] text-faint">Add your API key in Settings → AI to unlock this.</p>
+    </div>
+  );
+}
+
 // ── React node view ────────────────────────────────────────────────────────────
 
 /**
@@ -91,9 +108,9 @@ function ImageBlockView({ node, updateAttributes, editor, selected }) {
   const [editing, setEditing] = useState(!src);
 
   // ── per-tab state ────────────────────────────────────────────────────────
-  /** @type {'link'|'upload'|'gif'} */
+  /** @type {'link'|'upload'|'gif'|'photos'} */
   const defaultTab = 'link';
-  const [tab, setTab] = useState(/** @type {'link'|'upload'|'gif'} */ (defaultTab));
+  const [tab, setTab] = useState(/** @type {'link'|'upload'|'gif'|'photos'} */ (defaultTab));
 
   // link tab
   const [urlDraft, setUrlDraft] = useState(/** @type {string} */ (src || ''));
@@ -109,6 +126,12 @@ function ImageBlockView({ node, updateAttributes, editor, selected }) {
   const [searchQ, setSearchQ] = useState('');
   const [searching, setSearching] = useState(false);
   const [results, setResults] = useState(/** @type {{ url: string, preview: string }[]} */ ([]));
+
+  // photos tab
+  const [photoQ, setPhotoQ] = useState('');
+  const [photoSearching, setPhotoSearching] = useState(false);
+  const [photoResults, setPhotoResults] = useState(/** @type {{ preview: string, regular: string, downloadLocation: string, alt: string }[]} */ ([]));
+  const [pickingPhoto, setPickingPhoto] = useState(/** @type {string | null} */ (null));
 
   // shared
   const [capDraft, setCapDraft] = useState(/** @type {string} */ (caption || ''));
@@ -170,14 +193,35 @@ function ImageBlockView({ node, updateAttributes, editor, selected }) {
     setSearching(false);
   }, [capDraft, updateAttributes]);
 
+  // ── photos tab handlers ──────────────────────────────────────────────────
+  const doPhotoSearch = useCallback(async () => {
+    if (!options.onSearchPhotos) return;
+    setPhotoResults([]);
+    const hits = await options.onSearchPhotos(photoQ).catch(() => /** @type {typeof photoResults} */ ([]));
+    setPhotoResults(hits);
+  }, [options, photoQ]);
+
+  const pickPhoto = useCallback(async (/** @type {typeof photoResults[0]} */ photo) => {
+    if (!options.onPickPhoto) return;
+    setPickingPhoto(photo.preview);
+    try {
+      const url = await options.onPickPhoto(photo);
+      updateAttributes({ src: url, caption: capDraft.trim() });
+      setEditing(false);
+    } catch { /* ignore */ } finally {
+      setPickingPhoto(null);
+    }
+  }, [options, capDraft, updateAttributes]);
+
   // ── tabs config ──────────────────────────────────────────────────────────
-  const tabs = /** @type {('link'|'upload'|'gif')[]} */ ([
+  const tabs = /** @type {('link'|'upload'|'gif'|'photos')[]} */ ([
     'link',
     ...(options.onUpload ? /** @type {const} */ (['upload']) : []),
-    ...(options.onSearch ? /** @type {const} */ (['gif']) : []),
+    'gif',
+    'photos',
   ]);
 
-  const TAB_LABEL = { link: 'Link', upload: 'Upload', gif: 'GIFs' };
+  const TAB_LABEL = { link: 'Link', upload: 'Upload', gif: 'GIFs', photos: 'Photos' };
 
   // ── alignment classes ────────────────────────────────────────────────────
   const ALIGNS = /** @type {const} */ (['left', 'center', 'right']);
@@ -282,52 +326,111 @@ function ImageBlockView({ node, updateAttributes, editor, selected }) {
 
           {/* gif tab */}
           {tab === 'gif' && (
-            <>
-              <div className="flex gap-1.5">
-                <input
-                  value={searchQ}
-                  onChange={(e) => setSearchQ(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') { e.preventDefault(); setSearching(true); doSearch(); }
-                  }}
-                  placeholder="Search GIFs…"
-                  className="h-8 flex-1 rounded-md border border-line bg-transparent px-2 text-[13px] text-fg placeholder:text-faint focus:outline-none focus:ring-1 focus:ring-accent/50"
-                />
-                <button
-                  type="button"
-                  onClick={() => { setSearching(true); doSearch(); }}
-                  className="h-8 rounded-md border border-line px-3 text-[13px] text-muted hover:text-fg hover:bg-hover"
-                >
-                  Search
-                </button>
-              </div>
-              {searching && results.length === 0 && (
-                <p className="text-[12px] text-faint">No results.</p>
-              )}
-              {results.length > 0 && (
-                <div className="grid grid-cols-4 gap-1 max-h-48 overflow-y-auto rounded-md">
-                  {results.map((r, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => pickResult(r.url)}
-                      className="overflow-hidden rounded border border-line hover:border-accent/50"
-                    >
-                      <img src={r.preview} alt="" className="h-16 w-full object-cover" />
-                    </button>
-                  ))}
+            options.giphyConfigured ? (
+              <>
+                <div className="flex gap-1.5">
+                  <input
+                    value={searchQ}
+                    onChange={(e) => setSearchQ(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') { e.preventDefault(); setSearching(true); doSearch(); }
+                    }}
+                    placeholder="Search GIFs…"
+                    className="h-8 flex-1 rounded-md border border-line bg-transparent px-2 text-[13px] text-fg placeholder:text-faint focus:outline-none focus:ring-1 focus:ring-accent/50"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => { setSearching(true); doSearch(); }}
+                    className="h-8 rounded-md border border-line px-3 text-[13px] text-muted hover:text-fg hover:bg-hover"
+                  >
+                    Search
+                  </button>
                 </div>
-              )}
-              {src && (
-                <button
-                  type="button"
-                  onClick={() => setEditing(false)}
-                  className="h-7 self-start rounded-md border border-line px-3 text-[13px] text-muted hover:text-fg hover:bg-hover"
-                >
-                  Cancel
-                </button>
-              )}
-            </>
+                {searching && results.length === 0 && (
+                  <p className="text-[12px] text-faint">No results.</p>
+                )}
+                {results.length > 0 && (
+                  <div className="grid grid-cols-4 gap-1 max-h-48 overflow-y-auto rounded-md">
+                    {results.map((r, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => pickResult(r.url)}
+                        className="overflow-hidden rounded border border-line hover:border-accent/50"
+                      >
+                        <img src={r.preview} alt="" className="h-16 w-full object-cover" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {src && (
+                  <button
+                    type="button"
+                    onClick={() => setEditing(false)}
+                    className="h-7 self-start rounded-md border border-line px-3 text-[13px] text-muted hover:text-fg hover:bg-hover"
+                  >
+                    Cancel
+                  </button>
+                )}
+              </>
+            ) : (
+              <IntegrationLocked service="Giphy" />
+            )
+          )}
+
+          {/* photos tab */}
+          {tab === 'photos' && (
+            options.unsplashConfigured ? (
+              <>
+                <div className="flex gap-1.5">
+                  <input
+                    value={photoQ}
+                    onChange={(e) => setPhotoQ(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') { e.preventDefault(); setPhotoSearching(true); doPhotoSearch(); }
+                    }}
+                    placeholder="Search Unsplash photos…"
+                    className="h-8 flex-1 rounded-md border border-line bg-transparent px-2 text-[13px] text-fg placeholder:text-faint focus:outline-none focus:ring-1 focus:ring-accent/50"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => { setPhotoSearching(true); doPhotoSearch(); }}
+                    className="h-8 rounded-md border border-line px-3 text-[13px] text-muted hover:text-fg hover:bg-hover"
+                  >
+                    Search
+                  </button>
+                </div>
+                {photoSearching && photoResults.length === 0 && (
+                  <p className="text-[12px] text-faint">No results.</p>
+                )}
+                {photoResults.length > 0 && (
+                  <div className="grid grid-cols-4 gap-1 max-h-48 overflow-y-auto rounded-md">
+                    {photoResults.map((r, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        disabled={pickingPhoto !== null}
+                        onClick={() => pickPhoto(r)}
+                        className={`overflow-hidden rounded border border-line hover:border-accent/50 ${pickingPhoto === r.preview ? 'opacity-50' : ''}`}
+                      >
+                        <img src={r.preview} alt={r.alt} className="h-16 w-full object-cover" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {src && (
+                  <button
+                    type="button"
+                    onClick={() => setEditing(false)}
+                    className="h-7 self-start rounded-md border border-line px-3 text-[13px] text-muted hover:text-fg hover:bg-hover"
+                  >
+                    Cancel
+                  </button>
+                )}
+              </>
+            ) : (
+              <IntegrationLocked service="Unsplash" />
+            )
           )}
         </div>
       </NodeViewWrapper>

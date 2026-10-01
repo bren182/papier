@@ -24,4 +24,6 @@ notion-export*/
 
 # e2e session (apps/web/e2e/global-setup.js)
 .auth/
+# Exclude screenshots/test images but allow committed public assets
 *.png
+!apps/web/public/*.png

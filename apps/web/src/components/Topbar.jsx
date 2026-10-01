@@ -96,9 +96,10 @@ export function Topbar({ selectedId, onSelect, prefs, onChange, onAi }) {
           aria-label="Ask AI (Ctrl+Shift+A)"
           title="Ask AI (Ctrl+Shift+A)"
           onClick={onAi}
-          className="flex size-7 items-center justify-center rounded-md text-muted hover:bg-s-active hover:text-fg"
+          className="flex h-7 items-center gap-1 rounded-md px-2 text-muted hover:bg-s-active hover:text-fg"
         >
           <span aria-hidden="true" className="text-[13px] font-semibold leading-none">✦</span>
+          <span className="text-[11px] font-medium">AI</span>
         </button>
       )}
       {data && <PageMenu page={data.page} databaseId={data.database?.id ?? null} onSelect={onSelect} />}
@@ -189,9 +190,10 @@ function FavoriteButton({ page }) {
       aria-label={on ? 'Remove from favourites' : 'Add to favourites'}
       title={on ? 'Remove from favourites' : 'Add to favourites'}
       onClick={() => setFavorite.mutate({ id: page.id, favorite: !on })}
-      className={`flex size-7 items-center justify-center rounded-md hover:bg-s-active ${on ? 'text-fg-strong' : 'text-muted hover:text-fg'}`}
+      className={`flex h-7 items-center gap-1 rounded-md px-2 hover:bg-s-active ${on ? 'text-fg-strong' : 'text-muted hover:text-fg'}`}
     >
       <StarIcon filled={on} />
+      <span className="text-[11px] font-medium">{on ? 'Starred' : 'Star'}</span>
     </button>
   );
 }

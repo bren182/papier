@@ -22,6 +22,7 @@ import { SidebarIcon, StarIcon } from './Topbar.jsx';
  *   onAddChild: (parentId: string) => void,
  *   onDelete: (page: Page) => void,
  *   onMoveTo: (page: Page) => void,
+ *   openInNewTab: (id: string) => void,
  *   dnd: TreeDnd,
  * }} TreeContext
  */
@@ -46,9 +47,9 @@ const navButton = 'flex h-11 md:h-8 items-center gap-2.5 rounded-md px-2.5 text-
 /**
  * @param {{ selectedId: string | null, atHome: boolean, onSelect: (id: string | null) => void, onSearch: () => void,
  *   onTemplates: () => void, onShortcuts: () => void, onCollapse: () => void,
- *   onSettings: () => void, onTrash: () => void }} props
+ *   onSettings: () => void, onTrash: () => void, openInNewTab: (id: string) => void }} props
  */
-export function Sidebar({ selectedId, atHome, onSelect, onSearch, onTemplates, onShortcuts, onCollapse, onSettings, onTrash }) {
+export function Sidebar({ selectedId, atHome, onSelect, onSearch, onTemplates, onShortcuts, onCollapse, onSettings, onTrash, openInNewTab }) {
   const [isExpanded, setExpanded] = useExpandedSet();
   const createPage = useCreatePage();
   const archivePage = useArchivePage();
@@ -94,6 +95,7 @@ export function Sidebar({ selectedId, atHome, onSelect, onSearch, onTemplates, o
     onAddChild: addPage,
     onDelete: deletePage,
     onMoveTo: setMoving,
+    openInNewTab,
     dnd,
   };
 
@@ -158,14 +160,7 @@ export function Sidebar({ selectedId, atHome, onSelect, onSearch, onTemplates, o
           <TrashIcon />
           <span>Trash</span>
         </button>
-        <button type="button" className={navButton} onClick={() => addPage(null)} disabled={createPage.isPending}>
-          <PlusIcon />
-          <span>New page</span>
-        </button>
-        <button type="button" className={navButton} onClick={() => addPage(null, 'database')} disabled={createPage.isPending}>
-          <DatabaseIcon />
-          <span>New database</span>
-        </button>
+        <NewPageButton addPage={addPage} isPending={createPage.isPending} />
         <UserStrip onSettings={onSettings} onShortcuts={onShortcuts} />
       </div>
 
@@ -380,6 +375,7 @@ function TreeItem({ page, depth, path, ctx }) {
         onDragStart={(e) => {
           e.dataTransfer.effectAllowed = 'move';
           e.dataTransfer.setData('text/plain', title);
+          e.dataTransfer.setData('application/x-papier-page-id', page.id);
           dnd.start(page);
         }}
         onDragOver={(e) => {
@@ -464,6 +460,15 @@ function TreeItem({ page, depth, path, ctx }) {
             className="flex size-6 items-center justify-center rounded text-muted hover:bg-white/10 hover:text-fg"
           >
             <MoveIcon />
+          </button>
+          <button
+            type="button"
+            aria-label={`Open ${title} in new tab`}
+            title="Open in new tab"
+            onClick={(e) => { e.stopPropagation(); ctx.openInNewTab(page.id); }}
+            className="flex size-6 items-center justify-center rounded text-muted hover:bg-white/10 hover:text-fg"
+          >
+            <NewTabIcon />
           </button>
           <button
             type="button"
@@ -592,6 +597,57 @@ function useExpandedSet() {
 }
 
 /**
+ * "+ New" button with a tiny dropdown: New page | New database.
+ * @param {{ addPage: (parentId: string | null, kind?: 'page' | 'database') => void, isPending: boolean }} props
+ */
+function NewPageButton({ addPage, isPending }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(/** @type {HTMLButtonElement | null} */ (null));
+  return (
+    <div className="relative">
+      <button
+        ref={ref}
+        type="button"
+        disabled={isPending}
+        onClick={() => setOpen((o) => !o)}
+        className={`${navButton} w-full disabled:opacity-50`}
+      >
+        <PlusIcon />
+        <span className="flex-1">New</span>
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true">
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+      </button>
+      {open && (
+        <div
+          className="absolute bottom-full left-0 right-0 mb-1 overflow-hidden rounded-lg border border-line bg-s-sidebar shadow-xl"
+          onMouseLeave={() => setOpen(false)}
+        >
+          <button
+            type="button"
+            disabled={isPending}
+            onClick={() => { setOpen(false); addPage(null, 'page'); }}
+            className="flex w-full items-center gap-2 px-3 py-2 text-[13px] text-fg hover:bg-hover"
+          >
+            <PlusIcon size={14} />
+            <span>New page</span>
+          </button>
+          <button
+            type="button"
+            disabled={isPending}
+            onClick={() => { setOpen(false); addPage(null, 'database'); }}
+            className="flex w-full items-center gap-2 px-3 py-2 text-[13px] text-fg hover:bg-hover"
+          >
+            <DatabaseIcon />
+            <span>New database</span>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
  * Compact user strip at the sidebar bottom: avatar, name, shortcuts, settings.
  * @param {{ onSettings: () => void, onShortcuts: () => void }} props
  */
@@ -661,6 +717,16 @@ function MoveIcon() {
   );
 }
 
+function NewTabIcon() {
+  return (
+    <svg {...iconProps(12)}>
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+      <polyline points="15 3 21 3 21 9" />
+      <line x1="10" y1="14" x2="21" y2="3" />
+    </svg>
+  );
+}
+
 function HomeIcon() {
   return (
     <svg {...iconProps()}>
@@ -701,8 +767,7 @@ function KeyboardIcon({ size }) {
 function GearIcon({ size }) {
   return (
     <svg {...iconProps(size)}>
-      <circle cx="12" cy="12" r="3" />
-      <path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" />
+      <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
     </svg>
   );
 }

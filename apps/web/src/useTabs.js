@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { pageKeys } from './api/pages.js';
 import { useQueryClient } from '@tanstack/react-query';
 
-const STORAGE_KEY = 'papier:tabs';
+// v2: bumped to clear tabs that were auto-created by the old behaviour
+const STORAGE_KEY = 'papier:tabs:v2';
 const MAX_TABS = 20;
 
 /** @returns {string[]} */
@@ -16,23 +17,22 @@ function save(tabs) {
 }
 
 /**
- * Open-page tabs, persisted in localStorage.
- * Active tab is the URL's ?p= param; this hook syncs it in and out.
+ * Explicitly-opened page tabs, persisted in localStorage.
+ * Tabs are only created on demand — never on ordinary navigation.
  * @param {string | null} activeId
  */
 export function useTabs(activeId) {
   const [tabs, setTabs] = useState(load);
   const qc = useQueryClient();
 
-  useEffect(() => {
-    if (!activeId) return;
+  const openInNewTab = useCallback(/** @param {string} id */ (id) => {
     setTabs((prev) => {
-      if (prev.includes(activeId)) return prev;
-      const next = [...prev, activeId].slice(-MAX_TABS);
+      if (prev.includes(id)) return prev;
+      const next = [...prev, id].slice(-MAX_TABS);
       save(next);
       return next;
     });
-  }, [activeId]);
+  }, []);
 
   const closeTab = useCallback(
     /** @param {string} id @returns {string | null} */
@@ -57,5 +57,5 @@ export function useTabs(activeId) {
     [qc],
   );
 
-  return { tabs, closeTab, titleOf };
+  return { tabs, openInNewTab, closeTab, titleOf };
 }

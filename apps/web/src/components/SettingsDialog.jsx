@@ -1,14 +1,18 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { THEMES } from '@papier/ui';
 import { MIN_PASSWORD } from '@papier/core/text';
 import { useAuthState, useChangePassword, useLogout, useUpdateProfile, useServerInfo } from '../api/auth.js';
+import { useUpdateWorkspace, useWorkspace } from '../api/workspaces.js';
 import { MoodOption } from './PageHeader.jsx';
 import { AiPanel } from './OllamaSettings.jsx';
 
-/** @typedef {'account' | 'display' | 'ai' | 'about'} Tab */
+const EmojiPicker = lazy(() => import('./EmojiPicker.jsx').then((m) => ({ default: m.EmojiPicker })));
+
+/** @typedef {'account' | 'workspace' | 'display' | 'ai' | 'about'} Tab */
 
 const TABS = /** @type {const} */ ([
   { id: 'account', label: 'Account' },
+  { id: 'workspace', label: 'Workspace' },
   { id: 'display', label: 'Display' },
   { id: 'ai', label: 'AI' },
   { id: 'about', label: 'About' },
@@ -90,6 +94,61 @@ function AccountTab() {
         >
           Sign out
         </button>
+      </section>
+    </div>
+  );
+}
+
+function WorkspaceTab() {
+  const { workspace } = useWorkspace();
+  const update = useUpdateWorkspace();
+  const [picking, setPicking] = useState(false);
+  if (!workspace) return null;
+  const owner = workspace.role === 'owner';
+  return (
+    <div className="flex flex-col gap-5">
+      <section>
+        <div className={sectionLabel}>Identity</div>
+        <div className="flex items-center gap-3 rounded-md border border-line bg-black/10 p-3">
+          <button
+            type="button"
+            disabled={!owner}
+            aria-label="Workspace icon"
+            title={owner ? 'Change icon' : undefined}
+            onClick={() => setPicking((o) => !o)}
+            className="flex size-10 shrink-0 items-center justify-center rounded-[6px] bg-hover text-[22px] leading-none enabled:hover:ring-1 enabled:hover:ring-accent/50 disabled:opacity-60"
+          >
+            {workspace.icon ?? (workspace.name.trim()[0] ?? 'P').toUpperCase()}
+          </button>
+          <div className="min-w-0 flex-1">
+            {owner ? (
+              <input
+                key={workspace.name}
+                className={inputCls}
+                defaultValue={workspace.name}
+                aria-label="Workspace name"
+                onBlur={(e) => {
+                  const name = e.target.value.trim();
+                  if (name && name !== workspace.name) update.mutate({ id: workspace.id, name });
+                }}
+                onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+              />
+            ) : (
+              <p className="text-[13px] text-fg-strong">{workspace.name}</p>
+            )}
+            <p className="mt-1 text-[11px] text-faint capitalize">Your role: {workspace.role}</p>
+          </div>
+        </div>
+        {picking && owner && (
+          <div className="mt-2 rounded-md border border-line bg-black/10 p-1">
+            <Suspense fallback={<div className="h-40" />}>
+              <EmojiPicker
+                onPick={(icon) => { update.mutate({ id: workspace.id, icon }); setPicking(false); }}
+                onRemove={() => { update.mutate({ id: workspace.id, icon: null }); setPicking(false); }}
+              />
+            </Suspense>
+          </div>
+        )}
       </section>
     </div>
   );
@@ -256,6 +315,7 @@ export function SettingsDialog({ onClose, prefs, onChange, initialTab = 'account
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-4">
           {tab === 'account' && <AccountTab />}
+          {tab === 'workspace' && <WorkspaceTab />}
           {tab === 'display' && <DisplayTab prefs={prefs} onChange={onChange} />}
           {tab === 'ai' && <AiPanel />}
           {tab === 'about' && <AboutTab />}

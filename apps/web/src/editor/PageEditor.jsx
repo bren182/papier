@@ -4,6 +4,7 @@ import { EditorContent, useEditor } from '@tiptap/react';
 import { TextSelection } from '@tiptap/pm/state';
 import { api, ApiError, SIGNED_IN_EVENT } from '../api/client.js';
 import { uploadFile } from '../api/files.js';
+import { useAiStatus } from '../api/ai.js';
 import { pageQuery } from '../api/pages.js';
 import { openPeek, useTargetBlock } from '../useSelectedPage.js';
 import { saveBlocks, usePageBlocks } from '../api/blocks.js';
@@ -47,6 +48,7 @@ export function PageEditor({ pageId, onOpenPage, onEmptyChange, template = false
 function Editor({ pageId, rows, onOpenPage, onEmptyChange, template, editorRef }) {
   const [container, setContainer] = useState(/** @type {HTMLDivElement | null} */ (null));
   const qc = useQueryClient();
+  const { data: aiStatus } = useAiStatus();
   // Button blocks run by id, so their latest settings must be saved first.
   const saverRef = useRef(/** @type {ReturnType<typeof createBlockSaver> | null} */ (null));
   const { runBlock } = useRunButton();
@@ -102,6 +104,17 @@ function Editor({ pageId, rows, onOpenPage, onEmptyChange, template, editorRef }
           );
           return data.results ?? [];
         },
+        onSearchPhotos: async (q) => {
+          const data = /** @type {{ results?: { preview: string, regular: string, downloadLocation: string, alt: string }[] }} */ (
+            await api(`/ai/unsplash?q=${encodeURIComponent(q)}`).catch(() => ({ results: [] }))
+          );
+          return data.results ?? [];
+        },
+        onPickPhoto: async (photo) => {
+          api('/ai/unsplash/download', { method: 'POST', body: { downloadLocation: photo.downloadLocation } }).catch(() => {});
+          const { url } = /** @type {{ url: string }} */ (await api('/files/fetch', { method: 'POST', body: { url: photo.regular } }));
+          return url;
+        },
         onUpload: async (file) => {
           const { url } = await uploadFile(file);
           return url;
@@ -124,6 +137,18 @@ function Editor({ pageId, rows, onOpenPage, onEmptyChange, template, editorRef }
       },
     },
   });
+
+  // Sync AI integration flags into the imageBlock extension options so the node
+  // view can show lock states without gating on the callbacks' presence.
+  useEffect(() => {
+    if (!editor || !aiStatus) return;
+    const ext = editor.extensionManager.extensions.find((e) => e.name === 'imageBlock');
+    if (!ext) return;
+    ext.options.giphyConfigured = /** @type {any} */ (aiStatus).giphy?.configured ?? false;
+    ext.options.unsplashConfigured = /** @type {any} */ (aiStatus).unsplash?.configured ?? false;
+    // Force node views to re-render with updated options.
+    editor.view.dispatch(editor.view.state.tr);
+  }, [editor, aiStatus]);
 
   // Autosave: diff the document against what the server has, per block.
   useEffect(() => {

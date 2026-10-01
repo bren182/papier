@@ -1,17 +1,26 @@
+import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { pageKeys } from '../api/pages.js';
-import { useTabs } from '../useTabs.js';
 import { TitleText } from './TitleText.jsx';
 
-/**
- * Horizontal tab strip showing open pages. Hidden when only one tab is open.
- * @param {{ activeId: string | null, onSelect: (id: string | null) => void }} props
- */
-export function TabBar({ activeId, onSelect }) {
-  const { tabs, closeTab } = useTabs(activeId);
-  const qc = useQueryClient();
+const PAGE_DRAG_TYPE = 'application/x-papier-page-id';
 
-  if (tabs.length <= 1) return null;
+/**
+ * Horizontal tab strip for explicitly-opened pages.
+ * Hidden when there are no open tabs.
+ * @param {{
+ *   activeId: string | null,
+ *   tabs: string[],
+ *   closeTab: (id: string) => string | null,
+ *   openInNewTab: (id: string) => void,
+ *   onSelect: (id: string | null) => void,
+ * }} props
+ */
+export function TabBar({ activeId, tabs, closeTab, openInNewTab, onSelect }) {
+  const qc = useQueryClient();
+  const [dropOver, setDropOver] = useState(false);
+
+  if (tabs.length === 0) return null;
 
   /** @param {string} id */
   const pageOf = (id) => /** @type {any} */ (qc.getQueryData(pageKeys.detail(id)))?.page ?? null;
@@ -69,6 +78,40 @@ export function TabBar({ activeId, onSelect }) {
           </div>
         );
       })}
+
+      {/* Drop zone: drag a sidebar page here to open it in a tab */}
+      <div
+        role="button"
+        aria-label="Drop page here to open in new tab"
+        tabIndex={-1}
+        onDragOver={(e) => {
+          if (!e.dataTransfer.types.includes(PAGE_DRAG_TYPE)) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'copy';
+          setDropOver(true);
+        }}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(/** @type {Node|null} */ (e.relatedTarget))) setDropOver(false);
+        }}
+        onDrop={(e) => {
+          const id = e.dataTransfer.getData(PAGE_DRAG_TYPE);
+          if (!id) return;
+          e.preventDefault();
+          setDropOver(false);
+          openInNewTab(id);
+          onSelect(id);
+        }}
+        className={`ml-1 flex h-7 self-center items-center gap-1 rounded-md border px-2 text-[11px] transition-colors ${
+          dropOver
+            ? 'border-accent bg-accent/10 text-accent'
+            : 'border-dashed border-white/15 text-faint/50'
+        }`}
+      >
+        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true">
+          <path d="M12 5v14M5 12h14" />
+        </svg>
+        {dropOver && <span>new tab</span>}
+      </div>
     </div>
   );
 }

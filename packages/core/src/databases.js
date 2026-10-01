@@ -170,6 +170,8 @@ export const ViewConfig = z.object({
   groupBy: PropertyId.nullable().default(null),
   /** Tables: leave out groups with no rows. */
   hideEmptyGroups: z.boolean().default(false),
+  /** Board: option ids (or '__none__' for the null group) hidden from view. */
+  hiddenGroups: z.array(z.string()).max(50).default([]),
   /** Calendar: the date the rows sit on (a date, created/edited time, or date rollup). */
   dateBy: PropertyId.nullable().default(null),
   /** Template that "New" uses in this view (null = an empty row). */

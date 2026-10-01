@@ -5,6 +5,7 @@ import { useWorkspace } from './api/workspaces.js';
 import { useSelectedPage } from './useSelectedPage.js';
 import { usePage, useSetFavorite } from './api/pages.js';
 import { useDuplicatePage } from './api/templates.js';
+import { useTabs } from './useTabs.js';
 import { Sidebar } from './components/Sidebar.jsx';
 import { Topbar } from './components/Topbar.jsx';
 import { Page } from './components/Page.jsx';
@@ -22,6 +23,7 @@ export function App() {
   const [prefs, updatePrefs] = usePrefs();
   const [selectedId, select] = useSelectedPage();
   const { workspace } = useWorkspace();
+  const { tabs, openInNewTab, closeTab } = useTabs(selectedId ?? workspace?.homePageId ?? null);
   const atHome = !selectedId;
   const pageId = selectedId ?? workspace?.homePageId ?? null;
   const [searching, setSearching] = useState(false);
@@ -59,6 +61,15 @@ export function App() {
       if (isMobile) updatePrefs({ sidebar: false });
     },
     [select, isMobile, updatePrefs],
+  );
+
+  // Open a page in a new tab and navigate to it.
+  const openPageInNewTab = useCallback(
+    /** @param {string} id */ (id) => {
+      openInNewTab(id);
+      selectAndClose(id);
+    },
+    [openInNewTab, selectAndClose],
   );
 
   useEffect(() => {
@@ -139,11 +150,18 @@ export function App() {
           onCollapse={() => updatePrefs({ sidebar: false })}
           onSettings={() => setSettingsOpen(true)}
           onTrash={() => setTrash(true)}
+          openInNewTab={openPageInNewTab}
         />
       </div>
       <main className="relative flex min-w-0 flex-1 flex-col">
         <Topbar selectedId={pageId} onSelect={selectAndClose} prefs={prefs} onChange={updatePrefs} onAi={() => setAiOpen(true)} />
-        <TabBar activeId={pageId} onSelect={selectAndClose} />
+        <TabBar
+          activeId={pageId}
+          tabs={tabs}
+          closeTab={closeTab}
+          openInNewTab={openInNewTab}
+          onSelect={selectAndClose}
+        />
         <div className="relative flex min-h-0 flex-1">
           <Page selectedId={pageId} onSelect={selectAndClose} onTemplates={setLibrary} />
           <RowPeek onSelect={selectAndClose} />

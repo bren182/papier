@@ -123,36 +123,61 @@ function NewMenu({ anchor, onClose, onNew }) {
   const { templates, view, setConfig, m, openRow } = useDb();
   const current = defaultTemplate(view, templates);
   const small = 'rounded px-1.5 text-[11px] text-muted hover:bg-white/[0.08] hover:text-fg';
+  const [renaming, setRenaming] = useState(/** @type {string | null} */ (null));
+  const [renameDraft, setRenameDraft] = useState('');
+
+  const commitRename = () => {
+    if (!renaming) return;
+    const name = renameDraft.trim();
+    m.renameRow(renaming, name);
+    setRenaming(null);
+  };
+
   return (
     <Popover anchor={anchor} onClose={onClose} width={300} align="end">
       <div className={menuLabel}>Templates</div>
       {templates.length === 0 && (
-        <div className="px-2 pb-1.5 text-[13px] text-muted">None yet. A template fills in a new row’s values and content.</div>
+        <div className="px-2 pb-1.5 text-[13px] text-muted">None yet. A template fills in a new row's values and content.</div>
       )}
       {templates.map((t) => (
         <div key={t.id} className="group/t flex items-center rounded-md hover:bg-hover">
-          <button
-            type="button"
-            className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1 text-left text-[13px] text-fg"
-            onClick={() => {
-              onClose();
-              onNew(t.id);
-            }}
-          >
-            <span className="truncate">{t.title || 'Untitled template'}</span>
-            {current === t.id && <span className="shrink-0 text-[11px] text-accent-text">Default</span>}
-          </button>
+          {renaming === t.id ? (
+            <input
+              autoFocus
+              value={renameDraft}
+              onChange={(e) => setRenameDraft(e.target.value)}
+              onBlur={commitRename}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') { e.preventDefault(); commitRename(); }
+                if (e.key === 'Escape') setRenaming(null);
+                e.stopPropagation();
+              }}
+              onClick={(e) => e.stopPropagation()}
+              placeholder="Template name…"
+              className="min-w-0 flex-1 bg-transparent px-2 py-1 text-[13px] text-fg outline-none"
+            />
+          ) : (
+            <button
+              type="button"
+              className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1 text-left text-[13px] text-fg"
+              onClick={() => { onClose(); onNew(t.id); }}
+              onDoubleClick={(e) => { e.stopPropagation(); setRenaming(t.id); setRenameDraft(t.title || ''); }}
+            >
+              <span className="truncate">{t.title || 'Untitled template'}</span>
+              {current === t.id && <span className="shrink-0 text-[11px] text-accent-text">Default</span>}
+            </button>
+          )}
           <span className="flex shrink-0 gap-0.5 pr-1 opacity-0 group-hover/t:opacity-100 focus-within:opacity-100">
             <button type="button" className={small} onClick={() => setConfig({ template: current === t.id ? null : t.id })}>
               {current === t.id ? 'Unset default' : 'Set default'}
             </button>
+            <button type="button" className={small} onClick={() => { setRenaming(t.id); setRenameDraft(t.title || ''); }}>
+              Rename
+            </button>
             <button
               type="button"
               className={small}
-              onClick={() => {
-                onClose();
-                openRow(t.id);
-              }}
+              onClick={() => { onClose(); openRow(t.id); }}
             >
               Edit
             </button>
@@ -163,23 +188,16 @@ function NewMenu({ anchor, onClose, onNew }) {
         </div>
       ))}
       <div className="my-1 h-px bg-line" />
-      <button
-        type="button"
-        className={menuItem}
-        onClick={() => {
-          onClose();
-          onNew(null);
-        }}
-      >
+      <button type="button" className={menuItem} onClick={() => { onClose(); onNew(null); }}>
         Empty page
       </button>
       <button
         type="button"
         className={menuItem}
         onClick={async () => {
-          onClose();
           const t = await m.addTemplate();
-          openRow(t.id);
+          setRenaming(t.id);
+          setRenameDraft('');
         }}
       >
         <Icon path={ICONS.plus} /> New template
