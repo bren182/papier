@@ -10,6 +10,18 @@ import { api } from './client.js';
  */
 
 export const authKey = ['auth'];
+export const infoKey = ['info'];
+
+/** Server version and build info from GET /api/health. */
+export function useServerInfo() {
+  return useQuery({
+    queryKey: infoKey,
+    /** @returns {Promise<{ ok: boolean, version: string, sha: string | null }>} */
+    queryFn: () => /** @type {any} */ (api('/health')),
+    staleTime: Infinity,
+    retry: false,
+  });
+}
 
 /** Who is signed in (null user = signed out), and whether the server still needs its first account. */
 export function useAuthState() {

@@ -104,7 +104,9 @@ export function buildApp({
   }
 
   authPlugin(app, db);
-  app.get('/api/health', async () => ({ ok: true, blockTypes: BLOCK_TYPES.length }));
+  const version = process.env.APP_VERSION ?? '0.3.0';
+  const sha = process.env.COMMIT_SHA ?? null;
+  app.get('/api/health', async () => ({ ok: true, version, sha, blockTypes: BLOCK_TYPES.length }));
   authRoutes(app, db, { ...cookie, setupToken: () => (userCount(db) === 0 ? token : null) });
   pageRoutes(app, db);
   blockRoutes(app, db);

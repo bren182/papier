@@ -49,11 +49,16 @@ COPY --from=builder /app/apps/web/dist/ /app/web/
 # Data dir (SQLite file + uploads)
 RUN mkdir -p /data/uploads
 
+ARG APP_VERSION=dev
+ARG COMMIT_SHA=
+
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
     PORT=3000 \
     DATABASE_PATH=/data/papier.db \
-    STATIC_DIR=/app/web
+    STATIC_DIR=/app/web \
+    APP_VERSION=${APP_VERSION} \
+    COMMIT_SHA=${COMMIT_SHA}
 
 EXPOSE 3000
 
