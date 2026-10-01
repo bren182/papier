@@ -75,7 +75,15 @@ export function useDemoStart() {
   const done = useSignedIn();
   return useMutation({
     mutationFn: () => api('/demo/start', { method: 'POST' }),
-    onSuccess: done,
+    onSuccess: () => {
+      // Clear any open-page URL params so the demo doesn't try to open the previous user's page.
+      const url = new URL(window.location.href);
+      url.searchParams.delete('p');
+      url.searchParams.delete('b');
+      url.searchParams.delete('peek');
+      window.history.replaceState(null, '', url.toString());
+      done();
+    },
   });
 }
 
