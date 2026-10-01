@@ -26,6 +26,24 @@ export function BoardView() {
   const [newRowId, setNewRowId] = useState(/** @type {string | null} */ (null));
   const [menu, setMenu] = useState(/** @type {{ row: Row, at: HTMLElement | { x: number, y: number } } | null} */ (null));
   const transfer = useTransfer();
+  const [colDragging, setColDragging] = useState(/** @type {string | null} */ (null));
+  const [colTarget, setColTarget] = useState(/** @type {string | null} */ (null));
+
+  const commitColReorder = () => {
+    const src = colDragging;
+    const tgt = colTarget;
+    setColDragging(null);
+    setColTarget(null);
+    if (!src || !tgt || src === tgt) return;
+    const opts = group.config.options ?? [];
+    const from = opts.findIndex((o) => o.id === src);
+    const to = opts.findIndex((o) => o.id === tgt);
+    if (from < 0 || to < 0) return;
+    const next = [...opts];
+    const [item] = next.splice(from, 1);
+    next.splice(to, 0, item);
+    m.updateProperty(group.id, { config: { ...group.config, options: next } });
+  };
 
   if (!group) {
     return (
@@ -118,6 +136,12 @@ export function BoardView() {
               if (templateId) openRow(row.id);
               else setNewRowId(row.id);
             }}
+            colDragging={colDragging}
+            colTarget={colTarget}
+            onColDragStart={(id) => setColDragging(id)}
+            onColDragOver={(id) => setColTarget(id)}
+            onColDrop={commitColReorder}
+            onColDragEnd={() => { setColDragging(null); setColTarget(null); }}
           />
         ))}
       </div>
@@ -130,9 +154,13 @@ export function BoardView() {
 /**
  * @param {{ group: Property, value: string | null, name: string, dragging: Dragging | null, drop: BoardDrop | null,
  *   onDragStart: (row: Row) => void, onDragOver: (d: BoardDrop) => void, onDrop: () => void, onDragEnd: () => void,
- *   newRowId: string | null, onNew: () => void, onMenu: (row: Row, at: HTMLElement | { x: number, y: number }) => void }} props
+ *   newRowId: string | null, onNew: () => void, onMenu: (row: Row, at: HTMLElement | { x: number, y: number }) => void,
+ *   colDragging: string | null, colTarget: string | null,
+ *   onColDragStart: (id: string) => void, onColDragOver: (id: string) => void,
+ *   onColDrop: () => void, onColDragEnd: () => void }} props
  */
-function Column({ group, value, name, dragging, drop, onDragStart, onDragOver, onDrop, onDragEnd, newRowId, onNew, onMenu }) {
+function Column({ group, value, name, dragging, drop, onDragStart, onDragOver, onDrop, onDragEnd, newRowId, onNew, onMenu,
+  colDragging, colTarget, onColDragStart, onColDragOver, onColDrop, onColDragEnd }) {
   const { dbId, view, properties } = useDb();
   const { sorts, filters } = view.config;
   const q = useRows(dbId, {
@@ -150,25 +178,52 @@ function Column({ group, value, name, dragging, drop, onDragStart, onDragOver, o
   const lineBefore = drop?.beforeId;
   const lineAfter = drop?.afterId;
 
+  const isColTarget = colTarget === value && value !== null;
+  const isColDragging = colDragging === value;
+
   return (
     <section
       aria-label={name}
       data-column={value ?? ''}
       onDragOver={(e) => {
-        if (!dragging) return;
+        if (!dragging && !colDragging) return;
         e.preventDefault();
-        // Over the column but not over a card: the end of the list.
+        if (colDragging) {
+          if (value !== null && colDragging !== value) onColDragOver(value);
+          return;
+        }
+        // Card drag: over the column but not over a card → end of list.
         if (e.target === e.currentTarget || !(e.target instanceof Element && e.target.closest('[data-card]'))) {
           onDragOver({ value, afterId: lastId });
         }
       }}
       onDrop={(e) => {
         e.preventDefault();
-        onDrop();
+        if (colDragging) onColDrop();
+        else onDrop();
       }}
-      className={`flex w-[260px] shrink-0 flex-col gap-1.5 rounded-lg p-1.5 ${drop ? 'bg-accent-soft/40' : 'bg-white/[0.02]'}`}
+      className={`group/col flex w-[260px] shrink-0 flex-col gap-1.5 rounded-lg p-1.5 transition-colors ${
+        drop ? 'bg-accent-soft/40' : isColTarget ? 'ring-2 ring-inset ring-accent/60 bg-accent-soft/20' : 'bg-white/[0.02]'
+      } ${isColDragging ? 'opacity-50' : ''}`}
     >
       <header className="flex h-7 items-center gap-2 px-1 text-[13px]">
+        {value !== null && (
+          <span
+            draggable
+            aria-label="Drag to reorder column"
+            title="Drag to reorder"
+            onDragStart={(e) => {
+              e.stopPropagation();
+              e.dataTransfer.effectAllowed = 'move';
+              e.dataTransfer.setData('text/plain', 'col');
+              onColDragStart(value);
+            }}
+            onDragEnd={onColDragEnd}
+            className="cursor-grab active:cursor-grabbing text-faint opacity-0 group-hover/col:opacity-100 hover:text-muted"
+          >
+            <Icon path={ICONS.grip} size={14} />
+          </span>
+        )}
         <span className="truncate font-medium text-fg">{name}</span>
         <span className="text-faint">{total}</span>
         <button

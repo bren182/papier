@@ -115,6 +115,17 @@ export function Page({ selectedId, onSelect, onTemplates }) {
                   )}
                 </Suspense>
               </div>
+              {!isDatabase && (
+                <div
+                  aria-hidden="true"
+                  onClick={() => editorRef.current?.focusEnd()}
+                  className="group mt-1 min-h-20 cursor-text select-none py-3"
+                >
+                  <span className="text-[14px] italic text-faint opacity-0 transition-opacity group-hover:opacity-40">
+                    Click to keep writing…
+                  </span>
+                </div>
+              )}
               {canStartAs && (
                 <StartAs
                   pageId={data.page.id}

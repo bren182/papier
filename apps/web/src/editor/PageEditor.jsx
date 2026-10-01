@@ -23,7 +23,7 @@ import { recentPages } from '../recentPages.js';
 /** @typedef {import('@papier/core').Block} Block */
 
 const EmojiPicker = lazy(() => import('../components/EmojiPicker.jsx').then((m) => ({ default: m.EmojiPicker })));
-/** @typedef {{ focusStart: () => void }} PageEditorHandle */
+/** @typedef {{ focusStart: () => void, focusEnd: () => void }} PageEditorHandle */
 /** @typedef {import('@papier/core').Page} Page */
 
 /**
@@ -190,7 +190,10 @@ function Editor({ pageId, rows, onOpenPage, onEmptyChange, template, editorRef }
     setFlash({ key: Date.now(), top: box.top - outer.top, left: box.left - outer.left, width: box.width, height: box.height });
   }, [editor, container, target, clearTarget]);
 
-  useImperativeHandle(editorRef, () => ({ focusStart: () => editor.commands.focus('start') }), [editor]);
+  useImperativeHandle(editorRef, () => ({
+    focusStart: () => editor.commands.focus('start'),
+    focusEnd: () => editor.commands.focus('end'),
+  }), [editor]);
 
   useEffect(() => {
     if (!onEmptyChange) return;

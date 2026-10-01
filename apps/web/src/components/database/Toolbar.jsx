@@ -7,8 +7,9 @@ import { RefChip, RelationPicker } from './cells.jsx';
 import { MiniCalendar } from './MiniCalendar.jsx';
 import { GROUPABLE } from './TableView.jsx';
 import { defaultTemplate, orderedProperties, TITLE, useDb } from './context.js';
-import { Icon, ICONS, OP_LABELS, TypeIcon } from './meta.jsx';
+import { Icon, ICONS, OP_LABELS, TYPE_LABELS, TypeIcon } from './meta.jsx';
 import { field, menuItem, menuLabel, Popover } from './Popover.jsx';
+import { PropertyMenu } from './PropertyMenu.jsx';
 
 const toolButton = 'flex h-7 items-center gap-1.5 rounded-md px-2 text-[13px] text-muted hover:bg-hover hover:text-fg';
 const activeTool = 'text-accent-text hover:text-accent-text';
@@ -490,12 +491,15 @@ function debounce(fn) {
   timer = window.setTimeout(fn, 300);
 }
 
-/** Show/hide properties in this view. @param {{ anchor: HTMLElement | null, onClose: () => void }} props */
+/** Show/hide/configure properties in this view. @param {{ anchor: HTMLElement | null, onClose: () => void }} props */
 function PropertiesMenu({ anchor, onClose }) {
   const { properties, view, setConfig, m } = useDb();
   const ordered = orderedProperties(properties, view.config);
   const hidden = view.config.hidden;
-  const [adding, setAdding] = useState('');
+  const [configProp, setConfigProp] = useState(/** @type {import('./context.js').Property | null} */ (null));
+  const [configAnchorEl, setConfigAnchorEl] = useState(/** @type {HTMLElement | null} */ (null));
+  const addRef = useRef(/** @type {HTMLButtonElement | null} */ (null));
+  const [addOpen, setAddOpen] = useState(false);
 
   return (
     <Popover anchor={anchor} onClose={onClose} width={260} align="end">
@@ -504,34 +508,62 @@ function PropertiesMenu({ anchor, onClose }) {
       {ordered.map((p) => {
         const shown = !hidden.includes(p.id);
         return (
-          <button
-            key={p.id}
-            type="button"
-            className={menuItem}
-            onClick={() => setConfig({ hidden: shown ? [...hidden, p.id] : hidden.filter((id) => id !== p.id) })}
-          >
-            <TypeIcon type={p.type} />
-            <span className={`flex-1 truncate ${shown ? '' : 'text-faint'}`}>{p.name}</span>
-            <Icon path={shown ? ICONS.eye : ICONS.eyeOff} />
-          </button>
+          <div key={p.id} className="flex w-full items-center rounded-md text-[13px] text-fg hover:bg-hover">
+            <button
+              type="button"
+              title={`Configure ${p.name}`}
+              onClick={(e) => { setConfigProp(p); setConfigAnchorEl(e.currentTarget); }}
+              className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-left"
+            >
+              <TypeIcon type={p.type} />
+              <span className={`flex-1 truncate ${shown ? '' : 'text-faint'}`}>{p.name}</span>
+            </button>
+            <button
+              type="button"
+              title={shown ? 'Hide' : 'Show'}
+              onClick={() => setConfig({ hidden: shown ? [...hidden, p.id] : hidden.filter((id) => id !== p.id) })}
+              className="flex size-8 shrink-0 items-center justify-center rounded text-muted hover:bg-white/[0.08] hover:text-fg"
+            >
+              <Icon path={shown ? ICONS.eye : ICONS.eyeOff} />
+            </button>
+          </div>
         );
       })}
       <div className="my-1 h-px bg-line" />
-      <div className="p-1">
-        <input
-          value={adding}
-          placeholder="New text property…"
-          onChange={(e) => setAdding(e.target.value)}
-          onKeyDown={(e) => {
-            e.stopPropagation();
-            if (e.key === 'Enter' && adding.trim()) {
-              m.addProperty({ name: adding.trim(), type: 'text' });
-              setAdding('');
-            }
+      <button ref={addRef} type="button" className={menuItem} onClick={() => setAddOpen((o) => !o)}>
+        <Icon path={ICONS.plus} /> New property
+      </button>
+      {configProp && configAnchorEl && (
+        <PropertyMenu prop={configProp} anchor={configAnchorEl} onClose={() => { setConfigProp(null); setConfigAnchorEl(null); }} />
+      )}
+      {addOpen && (
+        <AddPropertyMenu
+          anchor={addRef.current}
+          onClose={() => setAddOpen(false)}
+          onAdd={async (type) => {
+            setAddOpen(false);
+            const prop = await m.addProperty({ name: TYPE_LABELS[type], type });
+            setConfigProp(prop);
+            setConfigAnchorEl(addRef.current);
           }}
-          className={field}
         />
-      </div>
+      )}
+    </Popover>
+  );
+}
+
+/** Type picker for adding a new property. @param {{ anchor: HTMLElement | null, onClose: () => void, onAdd: (type: string) => void }} props */
+function AddPropertyMenu({ anchor, onClose, onAdd }) {
+  const types = ['text', 'number', 'select', 'multi_select', 'date', 'checkbox', 'url', 'relation', 'formula', 'button'];
+  return (
+    <Popover anchor={anchor} onClose={onClose} width={220}>
+      <div className={menuLabel}>Property type</div>
+      {types.map((t) => (
+        <button key={t} type="button" className={menuItem} onClick={() => onAdd(t)}>
+          <TypeIcon type={t} />
+          {TYPE_LABELS[t]}
+        </button>
+      ))}
     </Popover>
   );
 }

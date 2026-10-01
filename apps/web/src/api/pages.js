@@ -6,7 +6,7 @@ import { forgetRecent } from '../recentPages.js';
 
 /** @typedef {import('@papier/core').Page} Page */
 /** @typedef {{ id: string, title: string, titleContent: import('@papier/core').InlineContent | null, icon: string | null }} Crumb */
-/** @typedef {{ cover?: string | null, fullWidth?: boolean | null, smallText?: boolean | null, font?: 'serif' | 'sans' | 'mono' | null, mood?: string | null }} Appearance */
+/** @typedef {{ cover?: string | null, coverPosition?: number | null, fullWidth?: boolean | null, smallText?: boolean | null, font?: 'serif' | 'sans' | 'mono' | null, mood?: string | null }} Appearance */
 /** @typedef {{ title?: string, titleContent?: import('@papier/core').InlineContent, icon?: string | null, appearance?: Appearance }} PagePatch */
 /**
  * A trashed page, as the trash lists it.

@@ -15,6 +15,7 @@ export const PageKind = z.enum(PAGE_KINDS);
 export const Appearance = z
   .object({
     cover: z.string().max(64).nullable(),
+    coverPosition: z.number().min(0).max(100).nullable(),
     fullWidth: z.boolean().nullable(),
     smallText: z.boolean().nullable(),
     font: z.enum(['serif', 'sans', 'mono']).nullable(),

@@ -55,22 +55,66 @@ export const hasCover = (page) => Boolean(page?.appearance?.cover);
  */
 export function PageCover({ page }) {
   const cover = page?.appearance?.cover;
+  const patch = usePatch(page?.id ?? '');
   const [choosing, setChoosing] = useState(false);
+  const [repositioning, setRepositioning] = useState(false);
+  const [livePos, setLivePos] = useState(/** @type {number | null} */ (null));
   const ref = useRef(/** @type {HTMLButtonElement | null} */ (null));
   if (!cover) return null;
   const clear = cover === 'clear';
+  const isImage = cover.startsWith('asset:');
+  const pos = livePos ?? (page?.appearance?.coverPosition ?? 50);
+
+  /** @param {import('react').PointerEvent<HTMLDivElement>} e */
+  const onPointerMove = (e) => {
+    if (!repositioning) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    setLivePos(Math.round(Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100))));
+  };
+
+  const commitReposition = () => {
+    if (livePos !== null) patch.look({ coverPosition: livePos });
+    setRepositioning(false);
+    setLivePos(null);
+  };
+
   return (
-    <div className={`group/cover relative h-[170px] ${clear ? 'p-glass' : ''}`} data-cover={cover}>
-      {!clear && <div aria-hidden="true" className="page-cover absolute inset-0" style={{ backgroundImage: coverCss(cover) }} />}
+    <div
+      className={`group/cover relative h-[170px] ${clear ? 'p-glass' : ''}${repositioning ? ' cursor-ns-resize select-none' : ''}`}
+      data-cover={cover}
+      onPointerMove={onPointerMove}
+    >
+      {!clear && (
+        <div
+          aria-hidden="true"
+          className="page-cover absolute inset-0"
+          style={{ backgroundImage: coverCss(cover), backgroundPosition: isImage ? `center ${pos}%` : undefined }}
+        />
+      )}
       {page && (
-        <div className="absolute right-4 bottom-3 flex gap-1 opacity-0 transition-opacity group-hover/cover:opacity-100 focus-within:opacity-100">
-          <button ref={ref} type="button" onClick={() => setChoosing(true)} className={coverButton}>
-            Change cover
-          </button>
-          <CoverRemove page={page} />
+        <div className={`absolute right-4 bottom-3 flex gap-1 transition-opacity focus-within:opacity-100 ${repositioning ? 'opacity-100' : 'opacity-0 group-hover/cover:opacity-100'}`}>
+          {repositioning ? (
+            <button type="button" onClick={commitReposition} className={coverButton}>
+              Done repositioning
+            </button>
+          ) : (
+            <>
+              {isImage && (
+                <button type="button" onClick={() => setRepositioning(true)} className={coverButton}>
+                  Reposition
+                </button>
+              )}
+              <button ref={ref} type="button" onClick={() => setChoosing(true)} className={coverButton}>
+                Change cover
+              </button>
+              <CoverRemove page={page} />
+            </>
+          )}
         </div>
       )}
-      {page && choosing && <CoverChooser page={page} anchor={ref.current} onClose={() => setChoosing(false)} />}
+      {page && choosing && !repositioning && (
+        <CoverChooser page={page} anchor={ref.current} onClose={() => setChoosing(false)} />
+      )}
     </div>
   );
 }
