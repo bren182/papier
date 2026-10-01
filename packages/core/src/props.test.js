@@ -64,7 +64,7 @@ describe('coerceValue', () => {
 
 describe('ViewConfig', () => {
   it('defaults every field', () => {
-    expect(ViewConfig.parse({})).toEqual({ sorts: [], filters: [], hidden: [], widths: {}, propOrder: [], groupBy: null, hideEmptyGroups: false, dateBy: null, template: null });
+    expect(ViewConfig.parse({})).toEqual({ sorts: [], filters: [], hidden: [], widths: {}, propOrder: [], groupBy: null, hideEmptyGroups: false, hiddenGroups: [], dateBy: null, template: null });
   });
 
   it('rejects unknown filter operators', () => {
