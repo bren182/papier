@@ -21,3 +21,4 @@ notion-export*/
 
 # e2e session (apps/web/e2e/global-setup.js)
 .auth/
+*.png
