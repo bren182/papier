@@ -17,7 +17,7 @@ export function useAiStatus() {
 export function useSaveAiConfig() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (/** @type {{ provider?: string, url?: string, model?: string, anthropicKey?: string, anthropicModel?: string, anthropicWorkspaceId?: string, giphyKey?: string }} */ patch) =>
+    mutationFn: (/** @type {{ provider?: string, url?: string, model?: string, anthropicKey?: string, anthropicModel?: string, anthropicWorkspaceId?: string, giphyKey?: string, unsplashKey?: string }} */ patch) =>
       api('/ai/config', { method: 'PATCH', body: patch }),
     onSuccess: () => qc.invalidateQueries({ queryKey: aiStatusKey }),
   });

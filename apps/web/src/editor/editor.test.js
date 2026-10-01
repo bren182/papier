@@ -323,7 +323,7 @@ describe('Home widgets', () => {
   });
 
   it('lists the widgets in the slash menu', () => {
-    expect(slashItems('home').map((i) => i.title)).toEqual(['Greeting', 'Recent pages', 'Favourites']);
+    expect(slashItems('home').map((i) => i.title)).toEqual(['Greeting', 'Recent pages', 'Favourites', 'Reminders']);
   });
 });
 

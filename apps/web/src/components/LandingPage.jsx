@@ -22,8 +22,8 @@ services:
 volumes:
   papier_data:`;
 
-/** @param {{ onSignIn: () => void }} props */
-export function LandingPage({ onSignIn }) {
+/** @param {{ onSignIn: () => void, onDemo: () => void }} props */
+export function LandingPage({ onSignIn, onDemo }) {
   return (
     <div className="relative min-h-full overflow-y-auto" style={{ minHeight: '100svh' }}>
       {/* Full-bleed background */}
@@ -46,13 +46,22 @@ export function LandingPage({ onSignIn }) {
               A block‑based workspace — your notes, pages and databases, hosted by you.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={onSignIn}
-            className="mt-2 h-11 rounded-xl bg-white px-8 text-[15px] font-semibold text-black shadow-lg transition hover:bg-white/90 active:scale-95"
-          >
-            Sign in
-          </button>
+          <div className="mt-2 flex flex-wrap items-center justify-center gap-3">
+            <button
+              type="button"
+              onClick={onSignIn}
+              className="h-11 rounded-xl bg-white px-8 text-[15px] font-semibold text-black shadow-lg transition hover:bg-white/90 active:scale-95"
+            >
+              Sign in
+            </button>
+            <button
+              type="button"
+              onClick={onDemo}
+              className="h-11 rounded-xl border border-white/30 bg-white/10 px-8 text-[15px] font-semibold text-white backdrop-blur transition hover:bg-white/20 active:scale-95"
+            >
+              Try demo
+            </button>
+          </div>
         </header>
 
         {/* ── Feature grid ───────────────────────────────────────────── */}

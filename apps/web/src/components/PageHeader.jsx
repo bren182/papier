@@ -2,8 +2,10 @@ import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { COVERS, coverCss, THEMES } from '@papier/ui';
 import { useUpdatePage } from '../api/pages.js';
 import { uploadFile } from '../api/files.js';
+import { useAiStatus } from '../api/ai.js';
 import { usePageAction } from '../pageActions.js';
 import { setMood } from '../theme.js';
+import { api } from '../api/client.js';
 import { menuItem, menuLabel, Popover } from './database/Popover.jsx';
 
 /**
@@ -88,6 +90,9 @@ function CoverRemove({ page }) {
 /** Pick a cover preset (they follow the theme's palette). @param {{ page: PageData, anchor: HTMLElement | null, onClose: () => void }} props */
 function CoverChooser({ page, anchor, onClose }) {
   const patch = usePatch(page.id);
+  const { data: aiStatus } = useAiStatus();
+  const unsplashEnabled = aiStatus?.unsplash?.configured ?? false;
+  const [tab, setTab] = useState(/** @type {'presets'|'photos'} */ ('presets'));
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef(/** @type {HTMLInputElement | null} */ (null));
   const cover = page.appearance?.cover ?? null;
@@ -107,56 +112,156 @@ function CoverChooser({ page, anchor, onClose }) {
   };
 
   return (
-    <Popover anchor={anchor} onClose={onClose} width={340} align="end">
-      <div className={menuLabel}>Cover</div>
-      <div className="grid grid-cols-4 gap-1.5 p-1" aria-label="Covers">
-        {COVERS.map((c) => (
-          <button
-            key={c.id}
-            type="button"
-            title={c.name}
-            aria-label={`Cover ${c.name}`}
-            onClick={() => {
-              patch.look({ cover: c.id });
-              onClose();
-            }}
-            className={`page-cover h-12 rounded-md border ${cover === c.id ? 'border-accent' : 'border-line'} hover:border-muted`}
-            style={{ backgroundImage: c.css === 'none' ? undefined : c.css }}
-          >
-            {c.id === 'clear' && <span className="text-[11px] text-muted">Clear (blurred)</span>}
-          </button>
-        ))}
-        {isImage && (
-          <button
-            type="button"
-            title="Custom photo"
-            aria-label="Current photo cover"
-            onClick={() => onClose()}
-            className="page-cover h-12 rounded-md border border-accent"
-            style={{ backgroundImage: coverCss(cover) }}
-          />
-        )}
-      </div>
-      <div className="border-t border-line px-2 py-2">
-        <label
-          className={`flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-dashed border-line text-[12px] text-muted transition-colors hover:border-accent/60 hover:text-fg ${uploading ? 'pointer-events-none opacity-50' : ''}`}
-        >
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) handleUpload(f);
-              e.target.value = '';
-            }}
-          />
-          {uploading ? 'Uploading…' : '↑ Upload photo'}
-        </label>
-        <p className="mt-1 text-[11px] text-faint">Covers use your theme's colours.</p>
-      </div>
+    <Popover anchor={anchor} onClose={onClose} width={360} align="end">
+      {unsplashEnabled && (
+        <div className="flex gap-0.5 border-b border-line px-2 pt-1.5 pb-1">
+          {/** @type {const} */ (['presets', 'photos']).map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTab(t)}
+              className={`h-6 rounded px-2.5 text-[12px] font-medium capitalize transition-colors ${tab === t ? 'bg-accent/20 text-accent' : 'text-muted hover:text-fg hover:bg-hover'}`}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {tab === 'presets' && (
+        <>
+          <div className={menuLabel}>Cover</div>
+          <div className="grid grid-cols-4 gap-1.5 p-1" aria-label="Covers">
+            {COVERS.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                title={c.name}
+                aria-label={`Cover ${c.name}`}
+                onClick={() => { patch.look({ cover: c.id }); onClose(); }}
+                className={`page-cover h-12 rounded-md border ${cover === c.id ? 'border-accent' : 'border-line'} hover:border-muted`}
+                style={{ backgroundImage: c.css === 'none' ? undefined : c.css }}
+              >
+                {c.id === 'clear' && <span className="text-[11px] text-muted">Clear (blurred)</span>}
+              </button>
+            ))}
+            {isImage && (
+              <button
+                type="button"
+                title="Custom photo"
+                aria-label="Current photo cover"
+                onClick={() => onClose()}
+                className="page-cover h-12 rounded-md border border-accent"
+                style={{ backgroundImage: coverCss(cover) }}
+              />
+            )}
+          </div>
+          <div className="border-t border-line px-2 py-2">
+            <label className={`flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-dashed border-line text-[12px] text-muted transition-colors hover:border-accent/60 hover:text-fg ${uploading ? 'pointer-events-none opacity-50' : ''}`}>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUpload(f); e.target.value = ''; }}
+              />
+              {uploading ? 'Uploading…' : '↑ Upload photo'}
+            </label>
+            <p className="mt-1 text-[11px] text-faint">Covers use your theme's colours.</p>
+          </div>
+        </>
+      )}
+
+      {tab === 'photos' && <UnsplashPicker patch={patch} onClose={onClose} />}
     </Popover>
+  );
+}
+
+/**
+ * Unsplash photo search panel inside the cover chooser.
+ * @param {{ patch: ReturnType<typeof usePatch>, onClose: () => void }} props
+ */
+function UnsplashPicker({ patch, onClose }) {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState(/** @type {{ thumb: string, regular: string, downloadLocation: string, alt: string }[]} */ ([]));
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(/** @type {string | null} */ (null));
+  const inputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
+
+  useEffect(() => { setTimeout(() => inputRef.current?.focus(), 0); }, []);
+
+  const search = async () => {
+    const q = query.trim();
+    if (!q) return;
+    setLoading(true);
+    setResults([]);
+    try {
+      const data = await /** @type {Promise<{ results: typeof results }>} */ (api(`/ai/unsplash?q=${encodeURIComponent(q)}`));
+      setResults(data.results ?? []);
+    } catch { /* ignore */ } finally {
+      setLoading(false);
+    }
+  };
+
+  /** @param {{ thumb: string, regular: string, downloadLocation: string }} photo */
+  const pick = async (photo) => {
+    setSaving(photo.thumb);
+    try {
+      // Fire the Unsplash download trigger (required by API ToS).
+      api('/ai/unsplash/download', { method: 'POST', body: { downloadLocation: photo.downloadLocation } }).catch(() => {});
+      // Fetch + store the full-size image locally, then set as cover.
+      const { url } = await /** @type {Promise<{ url: string }>} */ (api('/files/fetch', { method: 'POST', body: { url: photo.regular } }));
+      patch.look({ cover: `asset:${url}` });
+      onClose();
+    } catch {
+      setSaving(null);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-2 p-2">
+      <div className="flex gap-1.5">
+        <input
+          ref={inputRef}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); search(); } }}
+          placeholder="Search Unsplash…"
+          className="h-7 flex-1 rounded-md border border-line bg-transparent px-2 text-[12px] text-fg placeholder:text-faint focus:outline-none focus:ring-1 focus:ring-accent/50"
+        />
+        <button
+          type="button"
+          disabled={loading || !query.trim()}
+          onClick={search}
+          className="h-7 rounded-md border border-line px-3 text-[12px] text-muted hover:text-fg hover:bg-hover disabled:opacity-40"
+        >
+          {loading ? '…' : 'Search'}
+        </button>
+      </div>
+
+      {results.length > 0 && (
+        <div className="grid grid-cols-3 gap-1 max-h-52 overflow-y-auto">
+          {results.map((r) => (
+            <button
+              key={r.thumb}
+              type="button"
+              disabled={saving !== null}
+              onClick={() => pick(r)}
+              className={`relative overflow-hidden rounded border border-line hover:border-accent/60 transition-colors ${saving === r.thumb ? 'opacity-60' : ''}`}
+            >
+              <img src={r.thumb} alt={r.alt} className="h-16 w-full object-cover" />
+              {saving === r.thumb && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-[10px] text-white">Saving…</div>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+      {!loading && results.length === 0 && query && (
+        <p className="text-[11px] text-faint">No results.</p>
+      )}
+      <p className="text-[10px] text-faint">Photos by <a href="https://unsplash.com" target="_blank" rel="noreferrer" className="hover:text-muted underline underline-offset-2">Unsplash</a></p>
+    </div>
   );
 }
 

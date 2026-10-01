@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { usePage, useSetFavorite } from '../api/pages.js';
+import { useAuthState, useLogout } from '../api/auth.js';
 import { PageMenu } from './PageMenu.jsx';
 import { ServerStatus } from './ServerStatus.jsx';
 import { TitleText } from './TitleText.jsx';
@@ -17,8 +18,12 @@ import { TitleText } from './TitleText.jsx';
  */
 export function Topbar({ selectedId, onSelect, prefs, onChange, onAi }) {
   const { data } = usePage(selectedId);
+  const { data: auth } = useAuthState();
+  const isDemo = auth?.user?.isDemo ?? false;
 
   return (
+    <>
+    {isDemo && <DemoBanner />}
     <header
       className="flex shrink-0 items-center gap-2 bg-s-top px-4 text-sm"
       style={{
@@ -77,6 +82,24 @@ export function Topbar({ selectedId, onSelect, prefs, onChange, onAi }) {
       )}
       {data && <PageMenu page={data.page} databaseId={data.database?.id ?? null} onSelect={onSelect} />}
     </header>
+    </>
+  );
+}
+
+/** A slim banner shown across the top of the app while in demo mode. */
+function DemoBanner() {
+  const logout = useLogout();
+  return (
+    <div className="flex shrink-0 items-center justify-center gap-3 bg-accent/15 px-4 py-1.5 text-[12px] text-fg">
+      <span>Demo mode — data is temporary and resets after 4 hours</span>
+      <button
+        type="button"
+        onClick={() => logout.mutate()}
+        className="rounded-md border border-accent/40 px-2.5 py-0.5 text-accent hover:bg-accent/10"
+      >
+        Exit demo
+      </button>
+    </div>
   );
 }
 

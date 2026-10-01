@@ -443,6 +443,59 @@ function GiphySection({ status }) {
 }
 
 /**
+ * Unsplash access key for photo search in page covers.
+ * @param {{ status: any }} props
+ */
+function UnsplashSection({ status }) {
+  const saveConfig = useSaveAiConfig();
+  const [keyDraft, setKeyDraft] = useState('');
+  const [saved, setSaved] = useState(false);
+  const configured = status?.unsplash?.configured ?? false;
+
+  function saveKey() {
+    const k = keyDraft.trim();
+    if (!k) return;
+    saveConfig.mutate({ unsplashKey: k }, {
+      onSuccess: () => { setKeyDraft(''); setSaved(true); setTimeout(() => setSaved(false), 2000); },
+    });
+  }
+
+  return (
+    <section>
+      <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-faint">Unsplash — photo covers</div>
+      {configured && !keyDraft && (
+        <div className="mb-2 flex items-center gap-2">
+          <StatusDot ok={true} warn={false} />
+          <span className="text-[12px] text-fg">Access key saved — photo search enabled in cover picker</span>
+        </div>
+      )}
+      <div className="flex gap-2">
+        <input
+          type="password"
+          value={keyDraft}
+          onChange={(e) => setKeyDraft(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && saveKey()}
+          placeholder={configured ? 'Enter new key to replace…' : 'Unsplash access key…'}
+          className="h-8 min-w-0 flex-1 rounded-md border border-line bg-black/20 px-2.5 font-mono text-[13px] text-fg-strong placeholder:text-faint focus:border-accent focus:outline-none"
+          aria-label="Unsplash access key"
+        />
+        <button
+          type="button"
+          onClick={saveKey}
+          disabled={!keyDraft.trim() || saveConfig.isPending}
+          className="h-8 shrink-0 rounded-md bg-accent px-3 text-[13px] font-medium text-root hover:brightness-110 disabled:opacity-50"
+        >
+          {saved ? 'Saved ✓' : 'Save'}
+        </button>
+      </div>
+      <p className="mt-1.5 text-[11px] text-faint">
+        Free access key at <span className="font-mono">unsplash.com/developers</span>. Adds a "Photos" tab to the page cover picker — photos download and store locally.
+      </p>
+    </section>
+  );
+}
+
+/**
  * AI settings panel — provider toggle (Ollama / Claude) with per-provider config.
  */
 export function AiPanel() {
@@ -488,8 +541,9 @@ export function AiPanel() {
         <ClaudeSection status={status} />
       )}
 
-      <div className="border-t border-line/50 pt-5">
+      <div className="border-t border-line/50 pt-5 flex flex-col gap-5">
         <GiphySection status={status} />
+        <UnsplashSection status={status} />
       </div>
     </div>
   );

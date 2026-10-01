@@ -24,7 +24,7 @@ export const CSRF_HEADER = 'x-papier';
 const INTERNAL_HEADER = 'x-papier-internal';
 
 /** Routes that work signed out. Everything else under /api needs a session. */
-const PUBLIC = new Set(['/api/health', '/api/auth/state', '/api/auth/setup', '/api/auth/login']);
+const PUBLIC = new Set(['/api/health', '/api/auth/state', '/api/auth/setup', '/api/auth/login', '/api/demo/start']);
 
 export function readCookie(req: FastifyRequest, name: string) {
   const header = req.headers.cookie;

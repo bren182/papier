@@ -17,6 +17,7 @@ import {
 } from '../auth/sessions.ts';
 import type { Db } from '../db/index.ts';
 import { users } from '../db/schema.ts';
+import { startDemo } from '../db/demo.ts';
 
 export type AuthOptions = CookieOptions & {
   /** Needed to create the first account; null once there is one. */
@@ -36,6 +37,17 @@ export function authRoutes(app: FastifyInstance, db: Db, opts: AuthOptions) {
   app.get('/api/auth/state', async (req) => {
     if (!req.user) return { setupNeeded: userCount(db) === 0, user: null, workspaces: [] };
     return { setupNeeded: false, user: req.user, workspaces: userWorkspaces(db, req.user.id) };
+  });
+
+  /** Start (or reset) the demo session. Public — no account needed. */
+  app.post('/api/demo/start', async (req, reply) => {
+    const token = startDemo(db);
+    // Browser-session cookie: no Max-Age so the browser clears it when the tab closes.
+    const attrs = [`papier_session=${token}`, 'Path=/', 'HttpOnly', 'SameSite=Lax'];
+    if (opts.secure) attrs.push('Secure');
+    reply.header('set-cookie', attrs.join('; '));
+    reply.code(201);
+    return {};
   });
 
   const signIn = (req: FastifyRequest, reply: import('fastify').FastifyReply, userId: string, client: 'web' | 'desktop') => {

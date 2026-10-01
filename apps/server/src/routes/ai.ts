@@ -28,6 +28,9 @@ function getAnthropicWorkspaceId(db: Db): string {
 function getGiphyKey(db: Db): string {
   return getSetting(db, 'giphy_api_key') ?? '';
 }
+function getUnsplashKey(db: Db): string {
+  return getSetting(db, 'unsplash_access_key') ?? '';
+}
 
 // --- Ollama ---
 
@@ -205,6 +208,7 @@ export function aiRoutes(app: FastifyInstance, db: Db) {
         workspaceId: getAnthropicWorkspaceId(db),
       },
       giphy: { configured: !!getGiphyKey(db) },
+      unsplash: { configured: !!getUnsplashKey(db) },
     };
   });
 
@@ -224,6 +228,36 @@ export function aiRoutes(app: FastifyInstance, db: Db) {
     return { results };
   });
 
+  /** Search Unsplash photos — proxied server-side to keep the access key out of the browser. */
+  app.get('/api/ai/unsplash', async (req, reply) => {
+    const key = getUnsplashKey(db);
+    if (!key) return reply.code(503).send({ error: 'Unsplash access key not configured.' });
+    const { q } = z.object({ q: z.string().trim().min(1).max(200) }).parse(req.query);
+    const url = `https://api.unsplash.com/search/photos?query=${encodeURIComponent(q)}&per_page=12&orientation=landscape&client_id=${encodeURIComponent(key)}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(8_000) });
+    if (!res.ok) return reply.code(res.status).send({ error: `Unsplash returned ${res.status}` });
+    const data = await res.json() as { results?: { urls?: { thumb?: string; regular?: string }; links?: { download_location?: string }; alt_description?: string | null }[] };
+    const results = (data.results ?? []).map((p) => ({
+      thumb: p.urls?.thumb ?? '',
+      regular: p.urls?.regular ?? '',
+      downloadLocation: p.links?.download_location ?? '',
+      alt: p.alt_description ?? '',
+    })).filter((r) => r.thumb);
+    return { results };
+  });
+
+  /** Trigger Unsplash download event (required by API ToS) — fire-and-forget from the client. */
+  app.post('/api/ai/unsplash/download', async (req, reply) => {
+    const key = getUnsplashKey(db);
+    if (!key) return reply.code(503).send({ error: 'Unsplash access key not configured.' });
+    const { downloadLocation } = z.object({ downloadLocation: z.string().url() }).parse(req.body);
+    if (!downloadLocation.startsWith('https://api.unsplash.com/')) {
+      return reply.code(400).send({ error: 'Invalid download location.' });
+    }
+    fetch(`${downloadLocation}&client_id=${encodeURIComponent(key)}`, { signal: AbortSignal.timeout(5_000) }).catch(() => {});
+    return { ok: true };
+  });
+
   /** Save any combination of provider, Ollama URL/model, or Anthropic key/model. */
   app.patch('/api/ai/config', async (req) => {
     const body = z.object({
@@ -234,6 +268,7 @@ export function aiRoutes(app: FastifyInstance, db: Db) {
       anthropicModel: z.string().min(1).optional(),
       anthropicWorkspaceId: z.string().optional(),
       giphyKey: z.string().optional(),
+      unsplashKey: z.string().optional(),
     }).parse(req.body);
 
     if (body.provider !== undefined) setSetting(db, 'ai_provider', body.provider);
@@ -243,6 +278,7 @@ export function aiRoutes(app: FastifyInstance, db: Db) {
     if (body.anthropicModel !== undefined) setSetting(db, 'anthropic_model', body.anthropicModel);
     if (body.anthropicWorkspaceId !== undefined) setSetting(db, 'anthropic_workspace_id', body.anthropicWorkspaceId);
     if (body.giphyKey !== undefined) setSetting(db, 'giphy_api_key', body.giphyKey);
+    if (body.unsplashKey !== undefined) setSetting(db, 'unsplash_access_key', body.unsplashKey);
 
     const provider = getProvider(db);
     const ollama = await ollamaStatus(db);
@@ -257,6 +293,7 @@ export function aiRoutes(app: FastifyInstance, db: Db) {
         workspaceId: getAnthropicWorkspaceId(db),
       },
       giphy: { configured: !!getGiphyKey(db) },
+      unsplash: { configured: !!getUnsplashKey(db) },
     };
   });
 

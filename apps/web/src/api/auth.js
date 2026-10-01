@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from './client.js';
 
 /**
- * @typedef {{ id: string, email: string, name: string, isAdmin: boolean }} User
+ * @typedef {{ id: string, email: string, name: string, isAdmin: boolean, isDemo: boolean }} User
  * @typedef {'owner' | 'editor' | 'viewer'} Role
  * @typedef {{ id: string, name: string, icon: string | null, role: Role, homePageId: string | null }} Workspace
  *   homePageId: the page `/` opens (null: none, or it's in the trash)
@@ -55,6 +55,15 @@ export function useLogout() {
       qc.setQueryData(authKey, /** @type {AuthState} */ ({ setupNeeded: false, user: null, workspaces: [] }));
       qc.removeQueries({ predicate: (q) => q.queryKey[0] !== authKey[0] });
     },
+  });
+}
+
+/** Start (or reset) the demo session — no account needed. */
+export function useDemoStart() {
+  const done = useSignedIn();
+  return useMutation({
+    mutationFn: () => api('/demo/start', { method: 'POST' }),
+    onSuccess: done,
   });
 }
 

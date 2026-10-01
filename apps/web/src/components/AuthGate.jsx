@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { authKey, useAuthState } from '../api/auth.js';
+import { authKey, useAuthState, useDemoStart } from '../api/auth.js';
 import { SIGNED_IN_EVENT, UNAUTHORIZED_EVENT } from '../api/client.js';
 import { AuthScreen, SessionExpired } from './AuthScreen.jsx';
 import { LandingPage } from './LandingPage.jsx';
@@ -14,6 +14,7 @@ import { LandingPage } from './LandingPage.jsx';
 export function AuthGate({ children }) {
   const qc = useQueryClient();
   const { data, isError, refetch } = useAuthState();
+  const demo = useDemoStart();
   const [expired, setExpired] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
 
@@ -39,7 +40,7 @@ export function AuthGate({ children }) {
   if (!data.user) {
     // First-run setup goes straight to the setup form; existing-server visitors see the landing page first.
     if (data.setupNeeded || showLogin) return <AuthScreen setup={data.setupNeeded} onBack={data.setupNeeded ? undefined : () => setShowLogin(false)} />;
-    return <LandingPage onSignIn={() => setShowLogin(true)} />;
+    return <LandingPage onSignIn={() => setShowLogin(true)} onDemo={() => demo.mutate()} />;
   }
 
   return (

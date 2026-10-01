@@ -7,11 +7,13 @@ import { DEFAULT_WORKSPACE_ID, members, sessions, users, workspaces } from '../d
 
 /** Sessions slide: each use pushes expiry to now + this. */
 export const SESSION_TTL_MS = 30 * 24 * 3600 * 1000;
+/** Demo sessions: fixed 4-hour window, no sliding. */
+export const DEMO_SESSION_TTL_MS = 4 * 60 * 60 * 1000;
 /** `last_seen_at` / expiry are written at most this often per session. */
 const TOUCH_MS = 60_000;
 
 export type SessionKind = 'cookie' | 'token';
-export type AuthUser = { id: string; email: string; name: string; isAdmin: boolean };
+export type AuthUser = { id: string; email: string; name: string; isAdmin: boolean; isDemo: boolean };
 export type Role = 'owner' | 'editor' | 'viewer';
 
 const tokenId = (token: string) => createHash('sha256').update(token).digest('hex');
@@ -25,17 +27,17 @@ export function createSession(db: Conn, userId: string, kind: SessionKind, userA
   return token;
 }
 
-/** The session's user, or null when the token is unknown or expired. Slides the expiry. */
+/** The session's user, or null when the token is unknown or expired. Slides the expiry (except for demo sessions). */
 export function resolveSession(db: Conn, token: string, now = Date.now()): { user: AuthUser; sessionId: string } | null {
   const id = tokenId(token);
   const row = db
-    .select({ id: users.id, email: users.email, name: users.name, isAdmin: users.isAdmin, lastSeenAt: sessions.lastSeenAt })
+    .select({ id: users.id, email: users.email, name: users.name, isAdmin: users.isAdmin, isDemo: users.isDemo, lastSeenAt: sessions.lastSeenAt })
     .from(sessions)
     .innerJoin(users, eq(users.id, sessions.userId))
     .where(and(eq(sessions.id, id), gt(sessions.expiresAt, now)))
     .get();
   if (!row) return null;
-  if (now - row.lastSeenAt > TOUCH_MS) {
+  if (!row.isDemo && now - row.lastSeenAt > TOUCH_MS) {
     db.update(sessions).set({ lastSeenAt: now, expiresAt: now + SESSION_TTL_MS }).where(eq(sessions.id, id)).run();
   }
   const { lastSeenAt: _, ...user } = row;
@@ -67,11 +69,11 @@ export function userCount(db: Conn) {
   return db.select({ n: count() }).from(users).get()!.n;
 }
 
-type NewUser = { email: string; name: string; passwordHash: string; isAdmin?: boolean };
+type NewUser = { email: string; name: string; passwordHash: string; isAdmin?: boolean; isDemo?: boolean };
 
 /** Creates a user (throws on a taken email — check first). Hash with `hashPassword` beforehand, so this stays synchronous. */
 export function createUser(db: Conn, input: NewUser, now = Date.now()) {
-  const user = { id: randomUUID(), email: normalizeEmail(input.email), name: input.name.trim(), isAdmin: input.isAdmin ?? false };
+  const user = { id: randomUUID(), email: normalizeEmail(input.email), name: input.name.trim(), isAdmin: input.isAdmin ?? false, isDemo: input.isDemo ?? false };
   db.insert(users).values({ ...user, passwordHash: input.passwordHash, createdAt: now }).run();
   return user satisfies AuthUser;
 }

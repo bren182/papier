@@ -2,6 +2,7 @@ import type { FastifyBaseLogger } from 'fastify';
 import { tick } from '../db/automations.ts';
 import { purgeExpired } from '../db/trash.ts';
 import { purgeExpiredSessions } from '../auth/sessions.ts';
+import { purgeExpiredDemos } from '../db/demo.ts';
 import type { Db } from '../db/index.ts';
 
 /** How often the scheduler looks for due schedules. Schedules are minute-precise at best. */
@@ -29,6 +30,8 @@ export function startScheduler(db: Db, log: FastifyBaseLogger) {
       const purged = purgeExpired(db);
       if (purged) log.info({ pages: purged }, 'Emptied expired pages from the trash');
       purgeExpiredSessions(db);
+      const demos = purgeExpiredDemos(db);
+      if (demos) log.info({ demos }, 'Purged expired demo workspaces');
     } catch (err) {
       log.error({ err }, 'Trash purge failed');
     }

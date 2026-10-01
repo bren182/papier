@@ -214,6 +214,8 @@ export const users = sqliteTable('users', {
   passwordHash: text('password_hash').notNull(),
   /** Deployment admin (the account created at setup). */
   isAdmin: integer('is_admin', { mode: 'boolean' }).notNull().default(false),
+  /** Ephemeral demo account — no password, purged when its session expires. */
+  isDemo: integer('is_demo', { mode: 'boolean' }).notNull().default(false),
   createdAt: integer('created_at').notNull(),
 });
 

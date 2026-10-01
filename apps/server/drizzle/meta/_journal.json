@@ -99,6 +99,20 @@
       "when": 1790790000000,
       "tag": "0013_server_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1790793600000,
+      "tag": "0014_reminders",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "6",
+      "when": 1790797200000,
+      "tag": "0015_demo",
+      "breakpoints": true
     }
   ]
 }
