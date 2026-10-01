@@ -1,12 +1,23 @@
+import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { eq } from 'drizzle-orm';
-import { WorkspaceUpdate } from '@papier/core';
-import { memberRole, userWorkspaces } from '../auth/sessions.ts';
+import { WorkspaceCreate, WorkspaceUpdate } from '@papier/core';
+import { addMember, memberRole, userWorkspaces } from '../auth/sessions.ts';
 import type { Db } from '../db/index.ts';
 import { liveLineage } from '../db/lineage.ts';
 import { pages, workspaces } from '../db/schema.ts';
 
 export function workspaceRoutes(app: FastifyInstance, db: Db) {
+  /** Create a new workspace; the caller becomes its owner. */
+  app.post('/api/workspaces', async (req) => {
+    const { name } = WorkspaceCreate.parse(req.body);
+    const id = randomUUID();
+    const now = Date.now();
+    db.insert(workspaces).values({ id, name, createdAt: now }).run();
+    addMember(db, id, req.user!.id, 'owner', now);
+    return userWorkspaces(db, req.user!.id).find((w) => w.id === id);
+  });
+
   /**
    * Rename a workspace, set its icon (owners), or choose its Home page (owners
    * and editors). Home must be a live page in this workspace.

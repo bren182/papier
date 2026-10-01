@@ -35,10 +35,11 @@ const TO_NODE = {
   button: 'buttonBlock',
   widget: 'widgetBlock',
   linked_database: 'linkedDatabase',
+  image: 'imageBlock',
 };
 
 /** Node types without inline content. */
-const ATOMS = new Set(['divider', 'pageBlock', 'databaseBlock', 'buttonBlock', 'widgetBlock', 'linkedDatabase']);
+const ATOMS = new Set(['divider', 'pageBlock', 'databaseBlock', 'buttonBlock', 'widgetBlock', 'linkedDatabase', 'imageBlock']);
 
 /** @type {Record<string, BlockTypeName>} */
 const FROM_NODE = Object.fromEntries(Object.entries(TO_NODE).map(([ours, node]) => [node, /** @type {BlockTypeName} */ (ours)]));
@@ -56,6 +57,7 @@ const PROPS = {
   button: ['label', 'actions', 'open'],
   widget: ['kind'],
   linked_database: ['databaseId', 'view'],
+  image: ['src', 'caption', 'align', 'animation'],
 };
 
 /** Inline styles, in the fixed order they're stored (keeps saves diff-stable). */

@@ -22,8 +22,8 @@ const turnInto = (typeName, attrs = {}) => (editor, range) => {
   const block = blockAt(tr.doc, range.from);
   if (!block) return;
   const type = /** @type {any} */ (state.schema.nodes[typeName]);
-  // Atoms (a divider, a button) get an empty line after them to keep typing in.
-  const atom = ['divider', 'buttonBlock', 'widgetBlock', 'linkedDatabase'].includes(typeName);
+  // Atoms (a divider, a button, an image) get an empty line after them to keep typing in.
+  const atom = ['divider', 'buttonBlock', 'widgetBlock', 'linkedDatabase', 'imageBlock'].includes(typeName);
   if (block.node.content.size === 0 || block.node.type.name === 'divider') {
     setBlockType(tr, block.pos, type, attrs);
     if (atom) insertBlockAfter(tr, block.pos, 'paragraph');
@@ -173,6 +173,11 @@ const PAGE_ITEMS = [
   { title: 'Linked view of a database', icon: '↗', aliases: ['linked database', 'view', 'existing database'], group: 'Pages', subtext: 'Show a database from elsewhere, with its own filters', run: turnInto('linkedDatabase') },
 ];
 
+/** Media blocks. @type {MenuItem[]} */
+const MEDIA_ITEMS = [
+  { title: 'Image', icon: '🖼', aliases: ['photo', 'picture', 'gif', 'media', 'giphy', 'tenor', 'img'], group: 'Media', subtext: 'Embed any image or GIF by URL', run: turnInto('imageBlock') },
+];
+
 /** Live widgets (made for Home). @type {MenuItem[]} */
 const WIDGET_ITEMS = [
   { title: 'Greeting', icon: '☀', aliases: ['hello', 'welcome', 'date', 'home'], group: 'Widgets', subtext: 'Hello, and today’s date', run: turnInto('widgetBlock', { kind: 'greeting' }) },
@@ -206,7 +211,7 @@ const INLINE_ITEMS = [
  */
 export function slashItems(query) {
   const q = query.toLowerCase().trim();
-  const all = [...BLOCK_ITEMS, ...PAGE_ITEMS, ...WIDGET_ITEMS, ...INLINE_ITEMS];
+  const all = [...BLOCK_ITEMS, ...PAGE_ITEMS, ...MEDIA_ITEMS, ...WIDGET_ITEMS, ...INLINE_ITEMS];
   if (!q) return all;
   return all.filter((item) => item.title.toLowerCase().includes(q) || item.aliases?.some((a) => a.startsWith(q)));
 }

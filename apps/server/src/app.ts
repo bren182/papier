@@ -1,5 +1,8 @@
 import { randomBytes } from 'node:crypto';
+import { mkdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import Fastify from 'fastify';
+import multipart from '@fastify/multipart';
 import { ZodError } from 'zod';
 import { BLOCK_TYPES } from '@papier/core';
 import { authPlugin } from './auth/plugin.ts';
@@ -16,6 +19,8 @@ import { databaseRoutes } from './routes/databases.ts';
 import { pageRoutes } from './routes/pages.ts';
 import { searchRoutes } from './routes/search.ts';
 import { workspaceRoutes } from './routes/workspaces.ts';
+import { fileRoutes } from './routes/files.ts';
+import { aiRoutes } from './routes/ai.ts';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -72,6 +77,11 @@ export function buildApp({
   if (userCount(db) === 0) app.log.info(`No accounts yet. Open Papier and create the owner with setup token: ${token}`);
   const cookie = { secure: origin?.startsWith('https://') ?? false };
 
+  // File uploads (20 MB cap); /files/* is served without auth
+  const uploadsDir = dbPath === ':memory:' ? ':memory:' : join(dirname(dbPath), 'uploads');
+  if (uploadsDir !== ':memory:') mkdirSync(uploadsDir, { recursive: true });
+  app.register(multipart, { limits: { fileSize: 20 * 1024 * 1024 } });
+
   authPlugin(app, db);
   app.get('/api/health', async () => ({ ok: true, blockTypes: BLOCK_TYPES.length }));
   authRoutes(app, db, { ...cookie, setupToken: () => (userCount(db) === 0 ? token : null) });
@@ -82,6 +92,8 @@ export function buildApp({
   actionRoutes(app, db);
   automationRoutes(app, db);
   workspaceRoutes(app, db);
+  if (uploadsDir !== ':memory:') fileRoutes(app, uploadsDir);
+  aiRoutes(app, db);
 
   return app;
 }

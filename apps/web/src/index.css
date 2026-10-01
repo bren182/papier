@@ -46,6 +46,36 @@ body {
   outline-offset: 2px;
 }
 
+/* ── Motion ─────────────────────────────────────────────────────────────
+ * App-level "disable animations" preference: zero out all durations so
+ * CSS transitions and keyframe animations become instant.
+ */
+html[data-motion="off"] * {
+  transition-duration: 0ms !important;
+  animation-duration: 0ms !important;
+}
+
+/* Sidebar tree: animate expand/collapse with the grid-template-rows trick */
+.tree-children {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 160ms ease;
+}
+.tree-children[data-open="false"] {
+  grid-template-rows: 0fr;
+}
+
+/* Page navigation: slide up slightly when switching pages.
+ * No opacity change — fading a semi-transparent glass container would let
+ * the backdrop blaze through during the transition. */
+@keyframes papier-page-in {
+  from { transform: translateY(6px); }
+  to   { transform: none; }
+}
+.papier-page-in {
+  animation: papier-page-in 160ms ease-out;
+}
+
 /* ── Editor ─────────────────────────────────────────────────────────────
  * Blocks are flat <div class="pb" data-type data-indent> nodes (see
  * editor/schema.js). --indent comes from the node; --lead is the marker column
@@ -490,6 +520,12 @@ body {
 .papier-block-drag .prosemirror-dropcursor-block,
 .papier-block-drag .prosemirror-dropcursor-inline {
   display: none;
+}
+
+/* DDR practice: floating hit-rating text rises and fades */
+@keyframes ddr-float {
+  0%   { opacity: 1; transform: translateX(-50%) translateY(0); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-44px); }
 }
 
 /* a block opened from search: a brief accent wash */

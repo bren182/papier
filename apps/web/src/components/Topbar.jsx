@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import { usePage, useSetFavorite } from '../api/pages.js';
 import { PageMenu } from './PageMenu.jsx';
 import { ServerStatus } from './ServerStatus.jsx';
@@ -11,9 +12,10 @@ import { TitleText } from './TitleText.jsx';
  *   onSelect: (id: string | null) => void,
  *   prefs: Prefs,
  *   onChange: (patch: Partial<Prefs>) => void,
+ *   onAi?: () => void,
  * }} props
  */
-export function Topbar({ selectedId, onSelect, prefs, onChange }) {
+export function Topbar({ selectedId, onSelect, prefs, onChange, onAi }) {
   const { data } = usePage(selectedId);
 
   return (
@@ -58,9 +60,52 @@ export function Topbar({ selectedId, onSelect, prefs, onChange }) {
 
       {/* With the sidebar hidden, its server status (offline only) shows here. */}
       {!prefs.sidebar && <ServerStatus />}
+      <SaveStatus />
       {data && !data.page.isTemplate && !data.inTemplate && <FavoriteButton page={data.page} />}
+      {onAi && (
+        <button
+          type="button"
+          aria-label="Ask AI (Ctrl+Shift+A)"
+          title="Ask AI (Ctrl+Shift+A)"
+          onClick={onAi}
+          className="flex size-7 items-center justify-center rounded-md text-muted hover:bg-s-active hover:text-fg"
+        >
+          <span aria-hidden="true" className="text-[13px] font-semibold leading-none">✦</span>
+        </button>
+      )}
       {data && <PageMenu page={data.page} databaseId={data.database?.id ?? null} onSelect={onSelect} />}
     </header>
+  );
+}
+
+/** Fades "Saving…" → "Saved" in the topbar when blocks are written. */
+function SaveStatus() {
+  const [show, setShow] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const timerRef = useRef(/** @type {ReturnType<typeof setTimeout>|undefined} */ (undefined));
+  useEffect(() => {
+    const onSaving = () => { clearTimeout(timerRef.current); setSaving(true); setShow(true); };
+    const onSaved = () => {
+      setSaving(false);
+      clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => setShow(false), 1200);
+    };
+    window.addEventListener('papier:saving', onSaving);
+    window.addEventListener('papier:saved', onSaved);
+    return () => {
+      window.removeEventListener('papier:saving', onSaving);
+      window.removeEventListener('papier:saved', onSaved);
+      clearTimeout(timerRef.current);
+    };
+  }, []);
+  return (
+    <span
+      aria-live="polite"
+      aria-atomic="true"
+      className={`min-w-[44px] text-right text-[12px] transition-opacity duration-500 ${show ? 'opacity-100 text-faint' : 'opacity-0 pointer-events-none'}`}
+    >
+      {saving ? 'Saving…' : 'Saved'}
+    </span>
   );
 }
 

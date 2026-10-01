@@ -38,9 +38,11 @@ export function diffBlocks(confirmed, rows) {
  *   delay?: number,
  *   onError?: (err: unknown) => void,
  *   retry?: (err: unknown) => boolean,
+ *   onPending?: () => void,
+ *   onSettled?: () => void,
  * }} opts
  */
-export function createBlockSaver({ initial, read, send, delay = 400, onError, retry = () => true }) {
+export function createBlockSaver({ initial, read, send, delay = 400, onError, retry = () => true, onPending, onSettled }) {
   let confirmed = new Map(initial.map((row) => [row.id, JSON.stringify(row)]));
   /** @type {Promise<void> | null} */
   let inflight = null;
@@ -59,6 +61,7 @@ export function createBlockSaver({ initial, read, send, delay = 400, onError, re
     const { batch, next } = diffBlocks(confirmed, read());
     if (!batch.upserts.length && !batch.deletes.length) return Promise.resolve();
 
+    onPending?.();
     inflight = send(batch, {})
       .then(
         () => {
@@ -72,6 +75,7 @@ export function createBlockSaver({ initial, read, send, delay = 400, onError, re
       )
       .finally(() => {
         inflight = null;
+        onSettled?.();
         if (dirty) flush();
       });
     return inflight;

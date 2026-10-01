@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { pageKeys, useArchivePage, useChildPages, useCreatePage, useFavorites, useMovePage, useSetFavorite } from '../api/pages.js';
+import { useAuthState } from '../api/auth.js';
 import { useRecentPages } from '../recentPages.js';
 import { ServerStatus } from './ServerStatus.jsx';
 import { WorkspaceMenu } from './WorkspaceMenu.jsx';
@@ -44,7 +45,7 @@ const navButton = 'flex h-8 items-center gap-2.5 rounded-md px-2.5 text-left tex
 /**
  * @param {{ selectedId: string | null, atHome: boolean, onSelect: (id: string | null) => void, onSearch: () => void,
  *   onTemplates: () => void, onShortcuts: () => void, onCollapse: () => void,
- *   onSettings: (anchor: HTMLElement) => void, onTrash: () => void }} props
+ *   onSettings: () => void, onTrash: () => void }} props
  */
 export function Sidebar({ selectedId, atHome, onSelect, onSearch, onTemplates, onShortcuts, onCollapse, onSettings, onTrash }) {
   const [isExpanded, setExpanded] = useExpandedSet();
@@ -96,9 +97,10 @@ export function Sidebar({ selectedId, atHome, onSelect, onSearch, onTemplates, o
   };
 
   return (
-    <nav aria-label="Workspace" className="p-glass relative flex w-[260px] shrink-0 flex-col gap-0.5 border-r border-white/5 bg-s-sidebar px-2 py-3">
-      <div className="group/head flex items-center">
-        <WorkspaceMenu onHome={() => onSelect(null)} />
+    <nav aria-label="Workspace" className="p-glass relative flex w-[260px] shrink-0 flex-col border-r border-white/5 bg-s-sidebar px-2 py-2">
+      {/* Header: workspace switcher + collapse */}
+      <div className="group/head mb-1 flex items-center">
+        <WorkspaceMenu onHome={() => onSelect(null)} onSettings={onSettings} />
         <ServerStatus />
         <button
           type="button"
@@ -111,6 +113,7 @@ export function Sidebar({ selectedId, atHome, onSelect, onSearch, onTemplates, o
         </button>
       </div>
 
+      {/* Quick nav */}
       <button
         type="button"
         onClick={() => onSelect(null)}
@@ -125,21 +128,9 @@ export function Sidebar({ selectedId, atHome, onSelect, onSearch, onTemplates, o
         <span className="flex-1">Search</span>
         <kbd className="font-mono text-[11px] text-faint">Ctrl K</kbd>
       </button>
-      <button type="button" className={navButton} onClick={onTemplates}>
-        <TemplateIcon />
-        <span>Templates</span>
-      </button>
-      <button type="button" className={navButton} data-settings-anchor="" onClick={(e) => onSettings(e.currentTarget)}>
-        <GearIcon />
-        <span>Settings</span>
-      </button>
-      <button type="button" className={navButton} onClick={onShortcuts}>
-        <KeyboardIcon />
-        <span className="flex-1">Keyboard shortcuts</span>
-        <kbd className="font-mono text-[11px] text-faint">Ctrl /</kbd>
-      </button>
 
-      <div className="-mx-2 mt-4 min-h-0 flex-1 overflow-y-auto px-2">
+      {/* Page tree */}
+      <div className="-mx-2 mt-3 min-h-0 flex-1 overflow-y-auto px-2">
         <Favorites selectedId={selectedId} onSelect={onSelect} />
         <Recent selectedId={selectedId} onSelect={onSelect} />
         <div className="group/pages flex h-[26px] items-center justify-between px-2.5 text-xs font-medium text-faint">
@@ -153,22 +144,29 @@ export function Sidebar({ selectedId, atHome, onSelect, onSearch, onTemplates, o
             <PlusIcon size={14} />
           </button>
         </div>
-
         <PageList parentId={null} depth={0} path={[]} ctx={ctx} />
       </div>
 
-      <button type="button" className={navButton} onClick={onTrash}>
-        <TrashIcon />
-        <span>Trash</span>
-      </button>
-      <button type="button" className={navButton} onClick={() => addPage(null)} disabled={createPage.isPending}>
-        <PlusIcon />
-        <span>New page</span>
-      </button>
-      <button type="button" className={navButton} onClick={() => addPage(null, 'database')} disabled={createPage.isPending}>
-        <DatabaseIcon />
-        <span>New database</span>
-      </button>
+      {/* Bottom actions */}
+      <div className="mt-1 flex flex-col gap-0.5 border-t border-white/5 pt-1">
+        <button type="button" className={navButton} onClick={onTemplates}>
+          <TemplateIcon />
+          <span>Templates</span>
+        </button>
+        <button type="button" className={navButton} onClick={onTrash}>
+          <TrashIcon />
+          <span>Trash</span>
+        </button>
+        <button type="button" className={navButton} onClick={() => addPage(null)} disabled={createPage.isPending}>
+          <PlusIcon />
+          <span>New page</span>
+        </button>
+        <button type="button" className={navButton} onClick={() => addPage(null, 'database')} disabled={createPage.isPending}>
+          <DatabaseIcon />
+          <span>New database</span>
+        </button>
+        <UserStrip onSettings={onSettings} onShortcuts={onShortcuts} />
+      </div>
 
       {moving && (
         <SearchDialog
@@ -335,6 +333,24 @@ function PageList({ parentId, depth, path, ctx }) {
 }
 
 /**
+ * Animated expand/collapse wrapper using the CSS grid-template-rows trick.
+ * Children mount on first open and stay mounted so collapsing can animate.
+ * @param {{ open: boolean, children: import('react').ReactNode }} props
+ */
+function Collapsible({ open, children }) {
+  const [mounted, setMounted] = useState(open);
+  useEffect(() => { if (open) setMounted(true); }, [open]);
+  if (!mounted) return null;
+  return (
+    <div className="tree-children" data-open={String(open)}>
+      <div className="overflow-hidden">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/**
  * @param {{ page: Page, depth: number, path: string[], ctx: TreeContext }} props
  *   path: ancestor ids, root first — a page can't be dropped into its own subtree.
  */
@@ -467,7 +483,11 @@ function TreeItem({ page, depth, path, ctx }) {
         </span>
       </div>
 
-      {expanded && !isDatabase && <PageList parentId={page.id} depth={depth + 1} path={[...path, page.id]} ctx={ctx} />}
+      {!isDatabase && (
+        <Collapsible open={expanded}>
+          <PageList parentId={page.id} depth={depth + 1} path={[...path, page.id]} ctx={ctx} />
+        </Collapsible>
+      )}
     </li>
   );
 }
@@ -568,6 +588,54 @@ function useExpandedSet() {
   return /** @type {const} */ ([isExpanded, setExpanded]);
 }
 
+/**
+ * Compact user strip at the sidebar bottom: avatar, name, shortcuts, settings.
+ * @param {{ onSettings: () => void, onShortcuts: () => void }} props
+ */
+function UserStrip({ onSettings, onShortcuts }) {
+  const { data } = useAuthState();
+  const user = data?.user;
+  if (!user) return null;
+  const initials = user.name.trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase() || 'P';
+  return (
+    <div className="flex h-8 items-center gap-1 rounded-md px-1 text-sm text-muted">
+      <button
+        type="button"
+        aria-label="Settings"
+        title="Settings"
+        onClick={onSettings}
+        className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-1 hover:bg-s-active"
+      >
+        <span
+          className="flex size-5 shrink-0 items-center justify-center rounded-[4px] bg-accent/20 text-[10px] font-semibold text-accent"
+          aria-hidden="true"
+        >
+          {initials}
+        </span>
+        <span className="min-w-0 flex-1 truncate text-left text-[13px] text-fg">{user.name}</span>
+      </button>
+      <button
+        type="button"
+        aria-label="Keyboard shortcuts (Ctrl+/)"
+        title="Keyboard shortcuts (Ctrl+/)"
+        onClick={onShortcuts}
+        className="flex size-6 shrink-0 items-center justify-center rounded text-muted hover:bg-s-active hover:text-fg"
+      >
+        <KeyboardIcon size={14} />
+      </button>
+      <button
+        type="button"
+        aria-label="Settings"
+        title="Settings"
+        onClick={onSettings}
+        className="flex size-6 shrink-0 items-center justify-center rounded text-muted hover:bg-s-active hover:text-fg"
+      >
+        <GearIcon size={14} />
+      </button>
+    </div>
+  );
+}
+
 /** @param {number} [size] */
 const iconProps = (size = 16) =>
   /** @type {const} */ ({
@@ -616,18 +684,20 @@ function TemplateIcon() {
   );
 }
 
-function KeyboardIcon() {
+/** @param {{ size?: number }} props */
+function KeyboardIcon({ size }) {
   return (
-    <svg {...iconProps()}>
+    <svg {...iconProps(size)}>
       <rect x="2.5" y="6" width="19" height="12" rx="2" />
       <path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10" />
     </svg>
   );
 }
 
-function GearIcon() {
+/** @param {{ size?: number }} props */
+function GearIcon({ size }) {
   return (
-    <svg {...iconProps()}>
+    <svg {...iconProps(size)}>
       <circle cx="12" cy="12" r="3" />
       <path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" />
     </svg>

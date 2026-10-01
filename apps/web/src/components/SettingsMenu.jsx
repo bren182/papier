@@ -64,9 +64,9 @@ function Account() {
  * Settings: the account, then display settings (this device): colour theme, ambient or grayscale, glass,
  * motion. The same prefs the top bar toggles.
  * @param {{ anchor: HTMLElement | null, onClose: () => void, prefs: import('../usePrefs.js').Prefs,
- *   onChange: (patch: Partial<import('../usePrefs.js').Prefs>) => void }} props
+ *   onChange: (patch: Partial<import('../usePrefs.js').Prefs>) => void, onAi: () => void }} props
  */
-export function SettingsMenu({ anchor, onClose, prefs, onChange }) {
+export function SettingsMenu({ anchor, onClose, prefs, onChange, onAi }) {
   const toggle = (/** @type {string} */ label, /** @type {boolean} */ on, /** @type {() => void} */ flip) => (
     <button type="button" className={menuItem} onClick={flip} aria-pressed={on}>
       <span className="flex-1">{label}</span>
@@ -88,6 +88,10 @@ export function SettingsMenu({ anchor, onClose, prefs, onChange }) {
       {toggle('Grayscale backdrop', prefs.mode === 'grayscale', () => onChange({ mode: prefs.mode === 'grayscale' ? 'ambient' : 'grayscale' }))}
       {prefs.mode === 'ambient' && toggle('Clear glass', prefs.glass === 'clear', () => onChange({ glass: prefs.glass === 'clear' ? 'frosted' : 'clear' }))}
       {toggle('Motion', prefs.motion, () => onChange({ motion: !prefs.motion }))}
+      <div className="my-1 h-px bg-line" />
+      <button type="button" className={menuItem} onClick={() => { onClose(); onAi(); }}>
+        <span className="flex-1">✦ AI &amp; Ollama…</span>
+      </button>
     </Popover>
   );
 }

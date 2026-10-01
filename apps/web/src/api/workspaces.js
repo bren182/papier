@@ -62,6 +62,20 @@ export function useSwitchWorkspace() {
   };
 }
 
+/** Create a new workspace; the caller becomes its owner. */
+export function useCreateWorkspace() {
+  const qc = useQueryClient();
+  const switchTo = useSwitchWorkspace();
+  return useMutation({
+    /** @param {{ name: string }} input */
+    mutationFn: (input) => /** @type {Promise<import('./auth.js').Workspace>} */ (api('/workspaces', { method: 'POST', body: input })),
+    onSuccess: (ws) => {
+      qc.invalidateQueries({ queryKey: authKey });
+      switchTo(ws.id);
+    },
+  });
+}
+
 /** Rename a workspace, change its icon, or choose its Home page (null clears it). */
 export function useUpdateWorkspace() {
   const qc = useQueryClient();

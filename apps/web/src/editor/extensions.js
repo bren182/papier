@@ -13,6 +13,7 @@ import { PageMention } from './PageMention.js';
 import { ButtonBlock } from './ButtonBlock.jsx';
 import { DatabaseBlock } from './DatabaseBlock.jsx';
 import { LinkedDatabaseBlock } from './LinkedDatabaseBlock.jsx';
+import { ImageBlock } from './ImageBlock.js';
 import { WidgetBlock } from './WidgetBlock.jsx';
 import { BlockInputRules } from './inputRules.js';
 import { BlockKeymap } from './keymap.js';
@@ -77,11 +78,12 @@ function placeholderFor(node) {
  * @param {{ pages?: Partial<import('./PageBlock.js').PageBlockOptions>, databases?: Partial<import('./DatabaseBlock.jsx').DatabaseBlockOptions>,
  *   buttons?: Partial<import('./ButtonBlock.jsx').ButtonBlockOptions>, callouts?: Partial<import('./schema.js').CalloutOptions>,
  *   widgets?: Partial<import('./WidgetBlock.jsx').WidgetBlockOptions>, linked?: Partial<import('./LinkedDatabaseBlock.jsx').LinkedDatabaseOptions>,
+ *   images?: Partial<import('./ImageBlock.js').ImageBlockOptions>,
  *   links?: Partial<Pick<import('./PageMention.js').PageMentionOptions, 'searchPages' | 'recentPages'>>, template?: boolean }} [opts]
  *   page, database and button blocks' data and views, the callout icon picker, page search for inline links (none in tests);
  *   template: a template page
  */
-export function bodyExtensions({ pages = {}, databases = {}, buttons = {}, callouts = {}, widgets = {}, linked = {}, links = {}, template = false } = {}) {
+export function bodyExtensions({ pages = {}, databases = {}, buttons = {}, callouts = {}, widgets = {}, linked = {}, images = {}, links = {}, template = false } = {}) {
   return [
     TemplateMode.configure({ enabled: template }),
     PapierDocument,
@@ -92,6 +94,7 @@ export function bodyExtensions({ pages = {}, databases = {}, buttons = {}, callo
     ButtonBlock.configure(buttons),
     WidgetBlock.configure(widgets),
     LinkedDatabaseBlock.configure(linked),
+    ImageBlock.configure(images),
     DateNode,
     PageMention.configure({ watchPage: pages.watchPage ?? null, openPage: pages.openPage ?? null, ...links }),
     SoftBreak,

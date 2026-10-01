@@ -15,9 +15,21 @@ export const SHORTCUTS = [
     group: 'General',
     items: [
       { keys: ['Mod', 'K'], label: 'Search and commands (type > for commands)' },
+      { keys: ['Mod', 'S'], label: 'Save (triggers immediate autosave flush)' },
       { keys: ['Mod', '\\'], label: 'Show / hide the sidebar' },
       { keys: ['Mod', '/'], label: 'Keyboard shortcuts' },
       { keys: ['Esc'], label: 'Close a menu, dialog or the side peek' },
+    ],
+  },
+  {
+    group: 'Navigation',
+    items: [
+      { keys: ['Mod', 'Shift', 'H'], label: 'Go to Home' },
+      { keys: ['Mod', 'Shift', 'T'], label: 'Open Templates' },
+      { keys: ['Mod', 'Shift', 'X'], label: 'Open Trash' },
+      { keys: ['Mod', 'Shift', 'F'], label: 'Toggle favourite on current page' },
+      { keys: ['Mod', 'Shift', 'D'], label: 'Duplicate current page' },
+      { keys: ['Mod', 'Shift', 'A'], label: 'Ask AI' },
     ],
   },
   {

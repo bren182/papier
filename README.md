@@ -418,7 +418,181 @@ that I hate.*
 - Notion has a huge library of prebuilt templates, it would be cool to add a similar "plugin" library, where we can add stuff like "plugin for a recipe book" which can be a combination of pages and some other external tools/integrations like a recipe API + cart API that can put things in a shopping list for you. 
 - Being able to setup a custom "Home" page. So where you land you can see certain important blocks that you can customise. 
 - Uploading images for backgrounds for the app, and background for headers, background for pages etc. For now we'll assume storage stays local on a user's computer so no syncing yet.
-- Shortcut minigame: a "Practice" button in the keyboard shortcuts dialog (Ctrl+/) starts a Dance Dance Revolution–style drill (like Discord's keybinds easter egg) — shortcuts scroll up as falling prompts, press the right combo in time, streaks + a best score. A fun way to actually learn them. 
+- ~~Shortcut minigame: a "Practice" button in the keyboard shortcuts dialog (Ctrl+/) starts a Dance Dance Revolution–style drill (like Discord's keybinds easter egg) — shortcuts scroll up as falling prompts, press the right combo in time, streaks + a best score. A fun way to actually learn them.~~ Landed: 🕹 Practice tab in Ctrl+/ dialog, 4-lane DDR with Web Audio music, health bar, combos, scores.
 - ~~A small templating language for custom button logic~~ — landed as formulas (formula property + "Set to a formula" action).
 - ~~Noticed a small UX bug with the datepicker, some click actions close the popup immediately like using arrows to click to next month.~~ Fixed: our own calendar replaces the native date popup.
 - ~~The top header space on each page shoul.d be hideable and not shown by dfeefulat i think also the image does not get bluyrred in this header curently~~ Fixed: no header band unless the page has a cover; the "Clear" cover is blurred like the glass.
+- Scratch pad idea covering ollama from another session chat:
+
+Yep — absolutely. With 32 GB RAM and an RTX 5060, you can run a small local Ollama model that is perfectly capable of the “Notion AI-lite” stuff you’re describing.
+
+For Papier, I’d think of it less as “AI that knows the whole app” and more as:
+
+**user question → retrieve relevant Papier content → send only that context to Ollama → return answer**
+
+So for:
+
+> “Give me a summary of this week’s standups in @Engineering Standups”
+
+your app would resolve `@Engineering Standups` to that database, fetch entries from the current week, serialize the useful fields/content, and pass that bundle to the model with a prompt like “Summarize these standups, call out blockers, repeated themes, and completed work.”
+
+That architecture is very doable locally.
+
+A sensible first version would be:
+
+- **Model:** something in the 7B–14B range, quantized
+- **Runtime:** Ollama
+- **Papier backend:** your existing Node/C# backend calls Ollama over localhost HTTP
+- **Context system:** initially just SQL/filtering, no vector DB needed
+- **Features:** summarize page, summarize database selection, ask question about selected content, extract tasks/action items
+
+For your machine, models around this size should be comfortable:
+- `qwen3:8b`
+- `llama3.1:8b`
+- `gemma3:12b`
+- potentially a 14B quantized model if you’re okay with a bit less speed
+
+For this specific use case, I’d lean toward **Qwen 8B-ish** because you care more about instruction following, summarization, and structured output than creative writing.
+
+And you do **not** need RAG/vector embeddings on day one. Your Papier data is already structured. If the user explicitly says `@Standups`, you know exactly where to fetch context from. That’s actually a big advantage over a generic chatbot.
+
+A very simple flow could look like:
+
+```text
+User:
+"Summarize this week's standups in @Engineering Standups"
+
+        ↓
+
+Papier parses mention
+@Engineering Standups
+        ↓
+
+Database query
+created_at >= Monday
+        ↓
+
+Fetch:
+- date
+- author
+- yesterday
+- today
+- blockers
+- notes
+
+        ↓
+
+Build prompt:
+"You are Papier AI.
+Summarize the following standup entries.
+Highlight:
+1. major progress
+2. blockers
+3. recurring topics
+4. upcoming work
+
+<standup data>"
+        ↓
+
+Ollama
+qwen3:8b
+        ↓
+
+Papier UI:
+"This week the team..."
+```
+
+The **important architectural bit** is that Ollama shouldn't directly query your database. Let Papier own permissions, filtering, mentions and context retrieval. Ollama just receives a clean chunk of text and reasons over it.
+
+That also makes privacy much nicer: everything can stay on your PC/server with **zero OpenAI/Anthropic calls**.
+
+For implementation, I’d expose something like:
+
+```http
+POST /api/ai/query
+```
+
+with:
+
+```json
+{
+  "prompt": "Summarize this week's standups",
+  "context": {
+    "type": "database",
+    "databaseId": "engineering-standups",
+    "filters": {
+      "from": "2026-09-28"
+    }
+  }
+}
+```
+
+Your backend turns that into actual context, then calls:
+
+```http
+POST http://localhost:11434/api/chat
+```
+
+and streams the answer back to the UI.
+
+The next step up is where Papier starts feeling genuinely clever: support references like:
+
+```text
+@Standups
+@Project Phoenix
+@Brendan
+this week
+last month
+open tasks
+```
+
+Then you build a tiny resolver layer that converts those into deterministic database queries before involving the LLM.
+
+Later, if you want questions like:
+
+> “What did we decide about authentication a few months ago?”
+
+where the user doesn't know which page/database contains it, **that's** where embeddings + semantic search become worthwhile.
+
+So I'd build this in three levels:
+
+1. **Explicit context**
+   - Summarize current page
+   - Summarize selected blocks
+   - Ask about `@database`
+
+2. **Structured Papier context**
+   - date ranges
+   - people
+   - task status
+   - projects
+   - tags
+
+3. **Global semantic search**
+   - embeddings across pages
+   - retrieve top relevant chunks
+   - answer across the entire workspace
+
+Level 1 + 2 alone gets you surprisingly close to the useful part of Notion AI without needing an enormous model.
+
+And your RTX 5060 doesn't need to host some monster 70B model for this. The quality bottleneck for this particular feature will probably be **how well you prepare the context**, not whether you're running 8B versus 32B. A clean 8B model seeing exactly the right 15 standup entries will usually beat a much larger model being dumped an entire workspace.
+
+For Papier specifically, I'd probably make the first AI UI something lightweight like a `/` command:
+
+```text
+/ask
+/summarize
+/action-items
+```
+
+and then allow:
+
+```text
+/ask What were our main blockers this week? @Standups
+```
+
+That gives you a genuinely useful first “Papier AI” without building a giant agent system.
+
+- ~~Have giphy integration to insert inline gifs / images~~ Landed: `image` block type (`/image` in editor), paste any image/GIF URL, optional Giphy search (set key in Settings → AI). `animation` prop reserved for future slidedeck timing.
+
+- our side menu and opening closnig pages or collpasing to the right does not do a good animation yet, and we have the claude forntend style library, i'd like a full session or round to use the new forntend deisg tno make sure our layout and app styling is working correctly./ 

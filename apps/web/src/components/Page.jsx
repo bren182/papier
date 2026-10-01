@@ -50,12 +50,21 @@ export function Page({ selectedId, onSelect, onTemplates }) {
   }, [data?.page]);
   const width = look?.fullWidth ? 'max-w-none' : isDatabase ? 'max-w-[1240px]' : 'max-w-[784px]';
 
+  const scrollRef = useRef(/** @type {HTMLDivElement|null} */ (null));
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.classList.remove('papier-page-in');
+    void el.offsetHeight;
+    el.classList.add('papier-page-in');
+  }, [selectedId]);
+
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto" data-page-scroll="">
+    <div ref={scrollRef} className="papier-page-in min-h-0 flex-1 overflow-y-auto" data-page-scroll="">
       {/* the cover: a clear window onto the backdrop, or a gradient cover */}
       <PageCover page={data?.page} />
 
-      <div className={`p-glass border-t border-white/5 bg-s-page pb-24 ${hasCover(data?.page) ? 'min-h-[calc(100%-170px)]' : 'min-h-full'}`}>
+      <div className={`p-glass border-t border-white/5 bg-s-page pb-24 ${hasCover(data?.page) ? 'min-h-[calc(100vh-170px)]' : 'min-h-screen'}`}>
         {/* px-14: room for the block handles, inside the column */}
         <article className={`mx-auto flex w-full flex-col px-14 pt-10 ${width} ${layoutClasses(look)}`}>
           {!selectedId ? (

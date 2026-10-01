@@ -94,6 +94,14 @@ function Editor({ pageId, rows, onOpenPage, onEmptyChange, template, editorRef }
         },
         openRow: (id) => openPeek(id),
       },
+      images: {
+        onSearch: async (q) => {
+          const data = /** @type {{ results?: { url: string, preview: string }[] }} */ (
+            await api(`/ai/giphy?q=${encodeURIComponent(q)}`).catch(() => ({ results: [] }))
+          );
+          return data.results ?? [];
+        },
+      },
     }),
     content: rowsToDoc(rows),
     immediatelyRender: true,
@@ -129,18 +137,23 @@ function Editor({ pageId, rows, onOpenPage, onEmptyChange, template, editorRef }
       onError: (err) => console.error('Autosave failed', err),
       // A 4xx won't fix itself by resending; the next edit tries again.
       retry: (err) => !(err instanceof ApiError && err.status < 500),
+      onPending: () => window.dispatchEvent(new CustomEvent('papier:saving')),
+      onSettled: () => window.dispatchEvent(new CustomEvent('papier:saved')),
     });
 
     saverRef.current = saver;
     const onUpdate = () => saver.schedule();
     const onHide = () => saver.flushOnExit();
+    const onManualSave = () => saver.flush();
     editor.on('update', onUpdate);
     window.addEventListener('pagehide', onHide);
+    window.addEventListener('papier:save', onManualSave);
     // A save refused while signed out resends once signed back in.
     window.addEventListener(SIGNED_IN_EVENT, onUpdate);
     return () => {
       editor.off('update', onUpdate);
       window.removeEventListener('pagehide', onHide);
+      window.removeEventListener('papier:save', onManualSave);
       window.removeEventListener(SIGNED_IN_EVENT, onUpdate);
       saver.flush();
       saver.dispose();

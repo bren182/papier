@@ -1,6 +1,6 @@
 import { lazy, Suspense, useRef, useState } from 'react';
 import { useAuthState, useLogout } from '../api/auth.js';
-import { useSwitchWorkspace, useUpdateWorkspace, useWorkspace } from '../api/workspaces.js';
+import { useCreateWorkspace, useSwitchWorkspace, useUpdateWorkspace, useWorkspace } from '../api/workspaces.js';
 import { field, menuItem, menuLabel, Popover } from './database/Popover.jsx';
 
 const EmojiPicker = lazy(() => import('./EmojiPicker.jsx').then((m) => ({ default: m.EmojiPicker })));
@@ -22,10 +22,10 @@ export function WorkspaceBadge({ workspace, size = 22 }) {
 
 /**
  * The sidebar's header: the current workspace, and a menu to switch, rename
- * it or change its icon (owners), go Home, and sign out.
- * @param {{ onHome: () => void }} props
+ * it or change its icon (owners), go Home, create workspaces, and sign out.
+ * @param {{ onHome: () => void, onSettings: () => void }} props
  */
-export function WorkspaceMenu({ onHome }) {
+export function WorkspaceMenu({ onHome, onSettings }) {
   const { workspace, workspaces } = useWorkspace();
   const [open, setOpen] = useState(false);
   const ref = useRef(/** @type {HTMLButtonElement | null} */ (null));
@@ -51,6 +51,7 @@ export function WorkspaceMenu({ onHome }) {
           workspace={workspace}
           workspaces={workspaces}
           onHome={onHome}
+          onSettings={onSettings}
           onClose={() => setOpen(false)}
         />
       )}
@@ -58,18 +59,29 @@ export function WorkspaceMenu({ onHome }) {
   );
 }
 
-/** @param {{ anchor: HTMLElement | null, workspace: Workspace, workspaces: Workspace[], onHome: () => void, onClose: () => void }} props */
-function Panel({ anchor, workspace, workspaces, onHome, onClose }) {
+/** @param {{ anchor: HTMLElement | null, workspace: Workspace, workspaces: Workspace[], onHome: () => void, onSettings: () => void, onClose: () => void }} props */
+function Panel({ anchor, workspace, workspaces, onHome, onSettings, onClose }) {
   const { data } = useAuthState();
   const update = useUpdateWorkspace();
+  const create = useCreateWorkspace();
   const switchTo = useSwitchWorkspace();
   const logout = useLogout();
   const [picking, setPicking] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [newName, setNewName] = useState('');
   const owner = workspace.role === 'owner';
+
+  const submitCreate = (/** @type {import('react').FormEvent} */ e) => {
+    e.preventDefault();
+    const name = newName.trim();
+    if (!name) return;
+    create.mutate({ name }, { onSuccess: () => { setCreating(false); setNewName(''); onClose(); } });
+  };
 
   return (
     <Popover anchor={anchor} onClose={onClose} width={280}>
-      <div className="flex items-center gap-2 px-2 pt-1.5 pb-2">
+      {/* Workspace header: icon + name */}
+      <div className="flex items-center gap-2 px-2 pt-1.5 pb-1">
         <button
           type="button"
           disabled={!owner}
@@ -100,30 +112,23 @@ function Panel({ anchor, workspace, workspaces, onHome, onClose }) {
         <div className="px-1 pb-1">
           <Suspense fallback={<div className="h-40" />}>
             <EmojiPicker
-              onPick={(icon) => {
-                update.mutate({ id: workspace.id, icon });
-                setPicking(false);
-              }}
-              onRemove={() => {
-                update.mutate({ id: workspace.id, icon: null });
-                setPicking(false);
-              }}
+              onPick={(icon) => { update.mutate({ id: workspace.id, icon }); setPicking(false); }}
+              onRemove={() => { update.mutate({ id: workspace.id, icon: null }); setPicking(false); }}
             />
           </Suspense>
         </div>
       )}
-      <button
-        type="button"
-        className={menuItem}
-        onClick={() => {
-          onHome();
-          onClose();
-        }}
-      >
+      <button type="button" className={menuItem} onClick={() => { onHome(); onClose(); }}>
         {workspace.homePageId ? 'Go to Home' : 'Set up Home…'}
+      </button>
+      <button type="button" className={menuItem} onClick={() => { onSettings(); onClose(); }}>
+        <SettingsIcon />
+        Settings &amp; members
       </button>
 
       <div className="my-1 h-px bg-line" />
+
+      {/* Workspace switcher */}
       <div className={menuLabel}>Workspaces</div>
       {workspaces.map((w) => (
         <button
@@ -131,17 +136,36 @@ function Panel({ anchor, workspace, workspaces, onHome, onClose }) {
           type="button"
           className={menuItem}
           aria-current={w.id === workspace.id}
-          onClick={() => {
-            if (w.id !== workspace.id) switchTo(w.id);
-            onClose();
-          }}
+          onClick={() => { if (w.id !== workspace.id) switchTo(w.id); onClose(); }}
         >
           <WorkspaceBadge workspace={w} size={18} />
           <span className="flex-1 truncate">{w.name}</span>
-          <span className="text-[11px] text-faint">{w.role}</span>
+          <span className="text-[11px] text-faint capitalize">{w.role}</span>
           {w.id === workspace.id && <span className="text-accent">✓</span>}
         </button>
       ))}
+
+      {/* Create workspace */}
+      {creating ? (
+        <form className="flex items-center gap-1 px-2 py-1" onSubmit={submitCreate}>
+          <input
+            autoFocus
+            className={`${field} flex-1`}
+            placeholder="Workspace name"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Escape' && setCreating(false)}
+          />
+          <button type="submit" disabled={!newName.trim() || create.isPending} className="rounded px-2 py-1 text-[12px] text-accent hover:bg-hover disabled:opacity-40">
+            Create
+          </button>
+        </form>
+      ) : (
+        <button type="button" className={menuItem} onClick={() => setCreating(true)}>
+          <PlusIcon />
+          Create workspace…
+        </button>
+      )}
 
       <div className="my-1 h-px bg-line" />
       <div className="truncate px-2 pb-1 text-[12px] text-faint">{data?.user?.email}</div>
@@ -149,5 +173,22 @@ function Panel({ anchor, workspace, workspaces, onHome, onClose }) {
         Sign out
       </button>
     </Popover>
+  );
+}
+
+function SettingsIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" />
+    </svg>
+  );
+}
+
+function PlusIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+      <path d="M12 5v14M5 12h14" />
+    </svg>
   );
 }

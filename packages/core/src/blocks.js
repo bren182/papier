@@ -23,6 +23,7 @@ export const BLOCK_TYPES = /** @type {const} */ ([
   'button', // a button: props.label, props.actions (row-less actions: add rows), props.open (open the row it adds)
   'widget', // a live widget: props.kind ('greeting' | 'recent' | 'favorites')
   'linked_database', // a view of a database that lives elsewhere: props.databaseId, props.view ({ type, config }, this block's own)
+  'image', // an image or GIF: props.src (URL), props.caption, props.align ('left'|'center'|'right'), props.animation (future: slide timing)
 ]);
 
 export const BlockType = z.enum(BLOCK_TYPES);

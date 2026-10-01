@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { Backdrop } from '@papier/ui';
 import { MIN_PASSWORD } from '@papier/core/text';
 import { useLogin, useSetup } from '../api/auth.js';
 import { ApiError } from '../api/client.js';
@@ -116,7 +115,13 @@ export function AuthScreen({ setup }) {
   usePrefs(); // theme, mode and glass for the backdrop; the app isn't mounted yet
   return (
     <div className="relative grid h-full place-items-center overflow-y-auto px-4 py-10">
-      <Backdrop />
+      {/* Full-bleed photo background with frosted glass overlay */}
+      <div
+        className="absolute inset-0 bg-cover bg-center"
+        style={{ backgroundImage: "url('/login_bg.png')", backgroundColor: '#0d0f0d' }}
+        aria-hidden="true"
+      />
+      <div className="absolute inset-0 bg-black/25 backdrop-blur-md" aria-hidden="true" />
       {setup ? (
         <Card title="Welcome to Papier" subtitle="Create the owner account for this server.">
           <SetupForm />

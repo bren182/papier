@@ -24,9 +24,10 @@ import { SearchDialog } from './SearchDialog.jsx';
  *   onTemplates: () => void,
  *   onShortcuts: () => void,
  *   onSettings: () => void,
+ *   onAi?: () => void,
  * }} props
  */
-export function CommandPalette({ onClose, onSelect, selectedId, prefs, onPrefs, onTrash, onTemplates, onShortcuts, onSettings }) {
+export function CommandPalette({ onClose, onSelect, selectedId, prefs, onPrefs, onTrash, onTemplates, onShortcuts, onSettings, onAi }) {
   const createPage = useCreatePage();
   const updatePage = useUpdatePage();
   const archive = useArchivePage();
@@ -51,6 +52,7 @@ export function CommandPalette({ onClose, onSelect, selectedId, prefs, onPrefs, 
     { id: 'templates', title: 'Templates', keywords: 'library', run: onTemplates },
     { id: 'settings', title: 'Settings', keywords: 'theme display preferences', run: onSettings },
     { id: 'shortcuts', title: 'Keyboard shortcuts', keywords: 'keys help', keys: keys(['Mod', '/']), run: onShortcuts },
+    ...(onAi ? [{ id: 'ai', title: '✦ Ask AI', keywords: 'smart search summarize ollama llm', run: () => { onClose(); onAi(); } }] : []),
     { id: 'sidebar', title: prefs.sidebar ? 'Hide sidebar' : 'Show sidebar', keywords: 'toggle sidebar', keys: keys(['Mod', '\\']), run: () => onPrefs((p) => ({ sidebar: !p.sidebar })) },
     ...THEMES.map((t) => ({
       id: `theme-${t.id}`,

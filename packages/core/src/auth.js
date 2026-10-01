@@ -40,3 +40,6 @@ export const WorkspaceUpdate = z
     homePageId: z.string().max(100).nullable(),
   })
   .partial();
+
+/** `POST /api/workspaces`: create a new workspace. */
+export const WorkspaceCreate = z.object({ name: z.string().trim().min(1).max(100) });
