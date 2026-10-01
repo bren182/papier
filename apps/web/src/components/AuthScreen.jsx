@@ -27,7 +27,7 @@ function Card({ title, subtitle, children }) {
   return (
     <div className="p-glass relative w-full max-w-[360px] rounded-xl border border-line bg-s-page px-7 py-8 shadow-2xl">
       <div className="mb-6 flex flex-col items-center gap-2 text-center">
-        <span className="grid size-9 place-items-center rounded-lg bg-fg-strong font-display text-[20px] text-root">P</span>
+        <img src="/pwa-192x192.png" alt="Papier" className="size-14 rounded-2xl" />
         <h1 className="font-display text-[26px] leading-tight text-fg-strong">{title}</h1>
         {subtitle && <p className="text-[13px] text-muted">{subtitle}</p>}
       </div>

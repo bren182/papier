@@ -40,7 +40,7 @@ import { SidebarIcon, StarIcon } from './Topbar.jsx';
 /** How long hovering the middle of a collapsed page waits before opening it. */
 const EXPAND_DELAY_MS = 600;
 
-const navButton = 'flex h-8 items-center gap-2.5 rounded-md px-2.5 text-left text-sm text-muted hover:bg-s-active hover:text-fg';
+const navButton = 'flex h-11 md:h-8 items-center gap-2.5 rounded-md px-2.5 text-left text-sm text-muted hover:bg-s-active hover:text-fg';
 
 /**
  * @param {{ selectedId: string | null, atHome: boolean, onSelect: (id: string | null) => void, onSearch: () => void,
@@ -97,7 +97,7 @@ export function Sidebar({ selectedId, atHome, onSelect, onSearch, onTemplates, o
   };
 
   return (
-    <nav aria-label="Workspace" className="p-glass relative flex w-[260px] shrink-0 flex-col border-r border-white/5 bg-s-sidebar px-2 py-2">
+    <nav aria-label="Workspace" className="p-glass relative flex w-[260px] shrink-0 flex-col border-r border-white/5 bg-s-sidebar px-2 py-2" style={{ paddingLeft: 'max(0.5rem, env(safe-area-inset-left, 0px))' }}>
       {/* Header: workspace switcher + collapse */}
       <div className="group/head mb-1 flex items-center">
         <WorkspaceMenu onHome={() => onSelect(null)} onSettings={onSettings} />
@@ -107,7 +107,7 @@ export function Sidebar({ selectedId, atHome, onSelect, onSearch, onTemplates, o
           aria-label="Hide sidebar"
           title="Hide sidebar (Ctrl+\)"
           onClick={onCollapse}
-          className="ml-1 flex size-7 shrink-0 items-center justify-center rounded-md text-muted opacity-0 group-hover/head:opacity-100 hover:bg-s-active hover:text-fg focus-visible:opacity-100"
+          className="ml-1 flex size-10 md:size-7 shrink-0 items-center justify-center rounded-md text-muted opacity-100 md:opacity-0 md:group-hover/head:opacity-100 hover:bg-s-active hover:text-fg focus-visible:opacity-100"
         >
           <SidebarIcon />
         </button>
@@ -133,7 +133,7 @@ export function Sidebar({ selectedId, atHome, onSelect, onSearch, onTemplates, o
       <div className="-mx-2 mt-3 min-h-0 flex-1 overflow-y-auto px-2">
         <Favorites selectedId={selectedId} onSelect={onSelect} />
         <Recent selectedId={selectedId} onSelect={onSelect} />
-        <div className="group/pages flex h-[26px] items-center justify-between px-2.5 text-xs font-medium text-faint">
+        <div className="group/pages flex h-9 md:h-[26px] items-center justify-between px-2.5 text-xs font-medium text-faint">
           <span>Pages</span>
           <button
             type="button"
@@ -148,7 +148,7 @@ export function Sidebar({ selectedId, atHome, onSelect, onSearch, onTemplates, o
       </div>
 
       {/* Bottom actions */}
-      <div className="mt-1 flex flex-col gap-0.5 border-t border-white/5 pt-1">
+      <div className="mt-1 flex flex-col gap-0.5 border-t border-white/5 pt-1" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
         <button type="button" className={navButton} onClick={onTemplates}>
           <TemplateIcon />
           <span>Templates</span>
@@ -253,7 +253,7 @@ function SideSection({ label, storageKey, children }) {
         type="button"
         onClick={toggle}
         aria-expanded={open}
-        className="flex h-[26px] w-full items-center gap-1 rounded px-2.5 text-left text-xs font-medium text-faint hover:text-muted"
+        className="flex h-9 md:h-[26px] w-full items-center gap-1 rounded px-2.5 text-left text-xs font-medium text-faint hover:text-muted"
       >
         {label}
         <svg
@@ -283,7 +283,7 @@ function SideSection({ label, storageKey, children }) {
 function SideLink({ page, active, onSelect, children }) {
   return (
     <li
-      className={`group flex h-[30px] items-center gap-0.5 rounded-md pr-1 pl-[6px] text-sm ${active ? 'bg-s-active text-fg-strong' : 'text-[#a3a3a3] hover:bg-s-active hover:text-fg'}`}
+      className={`group flex h-11 md:h-[30px] items-center gap-0.5 rounded-md pr-1 pl-[6px] text-sm ${active ? 'bg-s-active text-fg-strong' : 'text-[#a3a3a3] hover:bg-s-active hover:text-fg'}`}
     >
       <button type="button" onClick={() => onSelect(page.id)} className="flex h-full min-w-0 flex-1 items-center gap-1.5 pl-[22px] text-left">
         {page.icon ? (
@@ -394,7 +394,7 @@ function TreeItem({ page, depth, path, ctx }) {
         }}
         onDragEnd={dnd.end}
         data-page-id={page.id}
-        className={`group relative flex h-[30px] items-center gap-0.5 rounded-md pr-1 text-sm ${
+        className={`group relative flex h-11 md:h-[30px] items-center gap-0.5 rounded-md pr-1 text-sm ${
           drop === 'inside' ? 'bg-accent-soft text-fg-strong' : active ? 'bg-s-active text-fg-strong' : 'text-[#a3a3a3] hover:bg-s-active hover:text-fg'
         } ${dnd.dragging?.id === page.id ? 'opacity-50' : ''}`}
         style={{ paddingLeft: 6 + depth * 18 }}
@@ -598,7 +598,7 @@ function UserStrip({ onSettings, onShortcuts }) {
   if (!user) return null;
   const initials = user.name.trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase() || 'P';
   return (
-    <div className="flex h-8 items-center gap-1 rounded-md px-1 text-sm text-muted">
+    <div className="flex h-11 md:h-8 items-center gap-1 rounded-md px-1 text-sm text-muted">
       <button
         type="button"
         aria-label="Settings"

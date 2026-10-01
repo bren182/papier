@@ -20,8 +20,10 @@ export function Topbar({ selectedId, onSelect, prefs, onChange, onAi }) {
 
   return (
     <header
-      className="flex h-11 shrink-0 items-center gap-2 bg-s-top px-4 text-sm"
+      className="flex shrink-0 items-center gap-2 bg-s-top px-4 text-sm"
       style={{
+        height: 'calc(2.75rem + env(safe-area-inset-top, 0px))',
+        paddingTop: 'env(safe-area-inset-top, 0px)',
         backdropFilter: 'var(--s-top-glass)',
         WebkitBackdropFilter: 'var(--s-top-glass)',
       }}
@@ -32,7 +34,7 @@ export function Topbar({ selectedId, onSelect, prefs, onChange, onAi }) {
           aria-label="Show sidebar"
           title="Show sidebar (Ctrl+\)"
           onClick={() => onChange({ sidebar: true })}
-          className="-ml-1.5 flex size-7 shrink-0 items-center justify-center rounded-md text-muted hover:bg-s-active hover:text-fg"
+          className="-ml-1.5 flex size-11 md:size-7 shrink-0 items-center justify-center rounded-md text-muted hover:bg-s-active hover:text-fg"
         >
           <SidebarIcon />
         </button>

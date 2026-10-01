@@ -64,7 +64,7 @@ export function Page({ selectedId, onSelect, onTemplates }) {
       {/* the cover: a clear window onto the backdrop, or a gradient cover */}
       <PageCover page={data?.page} />
 
-      <div className={`p-glass border-t border-white/5 bg-s-page pb-24 ${hasCover(data?.page) ? 'min-h-[calc(100vh-170px)]' : 'min-h-screen'}`}>
+      <div className={`p-glass border-t border-white/5 bg-s-page pb-24 ${hasCover(data?.page) ? 'min-h-[calc(100vh-170px)]' : 'min-h-screen'}`} style={{ paddingBottom: 'max(6rem, calc(6rem + env(safe-area-inset-bottom, 0px)))' }}>
         {/* px-4 on mobile grows to px-14 on sm+ to leave room for block handles */}
         <article className={`mx-auto flex w-full flex-col px-4 pt-10 sm:px-14 ${width} ${layoutClasses(look)}`}>
           {!selectedId ? (
