@@ -82,6 +82,9 @@ export function useDemoStart() {
       url.searchParams.delete('b');
       url.searchParams.delete('peek');
       window.history.replaceState(null, '', url.toString());
+      // Clear the stored workspace so API calls don't send the previous user's workspace ID.
+      try { localStorage.removeItem('papier.workspace'); } catch {}
+      window.dispatchEvent(new Event('papier:workspace'));
       // Flush all cached queries (pages, workspaces, etc.) so no real-user data bleeds in,
       // then re-fetch auth to mount the app as the fresh demo user.
       qc.removeQueries({ predicate: (q) => q.queryKey[0] !== authKey[0] });

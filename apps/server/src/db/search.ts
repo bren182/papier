@@ -151,7 +151,7 @@ type HitRow = Omit<SearchHit, 'titleContent' | 'snippet'> & { rowid: number; tit
  * per row, and a common word can match half the workspace. So a very deep
  * scroll through a huge result set ends early; a narrower query finds the rest.
  */
-export function searchPages(db: Db, q: string, { limit, offset }: { limit: number; offset: number }) {
+export function searchPages(db: Db, q: string, { limit, offset, workspaceId = null }: { limit: number; offset: number; workspaceId?: string | null }) {
   const match = toFtsQuery(q);
   if (!match) return { items: [] as SearchHit[], nextOffset: null };
 
@@ -177,7 +177,7 @@ export function searchPages(db: Db, q: string, { limit, offset }: { limit: numbe
     select r.id as rowid, r.page_id as pageId, r.block_id as blockId, d.name as field,
       p.title as title, p.title_content as titleContent, p.icon as icon
     from ranked r join pages p on p.id = r.page_id left join db_properties d on d.id = r.prop_id
-    where r.n = 1
+    where r.n = 1 ${workspaceId ? sql`and p.workspace_id = ${workspaceId}` : sql``}
     order by r.score, p.id
     limit ${limit + 1} offset ${offset}
   `);

@@ -44,10 +44,11 @@ export function pageRoutes(app: FastifyInstance, db: Db) {
   /** Children of one parent (root when `parent` is omitted). The sidebar loads lazily. */
   app.get<{ Querystring: { parent?: string } }>('/api/pages', async (req) => {
     const parent = req.query.parent;
+    const wsFilter = req.workspaceId ? eq(pages.workspaceId, req.workspaceId) : undefined;
     return db
       .select(pageFields)
       .from(pages)
-      .where(and(parent ? eq(pages.parentId, parent) : isNull(pages.parentId), isNull(pages.archivedAt), eq(pages.isTemplate, false)))
+      .where(and(parent ? eq(pages.parentId, parent) : isNull(pages.parentId), isNull(pages.archivedAt), eq(pages.isTemplate, false), wsFilter))
       .orderBy(asc(pages.orderKey))
       .all();
   });
@@ -56,11 +57,12 @@ export function pageRoutes(app: FastifyInstance, db: Db) {
    * The sidebar's Favourites: starred pages that are live (no trashed or
    * template ancestor), in starring order.
    */
-  app.get('/api/favorites', async () => {
+  app.get('/api/favorites', async (req) => {
+    const wsFilter = req.workspaceId ? sql`and p.workspace_id = ${req.workspaceId}` : sql``;
     const ids = db
       .all<{ id: string }>(sql`
         with recursive up(fav, id, dead) as (
-          select p.id, p.parent_id, p.archived_at is not null or p.is_template from pages p where p.favorite_key is not null
+          select p.id, p.parent_id, p.archived_at is not null or p.is_template from pages p where p.favorite_key is not null ${wsFilter}
           union all
           select up.fav, a.parent_id, a.archived_at is not null or a.is_template from up join pages a on a.id = up.id where up.dead = 0
         )
@@ -72,15 +74,16 @@ export function pageRoutes(app: FastifyInstance, db: Db) {
   });
 
   /** The template library: page templates (database templates live in their database). */
-  app.get('/api/templates', async () =>
-    db
+  app.get('/api/templates', async (req) => {
+    const wsFilter = req.workspaceId ? eq(pages.workspaceId, req.workspaceId) : undefined;
+    return db
       .select({ id: pages.id, title: pages.title, titleContent: pages.titleContent, icon: pages.icon, kind: pages.kind, updatedAt: pages.updatedAt })
       .from(pages)
-      .where(and(isNull(pages.parentId), eq(pages.isTemplate, true), isNull(pages.archivedAt)))
+      .where(and(isNull(pages.parentId), eq(pages.isTemplate, true), isNull(pages.archivedAt), wsFilter))
       .orderBy(asc(sql`lower(${pages.title})`))
       .limit(200)
-      .all(),
-  );
+      .all();
+  });
 
   /** One page plus its ancestors (root first) for breadcrumbs. */
   app.get<{ Params: { id: string } }>('/api/pages/:id', async (req, reply) => {
@@ -136,6 +139,7 @@ export function pageRoutes(app: FastifyInstance, db: Db) {
       tx.insert(pages)
         .values({
           id,
+          workspaceId: req.workspaceId ?? undefined,
           parentId: input.parentId,
           title: input.title,
           kind: input.kind,
@@ -291,7 +295,7 @@ export function pageRoutes(app: FastifyInstance, db: Db) {
   /** Move to trash. Descendants stay attached and disappear with it; so does its page block. */
   // --- trash ---
 
-  app.get<{ Querystring: { q?: string } }>('/api/trash', async (req) => listTrash(db, String(req.query.q ?? '').trim().slice(0, 200)));
+  app.get<{ Querystring: { q?: string } }>('/api/trash', async (req) => listTrash(db, String(req.query.q ?? '').trim().slice(0, 200), 200, req.workspaceId));
 
   app.post<{ Params: { id: string } }>('/api/pages/:id/restore', async (req, reply) => {
     try {

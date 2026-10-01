@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { Db } from '../db/index.ts';
-import { resolveSession, type AuthUser } from './sessions.ts';
+import { userWorkspaces, memberRole, resolveSession, type AuthUser } from './sessions.ts';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -11,6 +11,8 @@ declare module 'fastify' {
     sessionId: string | null;
     /** An in-process call (Notion import) made with `internalHeaders(app)`. */
     system: boolean;
+    /** The workspace scoping this request (from x-papier-workspace header, or the user's first). */
+    workspaceId: string | null;
   }
   interface FastifyInstance {
     /** Per-process secret for in-process calls; never leaves memory. */
@@ -68,6 +70,7 @@ export function authPlugin(app: FastifyInstance, db: Db) {
   app.decorateRequest('user', null);
   app.decorateRequest('sessionId', null);
   app.decorateRequest('system', false);
+  app.decorateRequest('workspaceId', null);
 
   app.addHook('onRequest', async (req, reply) => {
     const path = req.url.split('?', 1)[0]!;
@@ -84,6 +87,14 @@ export function authPlugin(app: FastifyInstance, db: Db) {
     if (session) {
       req.user = session.user;
       req.sessionId = session.sessionId;
+      // Resolve workspace: validate the header value, fall back to the user's first workspace.
+      const wsHeader = req.headers['x-papier-workspace'];
+      const wsId = typeof wsHeader === 'string' ? wsHeader.trim() : null;
+      if (wsId && memberRole(db, wsId, session.user.id)) {
+        req.workspaceId = wsId;
+      } else {
+        req.workspaceId = userWorkspaces(db, session.user.id)[0]?.id ?? null;
+      }
     } else if (!PUBLIC.has(path)) {
       return reply.code(401).send({ error: 'Sign in required' });
     }

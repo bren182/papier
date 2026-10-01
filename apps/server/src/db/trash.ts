@@ -26,12 +26,13 @@ export type TrashItem = {
 };
 
 /** Top-most trashed pages, newest first: trashed themselves, with no trashed ancestor. */
-export function listTrash(db: Db, q = '', limit = 200): TrashItem[] {
+export function listTrash(db: Db, q = '', limit = 200, workspaceId: string | null = null): TrashItem[] {
   const like = `%${q.toLowerCase().replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+  const wsFilter = workspaceId ? sql`and p.workspace_id = ${workspaceId}` : sql``;
   const rows = db.all<{ id: string; parent_id: string | null; title: string; title_content: string | null; icon: string | null; kind: string; is_template: number; archived_at: number; parent_kind: string | null }>(sql`
     select p.id, p.parent_id, p.title, p.title_content, p.icon, p.kind, p.is_template, p.archived_at, par.kind as parent_kind
     from pages p left join pages par on par.id = p.parent_id
-    where p.archived_at is not null ${q ? sql`and lower(p.title) like ${like} escape '\\'` : sql``}
+    where p.archived_at is not null ${q ? sql`and lower(p.title) like ${like} escape '\\'` : sql``} ${wsFilter}
     order by p.archived_at desc
     limit 2000
   `);

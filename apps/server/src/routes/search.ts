@@ -8,7 +8,7 @@ export function searchRoutes(app: FastifyInstance, db: Db) {
   /** Full-text search over page titles and blocks: one hit per page, best first, paginated. */
   app.get('/api/search', async (req) => {
     const { q, limit, offset } = SearchQuery.parse(req.query ?? {});
-    const { items, nextOffset } = searchPages(db, q, { limit, offset });
+    const { items, nextOffset } = searchPages(db, q, { limit, offset, workspaceId: req.workspaceId });
     return {
       items: items.map(({ pageId, title, titleContent, icon, blockId, field, snippet }) => ({
         page: { id: pageId, title, titleContent, icon },

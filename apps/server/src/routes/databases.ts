@@ -117,6 +117,7 @@ export function databaseRoutes(app: FastifyInstance, db: Db) {
       select id, title, title_content, icon from pages
       where kind = 'database' and id not in (select id from dead)
         ${q ? sql`and lower(title) like ${likeEscape(q)} escape '\\'` : sql``}
+        ${req.workspaceId ? sql`and workspace_id = ${req.workspaceId}` : sql``}
       order by title = '', lower(title), id
       limit ${limit}
     `);
