@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Backdrop } from '@papier/ui';
 import { usePrefs } from './usePrefs.js';
 import { useWorkspace } from './api/workspaces.js';
@@ -35,6 +35,30 @@ export function App() {
   // Keep a stable ref so the keydown handler always sees the current pageId.
   const pageIdRef = useRef(pageId);
   pageIdRef.current = pageId;
+
+  // On narrow viewports (<= 768px) treat the sidebar as an overlay: auto-close on
+  // page navigate and auto-collapse the initial state so content is not hidden.
+  const mqRef = useRef(typeof window !== 'undefined' ? window.matchMedia('(max-width: 768px)') : null);
+  const [isMobile, setIsMobile] = useState(() => mqRef.current?.matches ?? false);
+  useEffect(() => {
+    const mq = mqRef.current;
+    if (!mq) return;
+    const handler = (/** @type {MediaQueryListEvent} */ e) => setIsMobile(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+  // Auto-collapse when first rendered on a narrow screen.
+  useEffect(() => {
+    if (isMobile && prefs.sidebar) updatePrefs({ sidebar: false });
+  }, [isMobile]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Close overlay sidebar after the user picks a page on mobile.
+  const selectAndClose = useCallback(
+    /** @param {string | null} id */ (id) => {
+      select(id);
+      if (isMobile) updatePrefs({ sidebar: false });
+    },
+    [select, isMobile, updatePrefs],
+  );
 
   useEffect(() => {
     /** @param {KeyboardEvent} e */
@@ -86,20 +110,29 @@ export function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, [updatePrefs, select, pageData, setFavorite, duplicate]);
 
+  const sidebarOpen = prefs.sidebar;
+
   return (
     <div className="relative flex h-full overflow-hidden">
       <Backdrop />
-      {/* Collapsing slides the sidebar out; it stays mounted so its tree state survives. */}
+      {/* On mobile the sidebar is a fixed overlay; on desktop it shifts content. */}
+      {isMobile && sidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/40"
+          onClick={() => updatePrefs({ sidebar: false })}
+          aria-hidden="true"
+        />
+      )}
       <div
-        className="relative flex shrink-0 overflow-hidden transition-[width] duration-200 ease-out motion-reduce:transition-none"
-        style={{ width: prefs.sidebar ? 260 : 0 }}
-        inert={!prefs.sidebar}
+        className={`${isMobile ? 'fixed inset-y-0 left-0 z-50' : 'relative'} flex shrink-0 overflow-hidden transition-[width] duration-200 ease-out motion-reduce:transition-none`}
+        style={{ width: sidebarOpen ? 260 : 0 }}
+        inert={!sidebarOpen}
       >
         <Sidebar
           selectedId={pageId}
           atHome={atHome}
-          onSelect={select}
-          onSearch={() => setSearching(true)}
+          onSelect={selectAndClose}
+          onSearch={() => { setSearching(true); if (isMobile) updatePrefs({ sidebar: false }); }}
           onTemplates={() => setLibrary({ parentId: null })}
           onShortcuts={() => setShortcuts(true)}
           onCollapse={() => updatePrefs({ sidebar: false })}
@@ -108,10 +141,10 @@ export function App() {
         />
       </div>
       <main className="relative flex min-w-0 flex-1 flex-col">
-        <Topbar selectedId={pageId} onSelect={select} prefs={prefs} onChange={updatePrefs} onAi={() => setAiOpen(true)} />
+        <Topbar selectedId={pageId} onSelect={selectAndClose} prefs={prefs} onChange={updatePrefs} onAi={() => setAiOpen(true)} />
         <div className="relative flex min-h-0 flex-1">
-          <Page selectedId={pageId} onSelect={select} onTemplates={setLibrary} />
-          <RowPeek onSelect={select} />
+          <Page selectedId={pageId} onSelect={selectAndClose} onTemplates={setLibrary} />
+          <RowPeek onSelect={selectAndClose} />
         </div>
       </main>
       {searching && (

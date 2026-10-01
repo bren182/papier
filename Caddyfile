@@ -1,0 +1,3 @@
+papier.mylgs.co.za {
+    reverse_proxy app:3000
+}

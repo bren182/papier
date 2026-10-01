@@ -1,0 +1,35 @@
+services:
+  app:
+    build: .
+    image: ghcr.io/bren182/papier:latest
+    restart: unless-stopped
+    environment:
+      DATABASE_PATH: /data/papier.db
+      STATIC_DIR: /app/web
+      PAPIER_ORIGIN: ${PAPIER_ORIGIN}
+      PAPIER_SETUP_TOKEN: ${PAPIER_SETUP_TOKEN}
+      TRUST_PROXY: "1"
+      LOG_LEVEL: info
+    volumes:
+      - papier_data:/data
+    expose:
+      - "3000"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
+volumes:
+  papier_data:
+  caddy_data:
+  caddy_config:

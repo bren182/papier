@@ -1,0 +1,15 @@
+node_modules
+**/node_modules
+dist
+**/dist
+.git
+.env
+.env.*
+apps/server/data
+apps/web/e2e
+playwright-report
+test-results
+*.db
+*.db-*
+uploads
+data

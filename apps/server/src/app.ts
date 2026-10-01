@@ -1,8 +1,9 @@
 import { randomBytes } from 'node:crypto';
-import { mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import Fastify from 'fastify';
 import multipart from '@fastify/multipart';
+import staticFiles from '@fastify/static';
 import { ZodError } from 'zod';
 import { BLOCK_TYPES } from '@papier/core';
 import { authPlugin } from './auth/plugin.ts';
@@ -82,6 +83,25 @@ export function buildApp({
   const uploadsDir = dbPath === ':memory:' ? ':memory:' : join(dirname(dbPath), 'uploads');
   if (uploadsDir !== ':memory:') mkdirSync(uploadsDir, { recursive: true });
   app.register(multipart, { limits: { fileSize: 20 * 1024 * 1024 } });
+
+  // Serve the pre-built web UI when STATIC_DIR is set (production: Docker).
+  // Must be registered before auth so unauthenticated users can load the shell.
+  const staticDir = process.env.STATIC_DIR;
+  if (staticDir && existsSync(staticDir)) {
+    app.register(staticFiles, {
+      root: staticDir,
+      prefix: '/',
+      index: 'index.html',
+    });
+    // SPA fallback: serve index.html for any non-/api, non-/files path.
+    app.setNotFoundHandler(async (_req, reply) => {
+      try {
+        return await reply.sendFile('index.html', staticDir);
+      } catch {
+        return reply.code(404).send({ error: 'Not found' });
+      }
+    });
+  }
 
   authPlugin(app, db);
   app.get('/api/health', async () => ({ ok: true, blockTypes: BLOCK_TYPES.length }));
