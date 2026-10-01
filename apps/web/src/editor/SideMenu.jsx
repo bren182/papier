@@ -346,8 +346,32 @@ function BlockMenu({ editor, at, onClose }) {
       {!owning && (
         <div className="px-2 pt-1.5 pb-1 text-[11px] font-medium tracking-wide text-faint uppercase">Turn into</div>
       )}
-      {!owning && BLOCK_TYPES.map((t) => {
+      {!owning && BLOCK_TYPES.filter((t) => ['paragraph', 'heading', 'bulletItem', 'numberedItem', 'todo', 'divider'].includes(t.type)).map((t) => {
         const current = node.type.name === t.type && (t.type !== 'heading' || node.attrs.level === t.attrs?.level);
+        return (
+          <button
+            key={t.title}
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              const tr = editor.state.tr;
+              setBlockType(tr, posOfIndex(editor.state.doc, at.index), /** @type {any} */ (editor.schema.nodes[t.type]), t.attrs);
+              apply(tr);
+            }}
+            className="flex w-full items-center gap-2.5 rounded-md px-2 py-1 text-left text-[13px] text-fg hover:bg-hover"
+          >
+            <span className="w-5 text-center text-[12px] text-muted">{t.icon}</span>
+            <span className="flex-1">{t.title}</span>
+            {current && <span className="text-accent">✓</span>}
+          </button>
+        );
+      })}
+      {!owning && <div className="my-1 h-px bg-line" />}
+      {!owning && (
+        <div className="px-2 pt-1 pb-1 text-[11px] font-medium tracking-wide text-faint uppercase">Containers</div>
+      )}
+      {!owning && BLOCK_TYPES.filter((t) => ['toggle', 'quote', 'callout', 'codeBlock'].includes(t.type)).map((t) => {
+        const current = node.type.name === t.type && (t.type !== 'toggle' || node.attrs.level === (t.attrs?.level ?? 0));
         return (
           <button
             key={t.title}

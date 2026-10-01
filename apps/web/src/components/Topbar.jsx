@@ -20,6 +20,8 @@ export function Topbar({ selectedId, onSelect, prefs, onChange, onAi }) {
   const { data } = usePage(selectedId);
   const { data: auth } = useAuthState();
   const isDemo = auth?.user?.isDemo ?? false;
+  const [breadcrumbExpanded, setBreadcrumbExpanded] = useState(false);
+  useEffect(() => { setBreadcrumbExpanded(false); }, [selectedId]);
 
   return (
     <>
@@ -45,9 +47,27 @@ export function Topbar({ selectedId, onSelect, prefs, onChange, onAi }) {
         </button>
       )}
       <nav aria-label="Breadcrumb" className="flex min-w-0 flex-1 items-center gap-1">
-        {data &&
-          [...data.ancestors, data.page].map((crumb, i, all) => {
-            const last = i === all.length - 1;
+        {data && (() => {
+          const all = [...data.ancestors, data.page];
+          const collapsed = all.length > 2 && !breadcrumbExpanded;
+          const visible = collapsed ? [all[0], null, all[all.length - 1]] : all;
+          return visible.map((crumb, i) => {
+            if (crumb === null) {
+              return (
+                <span key="ellipsis" className="flex min-w-0 items-center gap-1">
+                  <span className="text-faint">/</span>
+                  <button
+                    type="button"
+                    onClick={() => setBreadcrumbExpanded(true)}
+                    aria-label="Show full path"
+                    className="rounded px-1.5 py-0.5 text-muted hover:bg-s-active hover:text-fg"
+                  >
+                    …
+                  </button>
+                </span>
+              );
+            }
+            const last = crumb.id === all[all.length - 1].id;
             return (
               <span key={crumb.id} className="flex min-w-0 items-center gap-1">
                 {i > 0 && <span className="text-faint">/</span>}
@@ -62,7 +82,8 @@ export function Topbar({ selectedId, onSelect, prefs, onChange, onAi }) {
                 </button>
               </span>
             );
-          })}
+          });
+        })()}
       </nav>
 
       {/* With the sidebar hidden, its server status (offline only) shows here. */}

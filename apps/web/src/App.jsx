@@ -16,6 +16,7 @@ import { TemplateLibrary } from './components/TemplateLibrary.jsx';
 import { TrashDialog } from './components/TrashDialog.jsx';
 import { Toaster } from './components/Toaster.jsx';
 import { AiPanel } from './components/AiPanel.jsx';
+import { TabBar } from './components/TabBar.jsx';
 
 export function App() {
   const [prefs, updatePrefs] = usePrefs();
@@ -142,6 +143,7 @@ export function App() {
       </div>
       <main className="relative flex min-w-0 flex-1 flex-col">
         <Topbar selectedId={pageId} onSelect={selectAndClose} prefs={prefs} onChange={updatePrefs} onAi={() => setAiOpen(true)} />
+        <TabBar activeId={pageId} onSelect={selectAndClose} />
         <div className="relative flex min-h-0 flex-1">
           <Page selectedId={pageId} onSelect={selectAndClose} onTemplates={setLibrary} />
           <RowPeek onSelect={selectAndClose} />

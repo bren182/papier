@@ -8,7 +8,7 @@ import { MiniCalendar } from './MiniCalendar.jsx';
 import { GROUPABLE } from './TableView.jsx';
 import { defaultTemplate, orderedProperties, TITLE, useDb } from './context.js';
 import { Icon, ICONS, OP_LABELS, TYPE_LABELS, TypeIcon } from './meta.jsx';
-import { field, menuItem, menuLabel, Popover } from './Popover.jsx';
+import { field, FieldSelect, menuItem, menuLabel, Popover } from './Popover.jsx';
 import { PropertyMenu } from './PropertyMenu.jsx';
 
 const toolButton = 'flex h-7 items-center gap-1.5 rounded-md px-2 text-[13px] text-muted hover:bg-hover hover:text-fg';
@@ -38,7 +38,7 @@ export function Toolbar({ onNew }) {
         onClick={() => setOpen('auto')}
       >
         <Icon path={ICONS.bolt} />
-        {running ? running : null}
+        Auto{running ? ` · ${running}` : ''}
       </button>
       {view.type === 'table' && (
         <button ref={refs.group} type="button" className={`${toolButton} ${grouped ? activeTool : ''}`} onClick={() => setOpen('group')}>
@@ -216,16 +216,16 @@ function SortMenu({ anchor, onClose }) {
           <div key={s.propId} className="flex items-center gap-1 px-1 py-0.5">
             <PropSelect value={s.propId} options={all.filter((p) => p.id === s.propId || !sorts.some((x) => x.propId === p.id))}
               onChange={(propId) => setConfig({ sorts: sorts.map((x, j) => (j === i ? setProp(propId) : x)) })} />
-            <select
+            <FieldSelect
               value={s.dir}
               aria-label="Direction"
               onChange={(e) => setConfig({ sorts: sorts.map((x, j) => (j === i ? { ...x, dir: /** @type {'asc' | 'desc' | 'upcoming'} */ (e.target.value) } : x)) })}
-              className={`${field} w-[110px]`}
+              className="w-[110px] shrink-0"
             >
               <option value="asc">Ascending</option>
               <option value="desc">Descending</option>
               {isDate && <option value="upcoming" title="Next anniversary first, like birthdays">Upcoming</option>}
-            </select>
+            </FieldSelect>
             <RemoveButton label="Remove sort" onClick={() => setConfig({ sorts: sorts.filter((_, j) => j !== i) })} />
           </div>
         );
@@ -299,7 +299,7 @@ export function ConditionRow({ filter: f, properties, onChange, onRemove }) {
           onChange({ propId, op: filterOps(next ?? { type: 'text' })[0] ?? 'is', value: next?.type === 'checkbox' ? true : undefined });
         }}
       />
-      <select
+      <FieldSelect
         value={f.op}
         aria-label="Condition"
         onChange={(e) => {
@@ -308,14 +308,14 @@ export function ConditionRow({ filter: f, properties, onChange, onRemove }) {
           const relative = RELATIVE_DATE_OPS.has(op);
           onChange(relative === RELATIVE_DATE_OPS.has(f.op) ? { op } : { op, value: relative ? 30 : undefined });
         }}
-        className={`${field} w-[130px] max-w-[130px] shrink-0`}
+        className="w-[130px] max-w-[130px] shrink-0"
       >
         {ops.map((op) => (
           <option key={op} value={op}>
             {OP_LABELS[op]}
           </option>
         ))}
-      </select>
+      </FieldSelect>
       {/* Keyed by property: a new property starts a fresh value box. */}
       {RELATIVE_DATE_OPS.has(f.op) ? (
         <DaysValue key={f.propId} value={f.value} onChange={(value) => onChange({ value })} />
@@ -374,21 +374,21 @@ function FilterValue({ prop, value, onChange }) {
     case 'select':
     case 'multi_select':
       return (
-        <select value={String(value ?? '')} aria-label="Value" onChange={(e) => onChange(e.target.value || null)} className={cls}>
+        <FieldSelect value={String(value ?? '')} aria-label="Value" onChange={(e) => onChange(e.target.value || null)} className="min-w-0 flex-1">
           <option value="">Choose…</option>
           {(prop.config.options ?? []).map((o) => (
             <option key={o.id} value={o.id}>
               {o.name}
             </option>
           ))}
-        </select>
+        </FieldSelect>
       );
     case 'checkbox':
       return (
-        <select value={value === false ? 'false' : 'true'} aria-label="Value" onChange={(e) => onChange(e.target.value === 'true')} className={cls}>
+        <FieldSelect value={value === false ? 'false' : 'true'} aria-label="Value" onChange={(e) => onChange(e.target.value === 'true')} className="min-w-0 flex-1">
           <option value="true">Checked</option>
           <option value="false">Unchecked</option>
-        </select>
+        </FieldSelect>
       );
     case 'date':
     case 'created_time':
@@ -396,15 +396,15 @@ function FilterValue({ prop, value, onChange }) {
       // "Today" is resolved when the query runs, so a view (or a schedule) keeps meaning today.
       return (
         <span className="flex min-w-[140px] flex-1 gap-1">
-          <select
+          <FieldSelect
             value={value === DYNAMIC_TODAY ? 'today' : 'date'}
             aria-label="Date"
             onChange={(e) => onChange(e.target.value === 'today' ? DYNAMIC_TODAY : null)}
-            className={`${field} w-[84px] shrink-0`}
+            className="w-[84px] shrink-0"
           >
             <option value="date">Date</option>
             <option value="today">Today</option>
-          </select>
+          </FieldSelect>
           {value !== DYNAMIC_TODAY && <DateFilterValue value={typeof value === 'string' ? value : null} onChange={onChange} />}
         </span>
       );
@@ -573,13 +573,13 @@ function AddPropertyMenu({ anchor, onClose, onAdd }) {
  */
 function PropSelect({ value, options, onChange }) {
   return (
-    <select value={value} aria-label="Property" onChange={(e) => onChange(e.target.value)} className={`${field} w-[130px] max-w-[130px] shrink-0`}>
+    <FieldSelect value={value} aria-label="Property" onChange={(e) => onChange(e.target.value)} className="w-[130px] max-w-[130px] shrink-0">
       {options.map((p) => (
         <option key={p.id} value={p.id}>
           {p.name}
         </option>
       ))}
-    </select>
+    </FieldSelect>
   );
 }
 

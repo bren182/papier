@@ -88,4 +88,27 @@ function isAbove(a, t) {
 
 export const menuItem = 'flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-[13px] text-fg hover:bg-hover disabled:opacity-40';
 export const menuLabel = 'px-2 pt-1.5 pb-1 text-[11px] font-medium tracking-wide text-faint uppercase';
-export const field = 'h-7 w-full rounded-md border border-line bg-root/60 px-2 text-[13px] text-fg outline-none focus:border-accent';
+export const field = 'h-7 w-full rounded-md border border-line bg-root/60 px-2 text-[13px] text-fg outline-none focus:border-accent appearance-none cursor-pointer';
+
+/**
+ * A styled <select> that replaces the OS dropdown arrow with our own.
+ * @param {{ className?: string } & import('react').SelectHTMLAttributes<HTMLSelectElement>} props
+ */
+export function FieldSelect({ className = '', children, ...props }) {
+  return (
+    <span className={`relative inline-flex ${className}`}>
+      <select {...props} className={`${field} w-full pr-6`}>
+        {children}
+      </select>
+      <svg
+        className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-muted"
+        width="10" height="10" viewBox="0 0 24 24"
+        fill="none" stroke="currentColor" strokeWidth="2.5"
+        strokeLinecap="round" strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M6 9l6 6 6-6" />
+      </svg>
+    </span>
+  );
+}

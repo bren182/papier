@@ -114,8 +114,12 @@ export function useUpdatePage() {
         qc.setQueriesData({ queryKey }, (/** @type {Page[] | undefined} */ list) => list?.map((p) => (p.id === id ? apply(p) : p)));
       }
       qc.setQueryData(pageKeys.detail(id), (/** @type {{ page: Page, ancestors: Crumb[] } | undefined} */ d) => d && { ...d, page: apply(d.page) });
+      qc.setQueryData(['templates'], (/** @type {any[] | undefined} */ list) => list?.map((t) => (t.id === id ? { ...t, ...patch } : t)));
     },
-    onError: () => qc.invalidateQueries({ queryKey: pageKeys.all }),
+    onError: () => {
+      qc.invalidateQueries({ queryKey: pageKeys.all });
+      qc.invalidateQueries({ queryKey: ['templates'] });
+    },
   });
 }
 
