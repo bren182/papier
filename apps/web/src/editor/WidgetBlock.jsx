@@ -8,7 +8,7 @@ import { NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
  * so the node works headless (tests).
  */
 
-/** @typedef {'greeting' | 'recent' | 'favorites'} WidgetKind */
+/** @typedef {'greeting' | 'recent' | 'favorites' | 'reminders'} WidgetKind */
 /**
  * @typedef {{
  *   View: import('react').ComponentType<{ kind: WidgetKind, onOpenPage: (id: string) => void }> | null,
@@ -16,7 +16,7 @@ import { NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
  * }} WidgetBlockOptions
  */
 
-export const WIDGET_LABELS = /** @type {Record<WidgetKind, string>} */ ({ greeting: 'Greeting', recent: 'Recent pages', favorites: 'Favourites' });
+export const WIDGET_LABELS = /** @type {Record<WidgetKind, string>} */ ({ greeting: 'Greeting', recent: 'Recent pages', favorites: 'Favourites', reminders: 'Reminders' });
 
 /** The id + indent attrs every block node carries (see schema.js). */
 export const blockAttrs = () => ({

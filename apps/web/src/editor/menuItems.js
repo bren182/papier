@@ -180,9 +180,10 @@ const MEDIA_ITEMS = [
 
 /** Live widgets (made for Home). @type {MenuItem[]} */
 const WIDGET_ITEMS = [
-  { title: 'Greeting', icon: '☀', aliases: ['hello', 'welcome', 'date', 'home'], group: 'Widgets', subtext: 'Hello, and today’s date', run: turnInto('widgetBlock', { kind: 'greeting' }) },
+  { title: 'Greeting', icon: '☀', aliases: ['hello', 'welcome', 'date', 'home'], group: 'Widgets', subtext: "Hello, and today's date", run: turnInto('widgetBlock', { kind: 'greeting' }) },
   { title: 'Recent pages', icon: '◷', aliases: ['recent', 'history', 'home'], group: 'Widgets', subtext: 'What you opened lately', run: turnInto('widgetBlock', { kind: 'recent' }) },
   { title: 'Favourites', icon: '★', aliases: ['favorites', 'starred', 'home'], group: 'Widgets', subtext: 'Your starred pages', run: turnInto('widgetBlock', { kind: 'favorites' }) },
+  { title: 'Reminders', icon: '🔔', aliases: ['remind', 'notifications', 'due', 'alerts', 'home'], group: 'Widgets', subtext: 'Upcoming @remind dates', run: turnInto('widgetBlock', { kind: 'reminders' }) },
 ];
 
 /** @type {MenuItem[]} */
@@ -194,6 +195,14 @@ const INLINE_ITEMS = [
     group: 'Inline',
     subtext: 'Today, 2 days ago, next fri…',
     run: (editor, range) => editor.chain().focus().deleteRange(range).insertContent('@').run(),
+  },
+  {
+    title: 'Reminder',
+    icon: '🔔',
+    aliases: ['remind', 'notification', 'notify', 'alert', 'bell'],
+    group: 'Inline',
+    subtext: 'Type @remind tomorrow, @r next week…',
+    run: (editor, range) => editor.chain().focus().deleteRange(range).insertContent('@remind ').run(),
   },
   {
     title: 'Link to page',
@@ -222,12 +231,35 @@ const isTemplateEditor = (editor) => Boolean(editor.extensionManager.extensions.
 /**
  * `@` menu: dates parsed from what's typed — plus, in a template, "Today ↻",
  * which stays dynamic and becomes the day the template is used.
+ * Also handles `@remind [date]`: type "remind tomorrow" to insert a reminder node.
  * @param {string} query
  * @param {Editor} [editor]
  * @returns {MenuItem[]}
  */
 export function dateItems(query, editor) {
   const q = query.trim().toLowerCase();
+
+  // `@remind [date]` or `@r [date]` → insert a remind node instead of a date node.
+  const remindPrefix = q.startsWith('remind ') ? 'remind ' : q.startsWith('r ') ? 'r ' : null;
+  if (remindPrefix !== null || q === 'remind' || q === 'r') {
+    const dateQuery = remindPrefix ? query.trim().slice(remindPrefix.length) : '';
+    return dateSuggestions(dateQuery).map(({ title, date, subtext }) => ({
+      title,
+      subtext: subtext ? `Remind: ${subtext}` : 'Add a reminder',
+      group: 'Reminder',
+      icon: '🔔',
+      run: (/** @type {Editor} */ editor, /** @type {import('@tiptap/core').Range} */ range) =>
+        editor
+          .chain()
+          .focus()
+          .insertContentAt(range, [
+            { type: 'remind', attrs: { date } },
+            { type: 'text', text: ' ' },
+          ])
+          .run(),
+    }));
+  }
+
   const dynamic =
     editor && isTemplateEditor(editor) && (!q || 'today'.startsWith(q) || 'dynamic'.startsWith(q))
       ? [{ title: 'Today ↻', date: DYNAMIC_TODAY, subtext: 'The day a page is made from this template' }]
@@ -237,7 +269,7 @@ export function dateItems(query, editor) {
     subtext,
     group: 'Date',
     icon: '@',
-    run: (editor, range) =>
+    run: (/** @type {Editor} */ editor, /** @type {import('@tiptap/core').Range} */ range) =>
       editor
         .chain()
         .focus()

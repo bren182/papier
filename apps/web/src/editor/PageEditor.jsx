@@ -3,6 +3,7 @@ import { QueryObserver, useQueryClient } from '@tanstack/react-query';
 import { EditorContent, useEditor } from '@tiptap/react';
 import { TextSelection } from '@tiptap/pm/state';
 import { api, ApiError, SIGNED_IN_EVENT } from '../api/client.js';
+import { uploadFile } from '../api/files.js';
 import { pageQuery } from '../api/pages.js';
 import { openPeek, useTargetBlock } from '../useSelectedPage.js';
 import { saveBlocks, usePageBlocks } from '../api/blocks.js';
@@ -100,6 +101,10 @@ function Editor({ pageId, rows, onOpenPage, onEmptyChange, template, editorRef }
             await api(`/ai/giphy?q=${encodeURIComponent(q)}`).catch(() => ({ results: [] }))
           );
           return data.results ?? [];
+        },
+        onUpload: async (file) => {
+          const { url } = await uploadFile(file);
+          return url;
         },
       },
     }),

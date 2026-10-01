@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { useAuthState } from '../api/auth.js';
 import { useFavorites } from '../api/pages.js';
 import { useWorkspace } from '../api/workspaces.js';
-import { formatDateLong, toISODate } from '../editor/dates.js';
+import { useReminders } from '../api/reminders.js';
+import { formatDateLong, formatDateMention, toISODate } from '../editor/dates.js';
 import { useRecentPages } from '../recentPages.js';
 import { TitleText } from './TitleText.jsx';
 
@@ -15,6 +16,7 @@ import { TitleText } from './TitleText.jsx';
 export function HomeWidget({ kind, onOpenPage }) {
   if (kind === 'greeting') return <Greeting />;
   if (kind === 'favorites') return <FavoriteCards onOpenPage={onOpenPage} />;
+  if (kind === 'reminders') return <RemindersWidget onOpenPage={onOpenPage} />;
   return <RecentCards onOpenPage={onOpenPage} />;
 }
 
@@ -62,6 +64,81 @@ function RecentCards({ onOpenPage }) {
   // Home itself is always the most recent page here; leave it out.
   const recent = useRecentPages().filter((p) => p.id !== workspace?.homePageId);
   return <PageCards pages={recent.slice(0, 6)} empty="Pages you open show up here." onOpenPage={onOpenPage} />;
+}
+
+// ── Reminders widget ──────────────────────────────────────────────────────────
+
+/** Request browser notification permission once, stored in localStorage to avoid re-asking. */
+function requestNotifPermission() {
+  if (typeof Notification === 'undefined' || Notification.permission !== 'default') return;
+  try {
+    if (localStorage.getItem('notif-asked')) return;
+    localStorage.setItem('notif-asked', '1');
+  } catch { /* private mode */ }
+  Notification.requestPermission().catch(() => {});
+}
+
+/**
+ * Fire a native notification for each reminder due today (once per session per id).
+ * @param {import('../api/reminders.js').Reminder[]} due
+ */
+function fireBrowserNotifications(due) {
+  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+  const key = `notif-fired-${toISODate(new Date())}`;
+  let fired = /** @type {string[]} */ ([]);
+  try { fired = JSON.parse(localStorage.getItem(key) ?? '[]'); } catch { /* */ }
+  for (const r of due) {
+    if (fired.includes(r.id)) continue;
+    new Notification(`Reminder: ${r.pageTitle || 'Untitled'}`, {
+      body: formatDateLong(r.date),
+      icon: '/favicon.ico',
+      tag: r.id,
+    });
+    fired.push(r.id);
+  }
+  try { localStorage.setItem(key, JSON.stringify(fired)); } catch { /* */ }
+}
+
+/** @param {{ onOpenPage: (id: string) => void }} props */
+function RemindersWidget({ onOpenPage }) {
+  const today = toISODate(new Date());
+  const { data: due, isPending } = useReminders(today);
+
+  useEffect(() => {
+    if (!due) return;
+    requestNotifPermission();
+    fireBrowserNotifications(due.filter((r) => r.date === today));
+  }, [due, today]);
+
+  if (isPending) return <div className="h-12" />;
+  if (!due || due.length === 0) {
+    return <p className="py-2 text-[14px] text-faint">No reminders due. Add @remind dates in pages.</p>;
+  }
+
+  return (
+    <ul className="flex flex-col gap-1 py-1">
+      {due.map((r) => {
+        const overdue = r.date < today;
+        return (
+          <li key={r.id}>
+            <button
+              type="button"
+              onClick={() => onOpenPage(r.pageId)}
+              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-hover"
+            >
+              <span className="text-[16px] leading-none">{r.pageIcon ?? '🔔'}</span>
+              <span className="flex-1 min-w-0">
+                <span className="block truncate text-[14px] font-medium text-fg">{r.pageTitle || 'Untitled'}</span>
+                <span className={`text-[12px] ${overdue ? 'text-red-400' : 'text-muted'}`}>
+                  {overdue ? 'Overdue · ' : ''}{formatDateMention(r.date)}
+                </span>
+              </span>
+            </button>
+          </li>
+        );
+      })}
+    </ul>
+  );
 }
 
 /**

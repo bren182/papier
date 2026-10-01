@@ -262,3 +262,21 @@ export const members = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.workspaceId, t.userId] }), index('members_user').on(t.userId)],
 );
+
+/**
+ * Indexed `@remind` inline nodes: one row per remind node per block. Block deletes
+ * cascade (FK). The route `GET /api/reminders?date=YYYY-MM-DD` returns items due
+ * up to that date so the client can show/push them.
+ */
+export const reminders = sqliteTable(
+  'reminders',
+  {
+    /** `${blockId}:${nodeIndex}` — stable as long as the block content doesn't change. */
+    id: text('id').primaryKey(),
+    pageId: text('page_id').notNull().references(() => pages.id, { onDelete: 'cascade' }),
+    blockId: text('block_id').notNull().references(() => blocks.id, { onDelete: 'cascade' }),
+    date: text('date').notNull(),
+    note: text('note').notNull().default(''),
+  },
+  (t) => [index('reminders_date').on(t.date), index('reminders_block').on(t.blockId)],
+);

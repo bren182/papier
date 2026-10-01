@@ -97,6 +97,9 @@ export function inlineToPM(content, { code = false } = {}) {
     } else if (node.type === 'date' && !code) {
       const props = /** @type {{ date?: unknown }} */ (node.props ?? {});
       out.push({ type: 'date', attrs: { date: String(props.date ?? '') } });
+    } else if (node.type === 'remind' && !code) {
+      const props = /** @type {{ date?: unknown }} */ (node.props ?? {});
+      out.push({ type: 'remind', attrs: { date: String(props.date ?? '') } });
     } else if (node.type === 'page' && !code) {
       const props = /** @type {{ pageId?: unknown }} */ (node.props ?? {});
       if (props.pageId) out.push({ type: 'pageMention', attrs: { pageId: String(props.pageId) } });
@@ -148,6 +151,8 @@ export function inlineFromPM(nodes = []) {
       appendText(out, '\n', {});
     } else if (node.type === 'date') {
       out.push({ type: 'date', props: { date: String(node.attrs?.date ?? '') } });
+    } else if (node.type === 'remind') {
+      out.push({ type: 'remind', props: { date: String(node.attrs?.date ?? '') } });
     } else if (node.type === 'pageMention') {
       out.push({ type: 'page', props: { pageId: String(node.attrs?.pageId ?? '') } });
     }

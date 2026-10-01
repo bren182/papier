@@ -8,12 +8,13 @@ import Strike from '@tiptap/extension-strike';
 import Underline from '@tiptap/extension-underline';
 import { Dropcursor, Gapcursor, Placeholder, UndoRedo } from '@tiptap/extensions';
 import { DateNode } from './DateNode.js';
+import { RemindNode } from './RemindNode.js';
 import { PageBlock } from './PageBlock.js';
 import { PageMention } from './PageMention.js';
 import { ButtonBlock } from './ButtonBlock.jsx';
 import { DatabaseBlock } from './DatabaseBlock.jsx';
 import { LinkedDatabaseBlock } from './LinkedDatabaseBlock.jsx';
-import { ImageBlock } from './ImageBlock.js';
+import { ImageBlock } from './ImageBlock.jsx';
 import { WidgetBlock } from './WidgetBlock.jsx';
 import { BlockInputRules } from './inputRules.js';
 import { BlockKeymap } from './keymap.js';
@@ -78,9 +79,10 @@ function placeholderFor(node) {
  * @param {{ pages?: Partial<import('./PageBlock.js').PageBlockOptions>, databases?: Partial<import('./DatabaseBlock.jsx').DatabaseBlockOptions>,
  *   buttons?: Partial<import('./ButtonBlock.jsx').ButtonBlockOptions>, callouts?: Partial<import('./schema.js').CalloutOptions>,
  *   widgets?: Partial<import('./WidgetBlock.jsx').WidgetBlockOptions>, linked?: Partial<import('./LinkedDatabaseBlock.jsx').LinkedDatabaseOptions>,
- *   images?: Partial<import('./ImageBlock.js').ImageBlockOptions>,
+ *   images?: Partial<import('./ImageBlock.jsx').ImageBlockOptions>,
  *   links?: Partial<Pick<import('./PageMention.js').PageMentionOptions, 'searchPages' | 'recentPages'>>, template?: boolean }} [opts]
  *   page, database and button blocks' data and views, the callout icon picker, page search for inline links (none in tests);
+ *   images.onUpload: upload a File and return its URL; images.onSearch: Giphy search;
  *   template: a template page
  */
 export function bodyExtensions({ pages = {}, databases = {}, buttons = {}, callouts = {}, widgets = {}, linked = {}, images = {}, links = {}, template = false } = {}) {
@@ -96,6 +98,7 @@ export function bodyExtensions({ pages = {}, databases = {}, buttons = {}, callo
     LinkedDatabaseBlock.configure(linked),
     ImageBlock.configure(images),
     DateNode,
+    RemindNode,
     PageMention.configure({ watchPage: pages.watchPage ?? null, openPage: pages.openPage ?? null, ...links }),
     SoftBreak,
     Bold,

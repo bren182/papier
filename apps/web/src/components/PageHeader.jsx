@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { COVERS, coverCss, THEMES } from '@papier/ui';
 import { useUpdatePage } from '../api/pages.js';
+import { uploadFile } from '../api/files.js';
 import { usePageAction } from '../pageActions.js';
 import { setMood } from '../theme.js';
 import { menuItem, menuLabel, Popover } from './database/Popover.jsx';
@@ -87,6 +88,24 @@ function CoverRemove({ page }) {
 /** Pick a cover preset (they follow the theme's palette). @param {{ page: PageData, anchor: HTMLElement | null, onClose: () => void }} props */
 function CoverChooser({ page, anchor, onClose }) {
   const patch = usePatch(page.id);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef(/** @type {HTMLInputElement | null} */ (null));
+  const cover = page.appearance?.cover ?? null;
+  const isImage = cover?.startsWith('asset:') ?? false;
+
+  /** @param {File} file */
+  const handleUpload = async (file) => {
+    if (!file.type.startsWith('image/')) return;
+    setUploading(true);
+    try {
+      const { url } = await uploadFile(file);
+      patch.look({ cover: `asset:${url}` });
+      onClose();
+    } catch {
+      setUploading(false);
+    }
+  };
+
   return (
     <Popover anchor={anchor} onClose={onClose} width={340} align="end">
       <div className={menuLabel}>Cover</div>
@@ -101,14 +120,42 @@ function CoverChooser({ page, anchor, onClose }) {
               patch.look({ cover: c.id });
               onClose();
             }}
-            className={`page-cover h-12 rounded-md border ${page.appearance?.cover === c.id ? 'border-accent' : 'border-line'} hover:border-muted`}
+            className={`page-cover h-12 rounded-md border ${cover === c.id ? 'border-accent' : 'border-line'} hover:border-muted`}
             style={{ backgroundImage: c.css === 'none' ? undefined : c.css }}
           >
             {c.id === 'clear' && <span className="text-[11px] text-muted">Clear (blurred)</span>}
           </button>
         ))}
+        {isImage && (
+          <button
+            type="button"
+            title="Custom photo"
+            aria-label="Current photo cover"
+            onClick={() => onClose()}
+            className="page-cover h-12 rounded-md border border-accent"
+            style={{ backgroundImage: coverCss(cover) }}
+          />
+        )}
       </div>
-      <div className="px-2 pb-1 text-[11px] text-faint">Covers use your theme’s colours. Image covers arrive with uploads.</div>
+      <div className="border-t border-line px-2 py-2">
+        <label
+          className={`flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-dashed border-line text-[12px] text-muted transition-colors hover:border-accent/60 hover:text-fg ${uploading ? 'pointer-events-none opacity-50' : ''}`}
+        >
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) handleUpload(f);
+              e.target.value = '';
+            }}
+          />
+          {uploading ? 'Uploading…' : '↑ Upload photo'}
+        </label>
+        <p className="mt-1 text-[11px] text-faint">Covers use your theme's colours.</p>
+      </div>
     </Popover>
   );
 }

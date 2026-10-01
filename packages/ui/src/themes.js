@@ -40,5 +40,14 @@ export const COVERS = /** @type {const} */ ([
   { id: 'night', name: 'Night', css: 'linear-gradient(200deg, var(--p-walnut) 0%, #0c0c0d 75%)' },
 ]);
 
-/** @param {string | null | undefined} id */
-export const coverCss = (id) => COVERS.find((c) => c.id === id)?.css ?? 'none';
+/**
+ * Returns the CSS `backgroundImage` value for a cover id.
+ * Gradient covers use CSS var tokens; image covers are stored as `asset:/files/…`
+ * and expand to a CSS url().
+ * @param {string | null | undefined} id
+ */
+export const coverCss = (id) => {
+  if (!id) return 'none';
+  if (id.startsWith('asset:')) return `url("${id.slice(6)}")`;
+  return COVERS.find((c) => c.id === id)?.css ?? 'none';
+};

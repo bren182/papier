@@ -5,6 +5,7 @@ import type { Db } from '../db/index.ts';
 import { liveLineage } from '../db/lineage.ts';
 import { linkedChildren, OWNING_BLOCKS, syncChildren } from '../db/pageTree.ts';
 import { indexBlocks } from '../db/search.ts';
+import { indexReminders } from '../db/reminders.ts';
 import { blocks, pages } from '../db/schema.ts';
 
 const blockFields = {
@@ -62,6 +63,7 @@ export function blockRoutes(app: FastifyInstance, db: Db) {
         }
 
         indexBlocks(tx, pageId, upserts);
+        indexReminders(tx, pageId, upserts);
 
         // Search rows go with their blocks (on delete cascade).
         if (deletes.length) {

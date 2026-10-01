@@ -438,6 +438,23 @@ html[data-motion="off"] * {
   color: var(--p-text);
 }
 
+/* inline reminder mention: bell + date, tinted amber */
+.papier-remind {
+  color: var(--p-muted);
+  border-radius: 4px;
+  padding: 0 0.15em;
+  white-space: nowrap;
+  cursor: default;
+  border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+}
+.papier-remind:hover {
+  background: var(--s-active);
+  color: var(--p-text);
+}
+.papier-remind-bell {
+  opacity: 0.8;
+}
+
 /* inline page link: icon + live title, underlined like a link */
 .papier-page-link {
   display: inline;
