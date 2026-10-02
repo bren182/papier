@@ -10,9 +10,12 @@ COPY packages/core/package.json   packages/core/
 COPY packages/ui/package.json     packages/ui/
 COPY apps/server/package.json     apps/server/
 COPY apps/web/package.json        apps/web/
+COPY apps/desktop/package.json    apps/desktop/
 
-# Install all deps (including dev — needed for the web build)
-RUN pnpm install --frozen-lockfile
+# Install all deps (including dev — needed for the web build).
+# Skip the Electron binary download — we only need Electron for desktop installers,
+# not inside Docker. The JS package installs fine; only the binary is skipped.
+RUN ELECTRON_SKIP_BINARY_DOWNLOAD=1 pnpm install --frozen-lockfile
 
 # Copy source
 COPY packages/ packages/
