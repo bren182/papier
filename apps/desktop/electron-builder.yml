@@ -1,0 +1,70 @@
+appId: com.papier.app
+productName: Papier
+copyright: MIT
+
+# Icons: place icon.ico (Windows), icon.png (Linux ≥ 256×256), icon.icns (macOS) in build/.
+# If omitted, electron-builder uses the default Electron icon.
+
+directories:
+  buildResources: build
+  output: release
+
+# asar: false — better-sqlite3's .node binary cannot live inside an asar archive.
+asar: false
+
+files:
+  - src/**
+  - dist/**
+  - package.json
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  # icon: build/icon.ico   # uncomment once you have a 256×256 ICO
+
+nsis:
+  # Full installer wizard (not a one-click silent install).
+  oneClick: false
+
+  # Install for the current user by default (no admin prompt), but let the user
+  # switch to a machine-wide install if they want.
+  perMachine: false
+  allowElevation: true
+
+  # Let the user choose where to install.
+  allowToChangeInstallationDirectory: true
+
+  # Shortcuts
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Papier
+
+  # Launch Papier immediately after the installer finishes.
+  runAfterFinish: true
+
+  # Welcome and finish pages make the installer feel polished.
+  # The "Open at Login" preference is managed from the tray menu inside the app
+  # (see main.js → buildTrayMenu) so the user can always change it later.
+  installerLanguages:
+    - en_US
+
+linux:
+  target:
+    - target: AppImage
+      arch:
+        - x64
+    - target: deb
+      arch:
+        - x64
+  # icon: build/icon.png   # uncomment once you have a 256×256 PNG
+  category: Office
+  synopsis: Self-hosted block workspace
+
+deb:
+  depends:
+    - libgtk-3-0
+    - libnotify4
+    - libnss3
+    - libxss1

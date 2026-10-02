@@ -118,7 +118,7 @@ export function AuthScreen({ setup, onBack }) {
       {/* Full-bleed photo background with frosted glass overlay */}
       <div
         className="absolute inset-0 bg-cover bg-center"
-        style={{ backgroundImage: "url('/login_bg.png')", backgroundColor: '#0d0f0d' }}
+        style={{ backgroundImage: "url('/login_bg.webp')", backgroundColor: '#0d0f0d' }}
         aria-hidden="true"
       />
       <div className="absolute inset-0 bg-black/25 backdrop-blur-md" aria-hidden="true" />

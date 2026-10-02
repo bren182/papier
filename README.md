@@ -46,7 +46,36 @@ container on a cheap VM and stores everything in SQLite.
 
 ---
 
-## Self-hosting
+## Install
+
+### Desktop app (Windows / Linux)
+
+Download the installer from the [latest release](https://github.com/bren182/papier/releases/latest):
+
+| Platform | Download |
+| --- | --- |
+| Windows 64-bit | `Papier-Setup-x.x.x.exe` (NSIS installer) |
+| Linux 64-bit | `Papier-x.x.x.AppImage` or `papier_x.x.x_amd64.deb` |
+
+**Windows:** Run the `.exe` installer — it adds a start menu shortcut and a system tray icon. Papier starts on login and lives in the tray; click it to open the window.
+
+**Linux (AppImage):** `chmod +x Papier-*.AppImage && ./Papier-*.AppImage`
+
+**Linux (deb):** `sudo dpkg -i papier_*_amd64.deb && papier`
+
+On first launch a dialog shows your **setup token** — enter it on the setup screen to create the owner account. The token is also saved to `%APPDATA%\Papier\setup-token.txt` (Windows) or `~/.config/Papier/setup-token.txt` (Linux) in case you need it later.
+
+Data (the SQLite database and uploads) lives in the same directory as the token file. Back it up with:
+
+```bash
+sqlite3 ~/.config/Papier/papier.db ".backup ~/papier-backup.db"
+```
+
+> **Local data only for now.** The desktop app stores everything on your machine. Cross-device sync (installing on a second machine and keeping them in sync) is planned but not yet implemented.
+
+---
+
+### Self-hosting with Docker
 
 ```yaml
 # docker-compose.yml
@@ -89,6 +118,10 @@ pnpm test         # Vitest unit tests
 pnpm test:e2e     # Playwright e2e (runs its own server + DB)
 pnpm typecheck    # tsc on server (TS) + web (JSDoc via checkJs)
 pnpm build        # production build
+
+# Desktop installers (requires the desktop package deps installed)
+pnpm desktop:win    # → apps/desktop/release/Papier-Setup-*.exe
+pnpm desktop:linux  # → apps/desktop/release/Papier-*.AppImage + .deb
 ```
 
 The server runs `.ts` directly via Node 24 type stripping — no build step in development.
@@ -99,7 +132,8 @@ The server runs `.ts` directly via Node 24 type stripping — no build step in d
 papier/
 ├── apps/
 │   ├── server/   # Fastify + TypeScript — REST API, auth, search, migrations
-│   └── web/      # React + Vite + Tailwind v4 — the editor UI
+│   ├── web/      # React + Vite + Tailwind v4 — the editor UI
+│   └── desktop/  # Electron wrapper — bundles server + web as a native app
 ├── packages/
 │   ├── core/     # shared block model, zod schemas, formula parser (JS + JSDoc)
 │   └── ui/       # design tokens, theme CSS
@@ -137,8 +171,9 @@ pnpm --filter @papier/server db:generate
 - **v0.1** — MVP editor + pages + search ✓
 - **v0.2** — Polish, uploads, tables, copy/paste (in progress)
 - **v0.3** — Databases + views, relations, formulas, automations ✓
-- **v0.4** — Multiplayer editing with presence (Yjs)
-- **v1.0** — Desktop apps, offline sync, export, docs
+- **v0.4** — Desktop apps (Windows + Linux installers) ✓
+- **v0.5** — Multiplayer editing with presence (Yjs)
+- **v1.0** — Cross-device sync, offline mode, export, docs
 
 ---
 

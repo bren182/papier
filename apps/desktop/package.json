@@ -1,0 +1,21 @@
+{
+  "name": "@papier/desktop",
+  "version": "0.3.1",
+  "private": true,
+  "description": "Papier — self-hosted block workspace, desktop app",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist:win": "pnpm build:prep && electron-builder --win",
+    "dist:linux": "pnpm build:prep && electron-builder --linux",
+    "build:prep": "pnpm --filter @papier/web build && node scripts/bundle-server.mjs"
+  },
+  "dependencies": {
+    "better-sqlite3": "^13.0.3"
+  },
+  "devDependencies": {
+    "electron": "^33.4.0",
+    "electron-builder": "^25.1.8",
+    "esbuild": "^0.25.5"
+  }
+}

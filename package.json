@@ -12,7 +12,9 @@
     "build": "pnpm -r build",
     "test": "vitest run",
     "typecheck": "pnpm -r typecheck",
-    "test:e2e": "pnpm --filter @papier/web test:e2e"
+    "test:e2e": "pnpm --filter @papier/web test:e2e",
+    "desktop:win": "pnpm --filter @papier/desktop dist:win",
+    "desktop:linux": "pnpm --filter @papier/desktop dist:linux"
   },
   "devDependencies": {
     "@types/node": "^26.6.3",

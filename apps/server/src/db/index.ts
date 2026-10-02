@@ -4,7 +4,8 @@ import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import * as schema from './schema.ts';
 
-const migrationsFolder = fileURLToPath(new URL('../../drizzle', import.meta.url));
+const migrationsFolder = process.env.PAPIER_MIGRATIONS_DIR
+  ?? fileURLToPath(new URL('../../drizzle', import.meta.url));
 
 /** Open (or create) the database and bring it up to the latest migration. */
 export function openDb(path: string) {
