@@ -89,7 +89,7 @@ jobs:
   # ── 3b. Windows installer (.exe) ─────────────────────────────────────────
   desktop-windows:
     needs: create-release
-    runs-on: windows-latest
+    runs-on: windows-2022
     permissions:
       contents: write
 
@@ -103,14 +103,18 @@ jobs:
           node-version: '24'
           cache: pnpm
 
+      # Makes VS2022 MSBuild discoverable by node-gyp when compiling better-sqlite3.
+      - uses: microsoft/setup-msbuild@v2
+
       - name: Install
         run: pnpm install --frozen-lockfile
 
       - name: Build Windows installer
         run: pnpm desktop:win
-        # GH_TOKEN lets electron-builder read release info if needed.
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Tell node-gyp which MSVC version to use.
+          npm_config_msvs_version: '2022'
 
       - name: Upload installer to release
         uses: softprops/action-gh-release@v2
@@ -136,8 +140,8 @@ jobs:
           cache: pnpm
 
       - name: Install system dependencies
-        # electron-builder needs these headers to compile better-sqlite3 for Electron.
-        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends python3 make g++
+        # python-is-python3 ensures node-gyp finds Python as 'python' (not just 'python3').
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends python3 python-is-python3 make g++
 
       - name: Install
         run: pnpm install --frozen-lockfile
