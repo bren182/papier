@@ -11,12 +11,10 @@ let tray = null;
 let mainWindow = null;
 let fastifyServer = null;
 
-// When packaged, dist/ lives in resources/dist/ beside the asar.
-// In dev (electron . from apps/desktop), dist/ is next to src/.
+// dist/ is always one level above src/ — both in dev and when packaged
+// with asar:false (where files land at resources/app/src/ and resources/app/dist/).
 function getDistDir() {
-  return app.isPackaged
-    ? path.join(process.resourcesPath, 'dist')
-    : path.join(__dirname, '..', 'dist');
+  return path.join(__dirname, '..', 'dist');
 }
 
 // Load or create a stable setup token so the user can always find it.
