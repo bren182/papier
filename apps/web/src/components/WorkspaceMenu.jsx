@@ -145,8 +145,8 @@ function Panel({ anchor, workspace, workspaces, onHome, onSettings, onClose }) {
         </button>
       ))}
 
-      {/* Create workspace */}
-      {creating ? (
+      {/* Create workspace — hidden for demo accounts */}
+      {!data?.user?.isDemo && (creating ? (
         <form className="flex items-center gap-1 px-2 py-1" onSubmit={submitCreate}>
           <input
             autoFocus
@@ -165,7 +165,7 @@ function Panel({ anchor, workspace, workspaces, onHome, onSettings, onClose }) {
           <PlusIcon />
           Create workspace…
         </button>
-      )}
+      ))}
 
       <div className="my-1 h-px bg-line" />
       <div className="truncate px-2 pb-1 text-[12px] text-faint">{data?.user?.email}</div>

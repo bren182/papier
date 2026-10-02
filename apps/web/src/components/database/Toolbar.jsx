@@ -11,7 +11,7 @@ import { Icon, ICONS, OP_LABELS, TYPE_LABELS, TypeIcon } from './meta.jsx';
 import { field, FieldSelect, menuItem, menuLabel, Popover } from './Popover.jsx';
 import { PropertyMenu } from './PropertyMenu.jsx';
 
-const toolButton = 'flex h-7 items-center gap-1.5 rounded-md px-2 text-[13px] text-muted hover:bg-hover hover:text-fg';
+const toolButton = 'flex h-7 items-center md:gap-1.5 rounded-md px-2 text-[13px] text-muted hover:bg-hover hover:text-fg';
 const activeTool = 'text-accent-text hover:text-accent-text';
 
 /**
@@ -38,25 +38,28 @@ export function Toolbar({ onNew }) {
         onClick={() => setOpen('auto')}
       >
         <Icon path={ICONS.bolt} />
-        Auto{running ? ` · ${running}` : ''}
+        <span className="hidden md:inline">Auto{running ? ` · ${running}` : ''}</span>
+        {running > 0 && <span className="md:hidden text-[10px] font-semibold">{running}</span>}
       </button>
       {view.type === 'table' && (
         <button ref={refs.group} type="button" className={`${toolButton} ${grouped ? activeTool : ''}`} onClick={() => setOpen('group')}>
           <Icon path={ICONS.group} />
-          Group
+          <span className="hidden md:inline">Group</span>
         </button>
       )}
       <button ref={refs.filter} type="button" className={`${toolButton} ${filters.length ? activeTool : ''}`} onClick={() => setOpen('filter')}>
         <Icon path={ICONS.filter} />
-        Filter{filters.length ? ` · ${filters.length}` : ''}
+        <span className="hidden md:inline">Filter{filters.length ? ` · ${filters.length}` : ''}</span>
+        {filters.length > 0 && <span className="md:hidden text-[10px] font-semibold">{filters.length}</span>}
       </button>
       <button ref={refs.sort} type="button" className={`${toolButton} ${sorts.length ? activeTool : ''}`} onClick={() => setOpen('sort')}>
         <Icon path={ICONS.sort} />
-        Sort{sorts.length ? ` · ${sorts.length}` : ''}
+        <span className="hidden md:inline">Sort{sorts.length ? ` · ${sorts.length}` : ''}</span>
+        {sorts.length > 0 && <span className="md:hidden text-[10px] font-semibold">{sorts.length}</span>}
       </button>
       <button ref={refs.props} type="button" className={toolButton} onClick={() => setOpen('props')} aria-label="Properties">
         <Icon path={ICONS.eye} />
-        Properties
+        <span className="hidden md:inline">Properties</span>
       </button>
       <span ref={refs.new} className="ml-1 flex h-7 items-stretch overflow-hidden rounded-md bg-accent text-[13px] font-medium text-[#141414]">
         <button type="button" onClick={() => onNew()} className="px-2.5 hover:bg-accent-text">

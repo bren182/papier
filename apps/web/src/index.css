@@ -39,6 +39,7 @@ body {
   color: var(--p-text);
   font-family: var(--p-font-sans);
   -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
 }
 
 :focus-visible {
@@ -56,10 +57,13 @@ html[data-motion="off"] * {
 }
 
 /* Vertical-only scroll on touch: prevents a sideways drift from triggering
- * navigation or link clicks while the user is trying to scroll. */
+ * navigation or link clicks while the user is trying to scroll.
+ * overscroll-behavior-y: contain keeps the native iOS bounce within the
+ * container and stops it from propagating to the document (gray-box artifact). */
 .overflow-y-auto,
 .overflow-auto {
   touch-action: pan-y;
+  overscroll-behavior-y: contain;
 }
 
 /* Sidebar tree: animate expand/collapse with the grid-template-rows trick */

@@ -24,16 +24,19 @@ export function Topbar({ selectedId, onSelect, prefs, onChange, onAi }) {
   useEffect(() => { setBreadcrumbExpanded(false); }, [selectedId]);
 
   return (
-    <>
-    {isDemo && <DemoBanner />}
-    <header
-      className="flex shrink-0 items-center gap-2 bg-s-top px-4 text-sm"
+    /* Outer wrapper carries the glass surface + safe-area-inset-top once,
+       so DemoBanner (when present) also sits correctly below the status bar. */
+    <div
+      className="flex shrink-0 flex-col bg-s-top"
       style={{
-        height: 'calc(2.75rem + env(safe-area-inset-top, 0px))',
         paddingTop: 'env(safe-area-inset-top, 0px)',
         backdropFilter: 'var(--s-top-glass)',
         WebkitBackdropFilter: 'var(--s-top-glass)',
       }}
+    >
+    {isDemo && <DemoBanner />}
+    <header
+      className="flex h-11 shrink-0 items-center gap-2 px-4 text-sm"
     >
       {!prefs.sidebar && (
         <button
@@ -99,12 +102,12 @@ export function Topbar({ selectedId, onSelect, prefs, onChange, onAi }) {
           className="flex h-7 items-center gap-1 rounded-md px-2 text-muted hover:bg-s-active hover:text-fg"
         >
           <span aria-hidden="true" className="text-[13px] font-semibold leading-none">✦</span>
-          <span className="text-[11px] font-medium">AI</span>
+          <span className="hidden md:inline text-[11px] font-medium">AI</span>
         </button>
       )}
       {data && <PageMenu page={data.page} databaseId={data.database?.id ?? null} onSelect={onSelect} />}
     </header>
-    </>
+    </div>
   );
 }
 
@@ -113,11 +116,12 @@ function DemoBanner() {
   const logout = useLogout();
   return (
     <div className="flex shrink-0 items-center justify-center gap-3 bg-accent/15 px-4 py-1.5 text-[12px] text-fg">
-      <span>Demo mode — data is temporary and resets after 4 hours</span>
+      <span className="hidden sm:inline">Demo mode — data is temporary and resets after 4 hours</span>
+      <span className="sm:hidden">Demo mode</span>
       <button
         type="button"
         onClick={() => logout.mutate()}
-        className="rounded-md border border-accent/40 px-2.5 py-0.5 text-accent hover:bg-accent/10"
+        className="shrink-0 rounded-md border border-accent/40 px-2.5 py-0.5 text-accent hover:bg-accent/10"
       >
         Exit demo
       </button>
@@ -149,7 +153,7 @@ function SaveStatus() {
     <span
       aria-live="polite"
       aria-atomic="true"
-      className={`min-w-[44px] text-right text-[12px] transition-opacity duration-500 ${show ? 'opacity-100 text-faint' : 'opacity-0 pointer-events-none'}`}
+      className={`md:min-w-[44px] text-right text-[12px] transition-opacity duration-500 ${show ? 'opacity-100 text-faint' : 'opacity-0 pointer-events-none'}`}
     >
       {saving ? 'Saving…' : 'Saved'}
     </span>
@@ -193,7 +197,7 @@ function FavoriteButton({ page }) {
       className={`flex h-7 items-center gap-1 rounded-md px-2 hover:bg-s-active ${on ? 'text-fg-strong' : 'text-muted hover:text-fg'}`}
     >
       <StarIcon filled={on} />
-      <span className="text-[11px] font-medium">{on ? 'Starred' : 'Star'}</span>
+      <span className="hidden md:inline text-[11px] font-medium">{on ? 'Starred' : 'Star'}</span>
     </button>
   );
 }

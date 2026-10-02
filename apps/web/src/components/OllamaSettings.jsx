@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAiStatus, useDeleteModel, usePullModel, useSaveAiConfig } from '../api/ai.js';
+import { useAuthState } from '../api/auth.js';
 
 const CLAUDE_MODELS = [
   { id: 'claude-haiku-4-5', label: 'Haiku 4.5', desc: 'Fastest · $1/$5 per M tokens', recommended: true },
@@ -499,8 +500,17 @@ function UnsplashSection({ status }) {
  * AI settings panel — provider toggle (Ollama / Claude) with per-provider config.
  */
 export function AiPanel() {
+  const { data: auth } = useAuthState();
   const { data: status, isLoading, refetch } = useAiStatus();
   const saveConfig = useSaveAiConfig();
+
+  if (auth?.user?.isDemo) {
+    return (
+      <div className="rounded-md border border-dashed border-line px-4 py-5 text-center text-[13px] text-muted">
+        AI and integration settings are not available in demo mode.
+      </div>
+    );
+  }
 
   const provider = status?.provider ?? 'ollama';
 

@@ -100,7 +100,7 @@ export function Sidebar({ selectedId, atHome, onSelect, onSearch, onTemplates, o
   };
 
   return (
-    <nav aria-label="Workspace" className="p-glass relative flex w-[260px] shrink-0 flex-col border-r border-white/5 bg-s-sidebar px-2 py-2" style={{ paddingLeft: 'max(0.5rem, env(safe-area-inset-left, 0px))' }}>
+    <nav aria-label="Workspace" className="p-glass relative flex w-[260px] shrink-0 flex-col border-r border-white/5 bg-s-sidebar px-2 pb-2" style={{ paddingLeft: 'max(0.5rem, env(safe-area-inset-left, 0px))', paddingTop: 'calc(0.5rem + env(safe-area-inset-top, 0px))' }}>
       {/* Header: workspace switcher + collapse */}
       <div className="group/head mb-1 flex items-center">
         <WorkspaceMenu onHome={() => onSelect(null)} onSettings={onSettings} />

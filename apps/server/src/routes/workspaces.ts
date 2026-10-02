@@ -9,7 +9,8 @@ import { pages, workspaces } from '../db/schema.ts';
 
 export function workspaceRoutes(app: FastifyInstance, db: Db) {
   /** Create a new workspace; the caller becomes its owner. */
-  app.post('/api/workspaces', async (req) => {
+  app.post('/api/workspaces', async (req, reply) => {
+    if (req.user?.isDemo) return reply.code(403).send({ error: 'Not available in demo mode' });
     const { name } = WorkspaceCreate.parse(req.body);
     const id = randomUUID();
     const now = Date.now();

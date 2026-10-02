@@ -58,29 +58,47 @@ export function PageCover({ page }) {
   const patch = usePatch(page?.id ?? '');
   const [choosing, setChoosing] = useState(false);
   const [repositioning, setRepositioning] = useState(false);
-  const [livePos, setLivePos] = useState(/** @type {number | null} */ (null));
+  const [livePosY, setLivePosY] = useState(/** @type {number | null} */ (null));
+  const [livePosX, setLivePosX] = useState(/** @type {number | null} */ (null));
+  const [liveZoom, setLiveZoom] = useState(/** @type {number | null} */ (null));
   const ref = useRef(/** @type {HTMLButtonElement | null} */ (null));
   if (!cover) return null;
   const clear = cover === 'clear';
   const isImage = cover.startsWith('asset:');
-  const pos = livePos ?? (page?.appearance?.coverPosition ?? 50);
+  const posY = livePosY ?? (page?.appearance?.coverPosition ?? 50);
+  const posX = livePosX ?? (page?.appearance?.coverPositionX ?? 50);
+  const zoom = liveZoom ?? (page?.appearance?.coverZoom ?? 1);
 
   /** @param {import('react').PointerEvent<HTMLDivElement>} e */
   const onPointerMove = (e) => {
-    if (!repositioning) return;
+    if (!repositioning || !isImage) return;
     const rect = e.currentTarget.getBoundingClientRect();
-    setLivePos(Math.round(Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100))));
+    setLivePosY(Math.round(Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100))));
+    setLivePosX(Math.round(Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100))));
   };
 
   const commitReposition = () => {
-    if (livePos !== null) patch.look({ coverPosition: livePos });
+    patch.look({
+      coverPosition: posY,
+      coverPositionX: posX,
+      coverZoom: zoom === 1 ? null : zoom,
+    });
     setRepositioning(false);
-    setLivePos(null);
+    setLivePosY(null);
+    setLivePosX(null);
+    setLiveZoom(null);
+  };
+
+  const cancelReposition = () => {
+    setRepositioning(false);
+    setLivePosY(null);
+    setLivePosX(null);
+    setLiveZoom(null);
   };
 
   return (
     <div
-      className={`group/cover relative h-[170px] ${clear ? 'p-glass' : ''}${repositioning ? ' cursor-ns-resize select-none' : ''}`}
+      className={`group/cover relative h-[170px] overflow-hidden ${clear ? 'p-glass' : ''}${repositioning ? ' cursor-move select-none' : ''}`}
       data-cover={cover}
       onPointerMove={onPointerMove}
     >
@@ -88,15 +106,42 @@ export function PageCover({ page }) {
         <div
           aria-hidden="true"
           className="page-cover absolute inset-0"
-          style={{ backgroundImage: coverCss(cover), backgroundPosition: isImage ? `center ${pos}%` : undefined }}
+          style={{
+            backgroundImage: coverCss(cover),
+            backgroundPosition: isImage ? `${posX}% ${posY}%` : undefined,
+            transform: isImage && zoom !== 1 ? `scale(${zoom})` : undefined,
+            transformOrigin: isImage && zoom !== 1 ? `${posX}% ${posY}%` : undefined,
+          }}
         />
       )}
       {page && (
-        <div className={`absolute right-4 bottom-3 flex gap-1 transition-opacity focus-within:opacity-100 ${repositioning ? 'opacity-100' : 'opacity-0 group-hover/cover:opacity-100'}`}>
+        <div
+          className={`absolute right-4 bottom-3 flex items-center gap-2 transition-opacity focus-within:opacity-100 ${repositioning ? 'opacity-100' : 'opacity-0 group-hover/cover:opacity-100'}`}
+          onPointerMove={repositioning ? (e) => e.stopPropagation() : undefined}
+        >
           {repositioning ? (
-            <button type="button" onClick={commitReposition} className={coverButton}>
-              Done repositioning
-            </button>
+            <>
+              <label className={`flex items-center gap-1.5 ${coverButton}`}>
+                <span className="text-[11px] text-fg/70">Zoom</span>
+                <input
+                  type="range"
+                  min={1}
+                  max={3}
+                  step={0.05}
+                  value={zoom}
+                  onChange={(e) => setLiveZoom(parseFloat(e.target.value))}
+                  className="w-20 cursor-pointer accent-white"
+                  aria-label="Cover zoom"
+                />
+                <span className="w-6 text-right text-[11px] tabular-nums text-fg/70">{zoom.toFixed(1)}×</span>
+              </label>
+              <button type="button" onClick={commitReposition} className={coverButton}>
+                Done
+              </button>
+              <button type="button" onClick={cancelReposition} className={coverButton}>
+                Cancel
+              </button>
+            </>
           ) : (
             <>
               {isImage && (

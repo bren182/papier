@@ -16,6 +16,8 @@ export const Appearance = z
   .object({
     cover: z.string().max(64).nullable(),
     coverPosition: z.number().min(0).max(100).nullable(),
+    coverPositionX: z.number().min(0).max(100).nullable(),
+    coverZoom: z.number().min(1).max(3).nullable(),
     fullWidth: z.boolean().nullable(),
     smallText: z.boolean().nullable(),
     font: z.enum(['serif', 'sans', 'mono']).nullable(),
