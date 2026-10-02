@@ -11,12 +11,13 @@
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
-    "dist:win": "pnpm build:prep && electron-builder --win",
-    "dist:linux": "pnpm build:prep && electron-builder --linux",
+    "dist:win": "pnpm build:prep && electron-builder --win --publish never",
+    "dist:linux": "pnpm build:prep && electron-builder --linux --publish never",
     "build:prep": "pnpm --filter @papier/web build && node scripts/bundle-server.mjs"
   },
   "dependencies": {
-    "better-sqlite3": "^13.0.3"
+    "better-sqlite3": "^13.0.3",
+    "electron-updater": "^6.3.9"
   },
   "devDependencies": {
     "electron": "^33.4.0",

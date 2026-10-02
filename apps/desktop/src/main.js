@@ -5,6 +5,12 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 
+// electron-updater is only meaningful in a packaged build.
+let autoUpdater = null;
+if (app.isPackaged) {
+  try { ({ autoUpdater } = require('electron-updater')); } catch {}
+}
+
 const APP_PORT = 37842;
 
 let tray = null;
@@ -92,6 +98,33 @@ function showSetupDialog(win, setupToken) {
   });
 }
 
+function setupAutoUpdater() {
+  if (!autoUpdater) return;
+
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on('update-downloaded', () => {
+    dialog.showMessageBox({
+      type: 'info',
+      title: 'Update ready',
+      message: 'A new version of Papier has been downloaded.',
+      detail: 'Restart to apply the update, or it will install automatically next time you quit.',
+      buttons: ['Restart now', 'Later'],
+      defaultId: 0,
+    }).then(({ response }) => {
+      if (response === 0) autoUpdater.quitAndInstall();
+    });
+  });
+
+  autoUpdater.on('error', (err) => {
+    console.error('Auto-update error:', err.message);
+  });
+
+  // Check silently 10 s after launch so startup isn't delayed.
+  setTimeout(() => autoUpdater.checkForUpdates().catch(() => {}), 10_000);
+}
+
 function buildTrayMenu() {
   const openAtLogin = app.getLoginItemSettings().openAtLogin;
   return Menu.buildFromTemplate([
@@ -110,6 +143,10 @@ function buildTrayMenu() {
         tray.setContextMenu(buildTrayMenu());
       },
     },
+    ...(autoUpdater ? [{
+      label: 'Check for updates…',
+      click: () => autoUpdater.checkForUpdates().catch(() => {}),
+    }] : []),
     { type: 'separator' },
     {
       label: `Running on port ${APP_PORT}`,
@@ -144,6 +181,7 @@ app.whenReady().then(async () => {
     const { isFirstRun, setupToken } = await startServer();
     const win = createWindow();
     createTray();
+    setupAutoUpdater();
 
     if (isFirstRun) {
       win.webContents.once('did-finish-load', () => {

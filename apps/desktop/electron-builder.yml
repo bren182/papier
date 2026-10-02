@@ -5,9 +5,13 @@ copyright: MIT
 # Icons: place icon.ico (Windows), icon.png (Linux ≥ 256×256), icon.icns (macOS) in build/.
 # If omitted, electron-builder uses the default Electron icon.
 
-# Disable electron-builder's own GitHub upload — the CI workflow handles artifact
-# upload via softprops/action-gh-release after the build finishes.
-publish: null
+# Tells electron-updater where to check for new releases.
+# --publish never in the dist scripts stops electron-builder from uploading here;
+# the CI workflow handles artifact upload via softprops/action-gh-release.
+publish:
+  provider: github
+  owner: bren182
+  repo: papier
 
 directories:
   buildResources: build
