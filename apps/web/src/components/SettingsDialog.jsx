@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense, useState, useEffect } from 'react';
 import { THEMES } from '@papier/ui';
 import { MIN_PASSWORD } from '@papier/core/text';
 import { useAuthState, useChangePassword, useLogout, useUpdateProfile, useServerInfo } from '../api/auth.js';
@@ -8,13 +8,16 @@ import { AiPanel } from './OllamaSettings.jsx';
 
 const EmojiPicker = lazy(() => import('./EmojiPicker.jsx').then((m) => ({ default: m.EmojiPicker })));
 
-/** @typedef {'account' | 'workspace' | 'display' | 'ai' | 'about'} Tab */
+/** @typedef {'account' | 'workspace' | 'display' | 'ai' | 'desktop' | 'about'} Tab */
+
+const isElectron = typeof window !== 'undefined' && 'papierElectron' in window;
 
 const TABS = /** @type {const} */ ([
   { id: 'account', label: 'Account' },
   { id: 'workspace', label: 'Workspace' },
   { id: 'display', label: 'Display' },
   { id: 'ai', label: 'AI' },
+  ...(isElectron ? [{ id: 'desktop', label: 'Desktop' }] : []),
   { id: 'about', label: 'About' },
 ]);
 
@@ -242,6 +245,75 @@ function AboutTab() {
   );
 }
 
+function DesktopTab() {
+  const [url, setUrl] = useState('');
+  const [loaded, setLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    window.papierElectron.getSettings().then((s) => {
+      setUrl(s.serverUrl ?? '');
+      setLoaded(true);
+    });
+  }, []);
+
+  if (!loaded) return null;
+
+  const isRemote = url.trim().length > 0;
+
+  return (
+    <div className="flex flex-col gap-5">
+      <section>
+        <div className={sectionLabel}>Server connection</div>
+        <p className="mb-3 text-[12px] text-muted leading-relaxed">
+          Connect this desktop app to a remote Papier server (e.g. one running on a VPS or a Raspberry Pi)
+          instead of the built-in local server. Leave blank to use local mode.
+        </p>
+        <div className="flex flex-col gap-2">
+          <input
+            className={inputCls}
+            type="url"
+            placeholder="https://papier.example.com"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            spellCheck={false}
+          />
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => { setSaving(true); window.papierElectron.setSettings({ serverUrl: url.trim() || null }); }}
+              className="h-8 flex-1 rounded-md bg-accent text-[13px] font-medium text-root hover:brightness-110 disabled:opacity-50"
+            >
+              {saving ? 'Restarting…' : 'Save & restart'}
+            </button>
+            {isRemote && (
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => { setSaving(true); window.papierElectron.setSettings({ serverUrl: null }); }}
+                className="h-8 rounded-md border border-line px-3 text-[13px] text-muted hover:bg-hover hover:text-fg disabled:opacity-50"
+              >
+                Use local
+              </button>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div className={sectionLabel}>Current mode</div>
+        <div className="rounded-md border border-line bg-black/10 px-3 py-2.5 text-[13px]">
+          {isRemote
+            ? <><span className="text-accent">Remote</span><span className="text-faint"> — {url}</span></>
+            : <><span className="text-fg-strong">Local</span><span className="text-faint"> — built-in server on this machine</span></>
+          }
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function GitHubIcon() {
   return (
     <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -318,6 +390,7 @@ export function SettingsDialog({ onClose, prefs, onChange, initialTab = 'account
           {tab === 'workspace' && <WorkspaceTab />}
           {tab === 'display' && <DisplayTab prefs={prefs} onChange={onChange} />}
           {tab === 'ai' && <AiPanel />}
+          {tab === 'desktop' && <DesktopTab />}
           {tab === 'about' && <AboutTab />}
         </div>
       </div>

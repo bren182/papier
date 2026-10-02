@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, Tray, Menu, dialog, shell, nativeImage } = require('electron');
+const { app, BrowserWindow, Tray, Menu, dialog, shell, nativeImage, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
@@ -16,6 +16,25 @@ const APP_PORT = 37842;
 let tray = null;
 let mainWindow = null;
 let fastifyServer = null;
+
+// ── Persistent settings (userData/settings.json) ─────────────────────────────
+
+const settingsFile = () => path.join(app.getPath('userData'), 'settings.json');
+
+/** @returns {{ serverUrl?: string }} */
+function readSettings() {
+  try { return JSON.parse(fs.readFileSync(settingsFile(), 'utf8')); } catch { return {}; }
+}
+
+/** @param {{ serverUrl?: string | null }} settings */
+function writeSettings(settings) {
+  const clean = { ...settings };
+  if (!clean.serverUrl) delete clean.serverUrl;
+  fs.mkdirSync(path.dirname(settingsFile()), { recursive: true });
+  fs.writeFileSync(settingsFile(), JSON.stringify(clean, null, 2));
+}
+
+// ── Local server ──────────────────────────────────────────────────────────────
 
 // dist/ is always one level above src/ — both in dev and when packaged
 // with asar:false (where files land at resources/app/src/ and resources/app/dist/).
@@ -43,7 +62,6 @@ async function startServer() {
 
   fs.mkdirSync(dataDir, { recursive: true });
 
-  // Configure the server before loading the bundle.
   process.env.DATABASE_PATH = dbPath;
   process.env.STATIC_DIR = path.join(distDir, 'web');
   process.env.PAPIER_MIGRATIONS_DIR = path.join(distDir, 'drizzle');
@@ -59,7 +77,10 @@ async function startServer() {
   return { isFirstRun, setupToken };
 }
 
-function createWindow() {
+// ── Window ────────────────────────────────────────────────────────────────────
+
+/** @param {string} serverUrl */
+function createWindow(serverUrl) {
   const iconPath = path.join(__dirname, '..', 'build', 'icon.png');
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -75,11 +96,12 @@ function createWindow() {
     },
   });
 
-  mainWindow.loadURL(`http://127.0.0.1:${APP_PORT}`);
+  mainWindow.loadURL(serverUrl);
 
-  // Open external links in the system browser.
+  // Open links to other origins in the system browser.
+  const serverOrigin = new URL(serverUrl).origin;
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (!url.startsWith(`http://127.0.0.1:${APP_PORT}`)) {
+    if (!url.startsWith(serverOrigin)) {
       shell.openExternal(url);
       return { action: 'deny' };
     }
@@ -99,6 +121,8 @@ function showSetupDialog(win, setupToken) {
     buttons: ['Got it'],
   });
 }
+
+// ── Auto-updater ──────────────────────────────────────────────────────────────
 
 function setupAutoUpdater() {
   if (!autoUpdater) return;
@@ -127,19 +151,25 @@ function setupAutoUpdater() {
   setTimeout(() => autoUpdater.checkForUpdates().catch(() => {}), 10_000);
 }
 
+// ── Tray ──────────────────────────────────────────────────────────────────────
+
 function buildTrayMenu() {
   const openAtLogin = app.getLoginItemSettings().openAtLogin;
+  const settings = readSettings();
+  const remoteUrl = settings.serverUrl;
   return Menu.buildFromTemplate([
     {
       label: 'Open Papier',
-      click: () => { if (mainWindow) mainWindow.focus(); else createWindow(); },
+      click: () => {
+        if (mainWindow) mainWindow.focus();
+        else createWindow(remoteUrl || `http://127.0.0.1:${APP_PORT}`);
+      },
     },
     { type: 'separator' },
     {
       label: 'Open at Login',
       type: 'checkbox',
       checked: openAtLogin,
-      // Toggles the OS startup entry and rebuilds the menu so the tick updates.
       click: (item) => {
         app.setLoginItemSettings({ openAtLogin: item.checked });
         tray.setContextMenu(buildTrayMenu());
@@ -150,14 +180,13 @@ function buildTrayMenu() {
       click: () => autoUpdater.checkForUpdates().catch(() => {}),
     }] : []),
     { type: 'separator' },
-    {
-      label: `Running on port ${APP_PORT}`,
-      enabled: false,
-    },
-    {
-      label: 'Open in browser',
-      click: () => shell.openExternal(`http://127.0.0.1:${APP_PORT}`),
-    },
+    ...(remoteUrl
+      ? [{ label: `Connected to ${remoteUrl}`, enabled: false }]
+      : [
+          { label: `Running on port ${APP_PORT}`, enabled: false },
+          { label: 'Open in browser', click: () => shell.openExternal(`http://127.0.0.1:${APP_PORT}`) },
+        ]
+    ),
     { type: 'separator' },
     { label: 'Quit', click: () => app.quit() },
   ]);
@@ -180,23 +209,44 @@ function createTray() {
   tray.setContextMenu(buildTrayMenu());
   tray.on('click', () => {
     if (mainWindow) mainWindow.focus();
-    else createWindow();
+    else createWindow(readSettings().serverUrl || `http://127.0.0.1:${APP_PORT}`);
   });
 }
 
+// ── IPC (settings) ────────────────────────────────────────────────────────────
+
+ipcMain.handle('papier:get-settings', () => readSettings());
+
+ipcMain.handle('papier:set-settings', (_e, patch) => {
+  writeSettings({ ...readSettings(), ...patch });
+  // Relaunch so the new server URL takes effect.
+  app.relaunch();
+  app.quit();
+});
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+
 app.whenReady().then(async () => {
   try {
-    const { isFirstRun, setupToken } = await startServer();
-    const win = createWindow();
+    const { serverUrl } = readSettings();
+
+    let win;
+    if (serverUrl) {
+      // Remote mode: skip local server, connect directly to the configured URL.
+      win = createWindow(serverUrl);
+    } else {
+      // Local mode: start the bundled Fastify server, then open it.
+      const { isFirstRun, setupToken } = await startServer();
+      win = createWindow(`http://127.0.0.1:${APP_PORT}`);
+      if (isFirstRun) {
+        win.webContents.once('did-finish-load', () => {
+          setTimeout(() => showSetupDialog(win, setupToken), 600);
+        });
+      }
+    }
+
     createTray();
     setupAutoUpdater();
-
-    if (isFirstRun) {
-      win.webContents.once('did-finish-load', () => {
-        // Small delay so the page renders before the dialog appears.
-        setTimeout(() => showSetupDialog(win, setupToken), 600);
-      });
-    }
   } catch (err) {
     dialog.showErrorBox('Papier failed to start', String(err));
     app.quit();
@@ -214,5 +264,5 @@ app.on('before-quit', async () => {
 });
 
 app.on('activate', () => {
-  if (!mainWindow) createWindow();
+  if (!mainWindow) createWindow(readSettings().serverUrl || `http://127.0.0.1:${APP_PORT}`);
 });
