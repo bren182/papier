@@ -5,14 +5,9 @@ copyright: MIT
 # Icons: place icon.ico (Windows), icon.png (Linux ≥ 256×256), icon.icns (macOS) in build/.
 # If omitted, electron-builder uses the default Electron icon.
 
-# Tell electron-builder where releases live (needed for auto-updater config generation).
-# The CI uploads artifacts separately via softprops/action-gh-release — publishArtifacts:
-# false stops electron-builder from doing a redundant upload.
-publish:
-  provider: github
-  owner: bren182
-  repo: papier
-  publishArtifacts: false
+# Disable electron-builder's own GitHub upload — the CI workflow handles artifact
+# upload via softprops/action-gh-release after the build finishes.
+publish: null
 
 directories:
   buildResources: build
