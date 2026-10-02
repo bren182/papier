@@ -106,6 +106,10 @@ jobs:
       # Makes VS2022 MSBuild discoverable by node-gyp when compiling better-sqlite3.
       - uses: microsoft/setup-msbuild@v2
 
+      # distutils was removed in Python 3.12; node-gyp@9 still needs it via setuptools.
+      - name: Install Python setuptools
+        run: pip install setuptools
+
       - name: Install
         run: pnpm install --frozen-lockfile
 
