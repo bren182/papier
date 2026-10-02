@@ -4,6 +4,10 @@
   "private": true,
   "description": "Papier — self-hosted block workspace, desktop app",
   "repository": "https://github.com/bren182/papier",
+  "author": {
+    "name": "bren182",
+    "email": "drummer.bren@gmail.com"
+  },
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
