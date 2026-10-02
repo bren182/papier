@@ -7,20 +7,20 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
 const ALLOWED_TYPES = new Set([
-  'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif', 'image/svg+xml',
+  'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif',
   'application/pdf',
 ]);
 
 const MIME_EXT: Record<string, string> = {
   'image/jpeg': '.jpg', 'image/png': '.png', 'image/gif': '.gif',
-  'image/webp': '.webp', 'image/avif': '.avif', 'image/svg+xml': '.svg',
+  'image/webp': '.webp', 'image/avif': '.avif',
   'application/pdf': '.pdf',
 };
 
 const EXT_MIME: Record<string, string> = {
   '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png',
   '.gif': 'image/gif', '.webp': 'image/webp', '.avif': 'image/avif',
-  '.svg': 'image/svg+xml', '.pdf': 'application/pdf',
+  '.pdf': 'application/pdf',
 };
 
 export function fileRoutes(app: FastifyInstance, uploadsDir: string) {
@@ -47,7 +47,7 @@ export function fileRoutes(app: FastifyInstance, uploadsDir: string) {
     const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
     if (!res.ok || !res.body) return reply.code(502).send({ error: 'Could not fetch image.' });
     const ct = ((res.headers.get('content-type') ?? '').split(';')[0] ?? '').trim();
-    if (!ALLOWED_TYPES.has(ct) && !ct.startsWith('image/')) {
+    if (!ALLOWED_TYPES.has(ct)) {
       return reply.code(415).send({ error: 'Unsupported file type.' });
     }
     const ext = MIME_EXT[ct] ?? '.jpg';

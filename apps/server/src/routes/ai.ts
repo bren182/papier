@@ -192,9 +192,9 @@ function isoDate(offsetDays = 0): string {
 
 // --- Routes ---
 
-/** 403 for demo accounts — they must not change shared server config. */
-function denyDemo(req: { user: { isDemo: boolean } | null }, reply: { code: (n: number) => { send: (b: unknown) => unknown } }) {
-  if (req.user?.isDemo) return reply.code(403).send({ error: 'Not available in demo mode' });
+/** 403 unless the user is an admin. Blocks demo accounts and non-admin editors/viewers from changing server config. */
+function requireAdmin(req: { user: { isAdmin: boolean; isDemo: boolean } | null }, reply: { code: (n: number) => { send: (b: unknown) => unknown } }) {
+  if (!req.user?.isAdmin) return reply.code(403).send({ error: 'Admin access required' });
 }
 
 export function aiRoutes(app: FastifyInstance, db: Db) {
@@ -265,7 +265,7 @@ export function aiRoutes(app: FastifyInstance, db: Db) {
 
   /** Save any combination of provider, Ollama URL/model, or Anthropic key/model. */
   app.patch('/api/ai/config', async (req, reply) => {
-    if (denyDemo(req, reply)) return;
+    if (requireAdmin(req, reply)) return;
     const body = z.object({
       provider: z.enum(['ollama', 'anthropic']).optional(),
       url: z.string().url().optional(),
@@ -308,7 +308,7 @@ export function aiRoutes(app: FastifyInstance, db: Db) {
    * Only relevant when the provider is Ollama.
    */
   app.post('/api/ai/pull', async (req, reply) => {
-    if (denyDemo(req, reply)) return;
+    if (requireAdmin(req, reply)) return;
     const { name } = z.object({ name: z.string().min(1) }).parse(req.body);
     const url = getOllamaUrl(db);
 
@@ -354,7 +354,7 @@ export function aiRoutes(app: FastifyInstance, db: Db) {
 
   /** Delete a pulled Ollama model. */
   app.delete('/api/ai/models/:name', async (req, reply) => {
-    if (denyDemo(req, reply)) return;
+    if (requireAdmin(req, reply)) return;
     const { name } = req.params as { name: string };
     const url = getOllamaUrl(db);
     try {
