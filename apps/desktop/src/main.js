@@ -60,12 +60,14 @@ async function startServer() {
 }
 
 function createWindow() {
+  const iconPath = path.join(__dirname, '..', 'build', 'icon.png');
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 860,
     minWidth: 600,
     minHeight: 480,
     title: 'Papier',
+    ...(fs.existsSync(iconPath) && { icon: iconPath }),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -161,13 +163,19 @@ function buildTrayMenu() {
   ]);
 }
 
-function createTray() {
-  const iconPath = path.join(__dirname, '..', 'build', 'tray.png');
-  const icon = fs.existsSync(iconPath)
-    ? nativeImage.createFromPath(iconPath)
-    : nativeImage.createEmpty();
+function getTrayIcon() {
+  for (const name of ['tray.png', 'icon.png']) {
+    const p = path.join(__dirname, '..', 'build', name);
+    if (fs.existsSync(p)) return nativeImage.createFromPath(p);
+  }
+  // Windows requires a non-empty tray icon; use a minimal 1×1 transparent PNG.
+  return nativeImage.createFromDataURL(
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='
+  );
+}
 
-  tray = new Tray(icon);
+function createTray() {
+  tray = new Tray(getTrayIcon());
   tray.setToolTip('Papier');
   tray.setContextMenu(buildTrayMenu());
   tray.on('click', () => {

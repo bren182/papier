@@ -1,5 +1,6 @@
 # Personal notes / scratch (not part of the public repo)
 NOTES.md
+*.exe
 
 node_modules/
 dist/
@@ -27,3 +28,4 @@ notion-export*/
 # Exclude screenshots/test images but allow committed public assets
 *.png
 !apps/web/public/*.png
+!apps/desktop/build/*.png

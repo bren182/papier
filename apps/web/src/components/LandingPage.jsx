@@ -3,7 +3,7 @@
  * Edit CONTACT_EMAIL / REPO_URL / ACCESS_REQUEST_URL to match your deployment.
  */
 
-import { useState } from 'react';
+import { useState, useLayoutEffect } from 'react';
 
 const CONTACT_EMAIL = 'brendan0jacobs@gmail.com';
 const REPO_URL = 'https://github.com/bren182/papier';
@@ -30,8 +30,17 @@ volumes:
 
 /** @param {{ onSignIn: () => void, onDemo: () => void }} props */
 export function LandingPage({ onSignIn, onDemo }) {
+  // Let #root scroll while the landing page is mounted. Using the document
+  // root as the scroll container avoids a Chrome bug where backdrop-filter
+  // children silently swallow wheel events on a nested overflow-y-auto div.
+  useLayoutEffect(() => {
+    const root = /** @type {HTMLElement} */ (document.getElementById('root'));
+    root.style.overflowY = 'auto';
+    return () => { root.style.overflowY = ''; };
+  }, []);
+
   return (
-    <div className="relative min-h-full overflow-y-auto" style={{ minHeight: '100svh' }}>
+    <div className="relative" style={{ minHeight: '100svh' }}>
       {/* Full-bleed background */}
       <div
         className="fixed inset-0 bg-cover bg-center"
