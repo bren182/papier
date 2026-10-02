@@ -23,30 +23,18 @@ win:
       arch:
         - x64
   # icon: build/icon.ico   # uncomment once you have a 256×256 ICO
+  # Stable filename so the /releases/latest/download/ URL never changes.
+  artifactName: Papier-Setup.exe
 
 nsis:
-  # Full installer wizard (not a one-click silent install).
   oneClick: false
-
-  # Install for the current user by default (no admin prompt), but let the user
-  # switch to a machine-wide install if they want.
   perMachine: false
   allowElevation: true
-
-  # Let the user choose where to install.
   allowToChangeInstallationDirectory: true
-
-  # Shortcuts
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: Papier
-
-  # Launch Papier immediately after the installer finishes.
   runAfterFinish: true
-
-  # Welcome and finish pages make the installer feel polished.
-  # The "Open at Login" preference is managed from the tray menu inside the app
-  # (see main.js → buildTrayMenu) so the user can always change it later.
   installerLanguages:
     - en_US
 
@@ -62,7 +50,11 @@ linux:
   category: Office
   synopsis: Self-hosted block workspace
 
+appImage:
+  artifactName: Papier-Linux.AppImage
+
 deb:
+  artifactName: papier-linux-amd64.deb
   depends:
     - libgtk-3-0
     - libnotify4

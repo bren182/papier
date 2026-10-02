@@ -116,7 +116,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          files: apps/desktop/release/*.exe
+          files: apps/desktop/release/Papier-Setup.exe
 
   # ── 3c. Linux packages (.AppImage + .deb) ────────────────────────────────
   desktop-linux:
@@ -152,5 +152,5 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           files: |
-            apps/desktop/release/*.AppImage
-            apps/desktop/release/*.deb
+            apps/desktop/release/Papier-Linux.AppImage
+            apps/desktop/release/papier-linux-amd64.deb

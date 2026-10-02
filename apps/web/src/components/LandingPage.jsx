@@ -8,6 +8,9 @@ import { useState } from 'react';
 const CONTACT_EMAIL = 'brendan0jacobs@gmail.com';
 const REPO_URL = 'https://github.com/bren182/papier';
 const RELEASES_URL = 'https://github.com/bren182/papier/releases/latest';
+const DL_WIN   = 'https://github.com/bren182/papier/releases/latest/download/Papier-Setup.exe';
+const DL_APPIMAGE = 'https://github.com/bren182/papier/releases/latest/download/Papier-Linux.AppImage';
+const DL_DEB   = 'https://github.com/bren182/papier/releases/latest/download/papier-linux-amd64.deb';
 const ACCESS_REQUEST_URL = `mailto:${CONTACT_EMAIL}?subject=Papier%20access%20request`;
 
 const dockerCompose = `\
@@ -183,7 +186,7 @@ function WindowsTab() {
   return (
     <div className="flex flex-col gap-5">
       <a
-        href={RELEASES_URL}
+        href={DL_WIN}
         target="_blank"
         rel="noreferrer"
         className="flex items-center justify-center gap-2.5 rounded-xl bg-white px-6 py-3 text-[15px] font-semibold text-black shadow-lg transition hover:bg-white/90 active:scale-95 sm:w-fit"
@@ -208,7 +211,7 @@ function LinuxTab() {
     <div className="flex flex-col gap-5">
       <div className="flex flex-wrap gap-3">
         <a
-          href={RELEASES_URL}
+          href={DL_APPIMAGE}
           target="_blank"
           rel="noreferrer"
           className="flex items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-[14px] font-semibold text-black shadow-lg transition hover:bg-white/90 active:scale-95"
@@ -217,7 +220,7 @@ function LinuxTab() {
           AppImage
         </a>
         <a
-          href={RELEASES_URL}
+          href={DL_DEB}
           target="_blank"
           rel="noreferrer"
           className="flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-5 py-2.5 text-[14px] font-semibold text-white transition hover:bg-white/20 active:scale-95"
