@@ -452,7 +452,7 @@ function TitleCell({ row, width, startEditing }) {
         <button
           type="button"
           onClick={() => openRow(row.id)}
-          className="absolute right-1.5 flex h-6 items-center gap-1 rounded border border-line bg-s-sidebar px-1.5 text-[11px] font-medium tracking-wide text-muted uppercase opacity-0 group-hover/row:opacity-100 hover:text-fg focus-visible:opacity-100"
+          className="absolute right-1.5 flex h-6 items-center gap-1 rounded border border-line bg-s-sidebar px-1.5 text-[11px] font-medium tracking-wide text-muted uppercase opacity-0 group-hover/row:opacity-100 hover:text-fg focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
         >
           <Icon path={ICONS.open} size={12} /> Open
         </button>
@@ -474,7 +474,7 @@ function RowEnd({ row, dnd }) {
         onDragStart={(e) => dnd.start(e, row)}
         onDragEnd={dnd.end}
         onClick={(e) => tools.openMenu(row, e.currentTarget)}
-        className={`flex size-6 items-center justify-center rounded text-faint opacity-0 group-hover/row:opacity-100 hover:bg-hover hover:text-fg focus-visible:opacity-100 ${dnd.enabled ? 'cursor-grab' : ''}`}
+        className={`flex size-6 items-center justify-center rounded text-faint opacity-0 group-hover/row:opacity-100 hover:bg-hover hover:text-fg focus-visible:opacity-100 [@media(hover:none)]:opacity-100 ${dnd.enabled ? 'cursor-grab' : ''}`}
       >
         <Icon path={dnd.enabled ? ICONS.grip : ICONS.dots} />
       </button>

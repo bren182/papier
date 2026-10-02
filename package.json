@@ -13,6 +13,8 @@
     "test": "vitest run",
     "typecheck": "pnpm -r typecheck",
     "test:e2e": "pnpm --filter @papier/web test:e2e",
+    "demo:record": "pnpm --filter @papier/web demo:record",
+    "demo:gif": "node scripts/demo-gif.mjs",
     "desktop:win": "pnpm --filter @papier/desktop dist:win",
     "desktop:linux": "pnpm --filter @papier/desktop dist:linux"
   },

@@ -387,7 +387,7 @@ function Card({ row, props, editTitle, dragging, onDragStart, onDragEnd, onMenu 
           e.stopPropagation();
           onMenu(e.currentTarget);
         }}
-        className="absolute top-2 right-1.5 flex size-6 items-center justify-center rounded text-faint opacity-0 group-hover/card:opacity-100 hover:bg-white/10 hover:text-fg focus-visible:opacity-100"
+        className="absolute top-2 right-1.5 flex size-6 items-center justify-center rounded text-faint opacity-0 group-hover/card:opacity-100 hover:bg-white/10 hover:text-fg focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
       >
         <Icon path={ICONS.dots} />
       </button>

@@ -199,7 +199,7 @@ export function CalendarView({ onNewRow }) {
                     type="button"
                     aria-label={`New on ${day}`}
                     onClick={() => onNewRow({ [dateBy.id]: day })}
-                    className="flex size-5 items-center justify-center rounded text-faint opacity-0 group-hover/day:opacity-100 hover:bg-hover hover:text-fg focus-visible:opacity-100"
+                    className="flex size-5 items-center justify-center rounded text-faint opacity-0 group-hover/day:opacity-100 hover:bg-hover hover:text-fg focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
                   >
                     <Icon path={ICONS.plus} size={12} />
                   </button>

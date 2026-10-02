@@ -17,6 +17,8 @@ apps/desktop/src-tauri/target/
 Thumbs.db
 test-results/
 playwright-report/
+apps/web/e2e/demos/videos/
+demos/videos/
 icon_spread.jpeg
 # Notion exports (personal data, imported locally, never committed)
 *_Export-*/

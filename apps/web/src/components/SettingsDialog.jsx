@@ -206,7 +206,7 @@ function AboutTab() {
       <section>
         <div className={sectionLabel}>Release</div>
         <div className="flex flex-col rounded-md border border-line bg-black/10 divide-y divide-line/50">
-          {row('Version', data ? `v${data.version}` : '—')}
+          {row('Version', data ? `${data.version}` : '—')}
           {data?.sha && row('Commit', data.sha.slice(0, 10))}
         </div>
       </section>

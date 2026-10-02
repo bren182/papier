@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "typecheck": "tsc -p jsconfig.json && tsc -p e2e/jsconfig.json",
     "test:e2e": "playwright test",
+    "demo:record": "playwright test --config=playwright.demo.config.js",
     "shot": "node e2e/shot.js"
   },
   "dependencies": {
