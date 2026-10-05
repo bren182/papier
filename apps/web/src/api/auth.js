@@ -93,6 +93,23 @@ export function useDemoStart() {
   });
 }
 
+/** Create a single-use invite link. Returns `{ url: string }`. */
+export function useCreateInvite() {
+  return useMutation({
+    mutationFn: () => /** @type {Promise<{ url: string }>} */ (api('/invites', { method: 'POST' })),
+  });
+}
+
+/** Accept an invite token and create an account. Signs in on success. */
+export function useAcceptInvite() {
+  const done = useSignedIn();
+  return useMutation({
+    /** @param {{ token: string, email: string, name: string, password: string }} input */
+    mutationFn: ({ token, ...body }) => api(`/invites/${token}/accept`, { method: 'POST', body }),
+    onSuccess: done,
+  });
+}
+
 export function useChangePassword() {
   return useMutation({
     /** @param {{ current: string, next: string }} input */

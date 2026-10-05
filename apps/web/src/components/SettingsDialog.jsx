@@ -1,7 +1,7 @@
 import { lazy, Suspense, useState, useEffect } from 'react';
 import { THEMES } from '@papier/ui';
 import { MIN_PASSWORD } from '@papier/core/text';
-import { useAuthState, useChangePassword, useLogout, useUpdateProfile, useServerInfo } from '../api/auth.js';
+import { useAuthState, useChangePassword, useCreateInvite, useLogout, useUpdateProfile, useServerInfo } from '../api/auth.js';
 import { useUpdateWorkspace, useWorkspace } from '../api/workspaces.js';
 import { MoodOption } from './PageHeader.jsx';
 import { AiPanel } from './OllamaSettings.jsx';
@@ -29,7 +29,9 @@ function AccountTab() {
   const rename = useUpdateProfile();
   const logout = useLogout();
   const change = useChangePassword();
+  const invite = useCreateInvite();
   const [pw, setPw] = useState(/** @type {{ current: string, next: string } | null} */ (null));
+  const [inviteUrl, setInviteUrl] = useState(/** @type {string | null} */ (null));
   const user = data?.user;
   if (!user) return null;
   const initials = user.name.trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase() || 'P';
@@ -83,6 +85,37 @@ function AccountTab() {
             onClick={() => { change.reset(); setPw({ current: '', next: '' }); }}
           >
             {change.isSuccess ? 'Password changed ✓ — other devices signed out' : 'Change password…'}
+          </button>
+        )}
+      </section>
+
+      <section>
+        <div className={sectionLabel}>Invite</div>
+        {inviteUrl ? (
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-1.5 rounded-md border border-line bg-black/10 px-3 py-2">
+              <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-fg-strong">{window.location.origin}{inviteUrl}</span>
+              <button
+                type="button"
+                className="shrink-0 rounded px-2 py-1 text-[12px] text-muted hover:bg-hover hover:text-fg"
+                onClick={() => navigator.clipboard.writeText(`${window.location.origin}${inviteUrl}`)}
+              >
+                Copy
+              </button>
+            </div>
+            <p className="text-[11px] text-faint">Valid for 7 days, single use. Share this link with the person you're inviting.</p>
+            <button type="button" className="h-8 w-full rounded-md border border-line text-[13px] text-muted hover:bg-hover hover:text-fg" onClick={() => setInviteUrl(null)}>
+              Generate another
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="h-9 w-full rounded-md border border-line bg-black/10 px-3 text-left text-[13px] text-muted hover:bg-hover hover:text-fg disabled:opacity-50"
+            disabled={invite.isPending}
+            onClick={() => invite.mutate(undefined, { onSuccess: (d) => setInviteUrl(d.url) })}
+          >
+            {invite.isPending ? 'Generating…' : 'Invite someone…'}
           </button>
         )}
       </section>

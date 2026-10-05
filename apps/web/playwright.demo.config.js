@@ -8,6 +8,7 @@ const WEB_PORT = Number(process.env.DEMO_WEB_PORT ?? 5175);
 
 export default defineConfig({
   testDir: 'e2e/demos',
+  testMatch: '**/*.demo.js',
   fullyParallel: false,
   forbidOnly: false,
   retries: 0,

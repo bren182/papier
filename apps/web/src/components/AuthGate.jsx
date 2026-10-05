@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { authKey, useAuthState, useDemoStart } from '../api/auth.js';
 import { SIGNED_IN_EVENT, UNAUTHORIZED_EVENT } from '../api/client.js';
 import { setRecentUser } from '../recentPages.js';
-import { AuthScreen, SessionExpired } from './AuthScreen.jsx';
+import { AuthScreen, JoinScreen, SessionExpired } from './AuthScreen.jsx';
 import { LandingPage } from './LandingPage.jsx';
 
 /**
@@ -42,6 +42,8 @@ export function AuthGate({ children }) {
   }
   if (!data) return null;
   if (!data.user) {
+    const joinToken = new URLSearchParams(window.location.search).get('join');
+    if (joinToken) return <JoinScreen token={joinToken} />;
     // First-run setup goes straight to the setup form; existing-server visitors see the landing page first.
     if (data.setupNeeded || showLogin) return <AuthScreen setup={data.setupNeeded} onBack={data.setupNeeded ? undefined : () => setShowLogin(false)} />;
     return <LandingPage onSignIn={() => setShowLogin(true)} onDemo={() => demo.mutate()} />;

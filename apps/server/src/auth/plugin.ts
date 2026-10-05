@@ -27,6 +27,8 @@ const INTERNAL_HEADER = 'x-papier-internal';
 
 /** Routes that work signed out. Everything else under /api needs a session. */
 const PUBLIC = new Set(['/api/health', '/api/auth/state', '/api/auth/setup', '/api/auth/login', '/api/demo/start']);
+/** Path prefixes that are also public (for routes with params, e.g. /api/invites/:token). */
+const PUBLIC_PREFIXES = ['/api/invites/'];
 
 export function readCookie(req: FastifyRequest, name: string) {
   const header = req.headers.cookie;
@@ -95,7 +97,7 @@ export function authPlugin(app: FastifyInstance, db: Db) {
       } else {
         req.workspaceId = userWorkspaces(db, session.user.id)[0]?.id ?? null;
       }
-    } else if (!PUBLIC.has(path)) {
+    } else if (!PUBLIC.has(path) && !PUBLIC_PREFIXES.some((p) => path.startsWith(p))) {
       return reply.code(401).send({ error: 'Sign in required' });
     }
   });

@@ -32,6 +32,7 @@ const sameSecret = (a: string, b: string) => {
 
 export function authRoutes(app: FastifyInstance, db: Db, opts: AuthOptions) {
   const throttle = loginThrottle();
+  const setupThrottle = loginThrottle({ free: 3, maxLockMs: 60 * 60_000 });
 
   /** What the client needs to boot: set up, sign in, or the user and their workspaces. */
   app.get('/api/auth/state', async (req) => {
@@ -59,10 +60,20 @@ export function authRoutes(app: FastifyInstance, db: Db, opts: AuthOptions) {
 
   /** The first account (an admin owning the default workspace). Needs the token from the server log. */
   app.post('/api/auth/setup', async (req, reply) => {
+    const key = req.ip;
+    const wait = setupThrottle.wait(key);
+    if (wait > 0) {
+      reply.header('retry-after', Math.ceil(wait / 1000));
+      return reply.code(429).send({ error: 'Too many attempts, try again shortly', retryAfter: Math.ceil(wait / 1000) });
+    }
     const input = AuthSetup.parse(req.body);
     const expected = opts.setupToken();
     if (userCount(db) > 0 || !expected) return reply.code(409).send({ error: 'Already set up' });
-    if (!sameSecret(input.setupToken, expected)) return reply.code(403).send({ error: 'Wrong setup token' });
+    if (!sameSecret(input.setupToken, expected)) {
+      setupThrottle.fail(key);
+      return reply.code(403).send({ error: 'Wrong setup token' });
+    }
+    setupThrottle.succeed(key);
     const passwordHash = await hashPassword(input.password);
     // Check again after the await, in one synchronous transaction, so two racing setups can't both win.
     const user = db.transaction((tx) => (userCount(tx) > 0 ? null : createOwner(tx, { ...input, passwordHash })));

@@ -155,7 +155,14 @@ describe('guards', () => {
       const res = await app.inject({ method: r.method as 'GET', url: r.url, headers: csrf, payload: r.method === 'GET' ? undefined : {} });
       if (res.statusCode !== 401) open.push(`${r.method} ${r.url} → ${res.statusCode}`);
     }
-    expect(open.sort()).toEqual(['GET /api/auth/state → 200', 'POST /api/auth/login → 400', 'POST /api/auth/setup → 400', 'POST /api/demo/start → 201']);
+    expect(open.sort()).toEqual([
+      'GET /api/auth/state → 200',
+      'GET /api/invites/x → 410',
+      'POST /api/auth/login → 400',
+      'POST /api/auth/setup → 400',
+      'POST /api/demo/start → 201',
+      'POST /api/invites/x/accept → 400',
+    ]);
   });
 
   it('needs the X-Papier header on writes, even signed in', async () => {

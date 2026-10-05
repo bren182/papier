@@ -22,6 +22,7 @@ import { searchRoutes } from './routes/search.ts';
 import { workspaceRoutes } from './routes/workspaces.ts';
 import { fileRoutes } from './routes/files.ts';
 import { aiRoutes } from './routes/ai.ts';
+import { inviteRoutes } from './routes/invites.ts';
 import { reminderRoutes } from './routes/reminders.ts';
 
 declare module 'fastify' {
@@ -117,6 +118,7 @@ export function buildApp({
   workspaceRoutes(app, db);
   if (uploadsDir !== ':memory:') fileRoutes(app, uploadsDir);
   aiRoutes(app, db);
+  inviteRoutes(app, db, cookie);
   reminderRoutes(app, db);
 
   return app;

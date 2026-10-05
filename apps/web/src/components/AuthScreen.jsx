@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { MIN_PASSWORD } from '@papier/core/text';
-import { useLogin, useSetup } from '../api/auth.js';
+import { useAcceptInvite, useLogin, useSetup } from '../api/auth.js';
 import { ApiError } from '../api/client.js';
 import { usePrefs } from '../usePrefs.js';
 
@@ -138,6 +138,71 @@ export function AuthScreen({ setup, onBack }) {
               ← Back
             </button>
           )}
+        </Card>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Full-screen invite acceptance form. Validates the token, then lets the invitee
+ * pick their name, email and password.
+ * @param {{ token: string }} props
+ */
+export function JoinScreen({ token }) {
+  usePrefs();
+  const accept = useAcceptInvite();
+  const [valid, setValid] = useState(/** @type {boolean | null} */ (null));
+  const [form, setForm] = useState({ name: '', email: '', password: '' });
+  /** @param {keyof typeof form} key */
+  const bind = (key) => ({ value: form[key], onChange: (/** @type {import('react').ChangeEvent<HTMLInputElement>} */ e) => setForm({ ...form, [key]: e.target.value }) });
+
+  useEffect(() => {
+    fetch(`/api/invites/${token}`, { headers: { 'x-papier': '1' } })
+      .then((r) => setValid(r.ok))
+      .catch(() => setValid(false));
+  }, [token]);
+
+  return (
+    <div className="relative grid h-full place-items-center overflow-y-auto px-4 py-10">
+      <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: "url('/login_bg.webp')", backgroundColor: '#0d0f0d' }} aria-hidden="true" />
+      <div className="absolute inset-0 bg-black/25 backdrop-blur-md" aria-hidden="true" />
+      {valid === null ? null : valid ? (
+        <Card title="Create your account" subtitle="You've been invited to Papier.">
+          <form
+            className="flex flex-col gap-3"
+            onSubmit={(e) => {
+              e.preventDefault();
+              accept.mutate({ token, ...form }, {
+                onSuccess: () => {
+                  const url = new URL(window.location.href);
+                  url.searchParams.delete('join');
+                  window.history.replaceState(null, '', url.toString());
+                },
+              });
+            }}
+          >
+            <div>
+              <label className={label} htmlFor="join-name">Your name</label>
+              <input id="join-name" className={field} autoComplete="name" autoFocus required {...bind('name')} />
+            </div>
+            <div>
+              <label className={label} htmlFor="join-email">Email</label>
+              <input id="join-email" className={field} type="email" autoComplete="username" required {...bind('email')} />
+            </div>
+            <div>
+              <label className={label} htmlFor="join-password">Password</label>
+              <input id="join-password" className={field} type="password" autoComplete="new-password" minLength={MIN_PASSWORD} required {...bind('password')} />
+            </div>
+            {accept.isError && <p role="alert" className="text-[13px] text-fg">{message(accept.error)}</p>}
+            <button type="submit" className={primary} disabled={accept.isPending}>
+              {accept.isPending ? 'Creating account…' : 'Create account'}
+            </button>
+          </form>
+        </Card>
+      ) : (
+        <Card title="Invite expired" subtitle="This invite link is no longer valid. Ask for a new one.">
+          <div />
         </Card>
       )}
     </div>

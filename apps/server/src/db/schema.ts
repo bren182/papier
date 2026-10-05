@@ -282,3 +282,17 @@ export const reminders = sqliteTable(
   },
   (t) => [index('reminders_date').on(t.date), index('reminders_block').on(t.blockId)],
 );
+
+/**
+ * Single-use invite links: an authenticated user creates one; the recipient
+ * visits `/join?token=<id>` and sets up their account. Expires after 7 days.
+ */
+export const invites = sqliteTable('invites', {
+  /** 32-byte random hex — the URL token the recipient receives. */
+  id: text('id').primaryKey(),
+  createdBy: text('created_by').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  createdAt: integer('created_at').notNull(),
+  expiresAt: integer('expires_at').notNull(),
+  usedAt: integer('used_at'),
+  usedBy: text('used_by').references(() => users.id, { onDelete: 'set null' }),
+});
