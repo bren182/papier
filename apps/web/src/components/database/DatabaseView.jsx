@@ -114,7 +114,7 @@ export function DatabaseView({ databaseId, inline = false, viewId, onViewChange,
         ) : view.type === 'calendar' ? (
           <CalendarView onNewRow={(values) => newRow(undefined, values)} />
         ) : (
-          <TableView newRowId={newRowId} onNewRow={(values) => newRow(undefined, values)} />
+          <TableView newRowId={newRowId} onNewRow={(values) => newRow(undefined, values)} onNewRowDone={() => setNewRowId(null)} />
         )}
       </div>
     </DbCtx.Provider>

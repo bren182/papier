@@ -284,7 +284,7 @@ function DesktopTab() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    window.papierElectron.getSettings().then((s) => {
+    /** @type {any} */ (window).papierElectron.getSettings().then((/** @type {any} */ s) => {
       setUrl(s.serverUrl ?? '');
       setLoaded(true);
     });
@@ -315,7 +315,7 @@ function DesktopTab() {
             <button
               type="button"
               disabled={saving}
-              onClick={() => { setSaving(true); window.papierElectron.setSettings({ serverUrl: url.trim() || null }); }}
+              onClick={() => { setSaving(true); /** @type {any} */ (window).papierElectron.setSettings({ serverUrl: url.trim() || null }); }}
               className="h-8 flex-1 rounded-md bg-accent text-[13px] font-medium text-root hover:brightness-110 disabled:opacity-50"
             >
               {saving ? 'Restarting…' : 'Save & restart'}
@@ -324,7 +324,7 @@ function DesktopTab() {
               <button
                 type="button"
                 disabled={saving}
-                onClick={() => { setSaving(true); window.papierElectron.setSettings({ serverUrl: null }); }}
+                onClick={() => { setSaving(true); /** @type {any} */ (window).papierElectron.setSettings({ serverUrl: null }); }}
                 className="h-8 rounded-md border border-line px-3 text-[13px] text-muted hover:bg-hover hover:text-fg disabled:opacity-50"
               >
                 Use local
@@ -405,7 +405,7 @@ export function SettingsDialog({ onClose, prefs, onChange, initialTab = 'account
             <button
               key={t.id}
               type="button"
-              onClick={() => setTab(t.id)}
+              onClick={() => setTab(/** @type {Tab} */ (t.id))}
               className={`-mb-px border-b-2 px-3 py-2.5 text-[13px] transition-colors ${
                 tab === t.id
                   ? 'border-accent text-fg-strong'

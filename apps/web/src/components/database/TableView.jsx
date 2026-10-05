@@ -30,9 +30,9 @@ const GROUP_DRAG = 'application/x-papier-group';
  * more as you scroll; an inline one loads a page at a time behind "Load more".
  * Grouped (`groupBy`), it shows one collapsible section per value instead,
  * each with its own paged query.
- * @param {{ newRowId: string | null, onNewRow: (values?: Record<string, unknown>) => void }} props
+ * @param {{ newRowId: string | null, onNewRow: (values?: Record<string, unknown>) => void, onNewRowDone: () => void }} props
  */
-export function TableView({ newRowId, onNewRow }) {
+export function TableView({ newRowId, onNewRow, onNewRowDone }) {
   const { dbId, properties, view, inline, openRow } = useDb();
   const { sorts, filters } = view.config;
   const groupProp = properties.find((p) => p.id === view.config.groupBy && GROUPABLE.has(p.type)) ?? null;
@@ -90,6 +90,7 @@ export function TableView({ newRowId, onNewRow }) {
                 columns={columns}
                 widthOf={widthOf}
                 newRowId={newRowId}
+                onNewRowDone={onNewRowDone}
                 allRows={rows}
                 onRows={(key, list) => setGroupRows((prev) => (prev[key] === list ? prev : { ...prev, [key]: list }))}
                 onNewRow={onNewRow}
@@ -97,7 +98,7 @@ export function TableView({ newRowId, onNewRow }) {
             ))
           ) : (
             <>
-              <Body rows={rows} columns={columns} widthOf={widthOf} newRowId={newRowId} dnd={rowDnd} query={q} virtual={!inline} />
+              <Body rows={rows} columns={columns} widthOf={widthOf} newRowId={newRowId} onNewRowDone={onNewRowDone} dnd={rowDnd} query={q} virtual={!inline} />
               <button
                 type="button"
                 onClick={() => onNewRow()}
@@ -289,9 +290,9 @@ function Header({ columns, widthOf, onResize, allSelected, onSelectAll }) {
 
 /**
  * @param {{ rows: Row[], columns: Property[], widthOf: (id: string) => number, newRowId: string | null,
- *   dnd: ReturnType<typeof useRowDnd>, query: ReturnType<typeof useRows>, virtual: boolean }} props
+ *   onNewRowDone: () => void, dnd: ReturnType<typeof useRowDnd>, query: ReturnType<typeof useRows>, virtual: boolean }} props
  */
-function Body({ rows, columns, widthOf, newRowId, dnd, query, virtual }) {
+function Body({ rows, columns, widthOf, newRowId, onNewRowDone, dnd, query, virtual }) {
   const ref = useRef(/** @type {HTMLDivElement | null} */ (null));
   const [scroller, setScroller] = useState(/** @type {HTMLElement | null} */ (null));
   const [margin, setMargin] = useState(0);
@@ -302,6 +303,20 @@ function Body({ rows, columns, widthOf, newRowId, dnd, query, virtual }) {
     setScroller(el);
     if (el) setMargin(ref.current.getBoundingClientRect().top - el.getBoundingClientRect().top + el.scrollTop);
   }, [virtual]);
+
+  // Scroll the new row into view once it appears in the list.
+  useEffect(() => {
+    if (!newRowId) return;
+    const idx = rows.findIndex((r) => r.id === newRowId);
+    if (idx === -1) return;
+    requestAnimationFrame(() => {
+      if (virtual && scroller) {
+        scroller.scrollTop = scroller.scrollHeight;
+      } else {
+        ref.current?.querySelector(`[data-row-id="${newRowId}"]`)?.scrollIntoView({ block: 'nearest' });
+      }
+    });
+  }, [rows, newRowId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const v = useVirtualizer({
     count: virtual ? rows.length : 0,
@@ -320,7 +335,7 @@ function Body({ rows, columns, widthOf, newRowId, dnd, query, virtual }) {
 
   /** @param {Row} row @param {number} index @param {import('react').CSSProperties} [style] */
   const renderRow = (row, index, style) => (
-    <TableRow key={row.id} row={row} index={index} columns={columns} widthOf={widthOf} editTitle={row.id === newRowId} dnd={dnd} style={style} />
+    <TableRow key={row.id} row={row} index={index} columns={columns} widthOf={widthOf} editTitle={row.id === newRowId} onEditDone={row.id === newRowId ? onNewRowDone : undefined} dnd={dnd} style={style} />
   );
 
   if (!virtual) return <div ref={ref}>{rows.map((r, i) => renderRow(r, i))}</div>;
@@ -346,9 +361,9 @@ function scrollParent(el) {
 
 /**
  * @param {{ row: Row, index: number, columns: Property[], widthOf: (id: string) => number, editTitle: boolean,
- *   dnd: ReturnType<typeof useRowDnd>, style?: import('react').CSSProperties }} props
+ *   onEditDone?: () => void, dnd: ReturnType<typeof useRowDnd>, style?: import('react').CSSProperties }} props
  */
-function TableRow({ row, index, columns, widthOf, editTitle, dnd, style }) {
+function TableRow({ row, index, columns, widthOf, editTitle, onEditDone, dnd, style }) {
   const { m, addOption } = useDb();
   const tools = useTableTools();
   const drop = dnd.drop?.id === row.id ? dnd.drop.where : null;
@@ -381,7 +396,7 @@ function TableRow({ row, index, columns, widthOf, editTitle, dnd, style }) {
           className={`accent-[var(--p-accent)] ${selected || tools.selected.size ? '' : 'opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100'}`}
         />
       </div>
-      <TitleCell row={row} width={widthOf('title')} startEditing={editTitle} />
+      <TitleCell row={row} width={widthOf('title')} startEditing={editTitle} onEditDone={onEditDone} />
       {columns.map((p) => (
         <div
           key={p.id}
@@ -406,8 +421,8 @@ function TableRow({ row, index, columns, widthOf, editTitle, dnd, style }) {
   );
 }
 
-/** @param {{ row: Row, width: number, startEditing: boolean }} props */
-function TitleCell({ row, width, startEditing }) {
+/** @param {{ row: Row, width: number, startEditing: boolean, onEditDone?: () => void }} props */
+function TitleCell({ row, width, startEditing, onEditDone }) {
   const { m, openRow } = useDb();
   const [editing, setEditing] = useState(startEditing);
   const [text, setText] = useState('');
@@ -417,6 +432,7 @@ function TitleCell({ row, width, startEditing }) {
 
   const commit = () => {
     setEditing(false);
+    onEditDone?.();
     if (text !== row.title) m.renameRow(row.id, text.trim());
   };
 
@@ -531,9 +547,9 @@ function regroup(prop, current, from, to) {
  * One group of a grouped table: a header (collapse, name, count), its rows
  * (paged), "New" in the group. Drop a row from another group to move it here.
  * @param {{ group: Group, prop: Property, offset: number, columns: Property[], widthOf: (id: string) => number, newRowId: string | null,
- *   allRows: Row[], onRows: (key: string, rows: Row[]) => void, onNewRow: (values?: Record<string, unknown>) => void }} props
+ *   onNewRowDone: () => void, allRows: Row[], onRows: (key: string, rows: Row[]) => void, onNewRow: (values?: Record<string, unknown>) => void }} props
  */
-function GroupSection({ group, prop, offset, columns, widthOf, newRowId, allRows, onRows, onNewRow }) {
+function GroupSection({ group, prop, offset, columns, widthOf, newRowId, onNewRowDone, allRows, onRows, onNewRow }) {
   const { dbId, view, m } = useDb();
   const { sorts, filters } = view.config;
   const q = useRows(dbId, { sorts, filters, group: { propId: prop.id, value: group.value }, limit: 25 });
@@ -591,7 +607,7 @@ function GroupSection({ group, prop, offset, columns, widthOf, newRowId, allRows
       {open && (
         <>
           {rows.map((r, i) => (
-            <TableRow key={r.id} row={r} index={offset + i} columns={columns} widthOf={widthOf} editTitle={r.id === newRowId} dnd={dnd} />
+            <TableRow key={r.id} row={r} index={offset + i} columns={columns} widthOf={widthOf} editTitle={r.id === newRowId} onEditDone={r.id === newRowId ? onNewRowDone : undefined} dnd={dnd} />
           ))}
           <div className="flex h-[30px] items-center gap-3 border-b border-line px-2 text-[13px] text-faint">
             <button type="button" onClick={() => onNewRow(groupValues(prop, group.value))} className="flex items-center gap-1.5 hover:text-muted">

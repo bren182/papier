@@ -120,7 +120,12 @@ export function formatDateMention(iso, now = new Date()) {
   if (diff === 1) return 'Tomorrow';
   if (diff === -1) return 'Yesterday';
   if (abs <= RELATIVE_LIMIT_DAYS) {
-    const span = abs < 7 ? plural(abs, 'day') : plural(Math.floor(abs / 7), 'week');
+    if (abs < 7) {
+      // Weekday name is more readable than "3 days ago"
+      const weekday = d.toLocaleDateString(undefined, { weekday: 'long' });
+      return diff > 0 ? weekday : `Last ${weekday}`;
+    }
+    const span = plural(Math.floor(abs / 7), 'week');
     return diff > 0 ? `In ${span}` : `${span} ago`;
   }
   return d.toLocaleDateString(undefined, {

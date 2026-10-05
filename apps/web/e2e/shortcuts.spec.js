@@ -8,7 +8,7 @@ test('Ctrl+/ lists the keyboard shortcuts, with a filter', async ({ page }) => {
   await page.keyboard.press('Control+/');
   const dialog = page.getByRole('dialog', { name: 'Keyboard shortcuts' });
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByRole('region')).toHaveCount(5); // General, Editing, Turn into, Formatting, Markdown
+  await expect(dialog.getByRole('region')).toHaveCount(6); // General, Navigation, Editing, Turn into, Formatting, Markdown
 
   await dialog.getByLabel('Filter shortcuts').fill('strike');
   await expect(dialog.getByRole('listitem')).toHaveCount(1);

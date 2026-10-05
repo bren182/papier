@@ -20,9 +20,15 @@ directories:
 # asar: false — better-sqlite3's .node binary cannot live inside an asar archive.
 asar: false
 
+# better-sqlite3 ≥ 9 ships N-API prebuilts (ABI-stable) that work in Electron
+# without recompilation.  Skipping the rebuild step also avoids a failure on
+# pnpm workspaces where a broken @blocknote/core symlink causes ENOENT.
+npmRebuild: false
+
 files:
   - src/**
   - dist/**
+  - build/**
   - package.json
 
 win:

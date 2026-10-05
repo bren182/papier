@@ -50,27 +50,29 @@ export function LandingPage({ onSignIn, onDemo }) {
       <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" aria-hidden="true" />
 
       {/* ── Top nav ───────────────────────────────────────────────── */}
-      <nav className="sticky top-0 z-10 flex items-center justify-between border-b border-white/10 bg-black/40 px-5 py-3 backdrop-blur-md">
-        <div className="flex items-center gap-2.5">
-          <img src="/pwa-192x192.png" alt="" className="size-8 rounded-lg shadow" />
-          <span className="font-semibold text-white">Papier</span>
-        </div>
-        <div className="flex items-center gap-4">
-          <a
-            href={REPO_URL}
-            target="_blank"
-            rel="noreferrer"
-            className="hidden text-[14px] text-white/55 transition hover:text-white sm:block"
-          >
-            GitHub
-          </a>
-          <button
-            type="button"
-            onClick={onSignIn}
-            className="h-8 rounded-lg bg-white px-5 text-[14px] font-semibold text-black shadow transition hover:bg-white/90 active:scale-95"
-          >
-            Sign in
-          </button>
+      <nav className="sticky top-0 z-10 border-b border-white/10 bg-black/40 backdrop-blur-md">
+        <div className="mx-auto flex max-w-[860px] items-center justify-between px-5 py-3">
+          <div className="flex items-center gap-2.5">
+            <img src="/pwa-192x192.png" alt="" className="size-8 rounded-lg shadow" />
+            <span className="font-semibold text-white">Papier</span>
+          </div>
+          <div className="flex items-center gap-4">
+            <a
+              href={REPO_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="hidden text-[14px] text-white/55 transition hover:text-white sm:block"
+            >
+              GitHub
+            </a>
+            <button
+              type="button"
+              onClick={onSignIn}
+              className="h-8 rounded-lg bg-white px-5 text-[14px] font-semibold text-black shadow transition hover:bg-white/90 active:scale-95"
+            >
+              Sign in
+            </button>
+          </div>
         </div>
       </nav>
 
