@@ -51,7 +51,7 @@ export function LandingPage({ onSignIn, onDemo }) {
 
       {/* ── Top nav ───────────────────────────────────────────────── */}
       <nav className="sticky top-0 z-10 border-b border-white/10 bg-black/40 backdrop-blur-md">
-        <div className="mx-auto flex max-w-[860px] items-center justify-between px-5 py-3">
+        <div className="flex items-center justify-between px-5 py-3">
           <div className="flex items-center gap-2.5">
             <img src="/pwa-192x192.png" alt="" className="size-8 rounded-lg shadow" />
             <span className="font-semibold text-white">Papier</span>
