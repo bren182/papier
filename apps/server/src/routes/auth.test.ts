@@ -131,6 +131,33 @@ describe('sessions', () => {
   });
 });
 
+describe('rate limiting', () => {
+  it('throttles the setup endpoint after 3 wrong tokens', async () => {
+    fresh();
+    const codes: number[] = [];
+    for (let i = 0; i < 4; i++) {
+      codes.push((await post('/api/auth/setup', { ...OWNER, setupToken: 'wrong' })).statusCode);
+    }
+    expect(codes).toEqual([403, 403, 403, 429]);
+    const locked = await post('/api/auth/setup', { ...OWNER, setupToken: 'wrong' });
+    expect(locked.statusCode).toBe(429);
+    expect(Number(locked.headers['retry-after'])).toBeGreaterThan(0);
+  });
+
+  it('throttles invite-accept after 3 failures and sends retry-after', async () => {
+    fresh();
+    const body = { email: 'new@example.com', name: 'New', password: 'correct horse' };
+    const codes: number[] = [];
+    for (let i = 0; i < 4; i++) {
+      codes.push((await post('/api/invites/no-such-token/accept', body)).statusCode);
+    }
+    expect(codes).toEqual([410, 410, 410, 429]);
+    const locked = await post('/api/invites/no-such-token/accept', body);
+    expect(locked.statusCode).toBe(429);
+    expect(Number(locked.headers['retry-after'])).toBeGreaterThan(0);
+  });
+});
+
 describe('guards', () => {
   /** Every `/api` route, read from the route files so new ones are covered too. */
   function allRoutes() {

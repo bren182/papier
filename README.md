@@ -171,7 +171,7 @@ pnpm --filter @papier/server db:generate
 - **v0.1** — MVP editor + pages + search ✓
 - **v0.2** — Polish, uploads, tables, copy/paste (in progress)
 - **v0.3** — Databases + views, relations, formulas, automations ✓
-- **v0.4** — Desktop apps (Windows + Linux installers) ✓
+- **v0.4** — Auth, multi-user invites, Windows/Linux desktop apps ✓
 - **v0.5** — Multiplayer editing with presence (Yjs)
 - **v1.0** — Cross-device sync, offline mode, export, docs
 

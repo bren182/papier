@@ -1,3 +1,7 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 # Papier
 
 Self-hosted, block-based workspace (a personal Notion). `README.md` is the living scope
@@ -9,15 +13,26 @@ before planning a feature; tick its checkboxes when items land.
 ```bash
 pnpm dev                                   # server :3000 + web :5173 (Vite proxies /api)
 pnpm test                                  # Vitest, all packages
+pnpm vitest run apps/server/src/routes/pages.test.ts  # run a single test file
 pnpm test:e2e                              # Playwright (apps/web/e2e), own server + DB
 pnpm --filter @papier/web shot "/?p=<id>" out.png   # screenshot a running `pnpm dev` (PAPIER_EMAIL/PAPIER_PASSWORD sign in)
 pnpm typecheck                             # tsc on server (TS) and web (JSDoc via jsconfig)
 pnpm build
 pnpm --filter @papier/server db:generate   # drizzle-kit: new SQL migration from schema.ts
+pnpm desktop:win                           # build Windows installer → apps/desktop/release/
+pnpm desktop:linux                         # build Linux AppImage + deb
+pnpm demo:record                           # record Playwright demo flows
+pnpm demo:gif                              # convert recordings to GIFs (scripts/demo-gif.mjs)
 ```
 
 Migrations in `apps/server/drizzle/` are committed and applied on server start. Dev DB:
 `apps/server/data/papier.db` (gitignored; override with `DATABASE_PATH`).
+
+Uploads live beside the DB: `dirname(DATABASE_PATH)/uploads/`, served at `/files/<uuid>.<ext>`.
+
+Relevant env vars: `DATABASE_PATH`, `PAPIER_SETUP_TOKEN`, `PAPIER_ORIGIN` (https makes the session cookie Secure),
+`TRUST_PROXY=1` (behind Caddy/nginx; enables X-Forwarded-For), `HOST`, `PORT`,
+`LOG_LEVEL`, `OLLAMA_URL` (default `http://127.0.0.1:11434`), `OLLAMA_MODEL` (default `llama3.2`).
 
 ## Layout
 
@@ -28,6 +43,12 @@ Migrations in `apps/server/drizzle/` are committed and applied on server start. 
   Server state via TanStack Query hooks in `src/api/`; open page lives in the URL (`?p=`),
   a database row in the side peek too (`?peek=`, `openPeek`/`usePeek` in `useSelectedPage.js`,
   `RowPeek.jsx`). `DatabaseView`'s `openRow` passes the view's `[data-row-id]` order for ‹ ›.
+- `apps/desktop` — Electron wrapper. Bundles the built web + an esbuild-bundled server CJS
+  into one native app. Runs the Fastify server in-process on port `37842` (localhost only).
+  Data lives in `app.getPath('userData')` (Windows: `%APPDATA%\Papier`). `src/main.js`
+  manages the tray icon, window, auto-updater, and settings (`userData/settings.json` for
+  the optional remote-server URL). Build: `build:prep` runs `pnpm build` + `scripts/bundle-server.mjs`,
+  then electron-builder packages it.
 - `packages/core` — shared zod schemas + helpers (JS + JSDoc), e.g. `Page`, `Block`,
   `orderBetween` (fractional indexing). Validate API input with these.
 - `packages/ui` — `theme.css` tokens and `Backdrop`. Tailwind maps tokens in
@@ -70,6 +91,17 @@ callers (the Notion importer) use `internalHeaders(app)`. Route tests use `testA
 whose `inject` is signed in as an owner; e2e signs in once in `e2e/global-setup.js` (storage state).
 Client: `AuthGate` shows `AuthScreen` (sign-in / setup) or the app; a 401 fires `papier:unauthorized`
 and keeps the app mounted under a sign-in dialog, then `papier:signed-in` makes autosave resend.
+
+## Workspaces & invites (`routes/workspaces.ts`, `routes/invites.ts`)
+
+Roles: `owner` / `editor` / `viewer`. `workspace_members` maps users to workspaces. Every page row
+carries `workspace_id` (denormalised from its root) so queries need no join to scope by workspace.
+**Invites** are single-use tokens (7-day TTL): `POST /api/invites` returns `{ url: '/?join=<token>' }`;
+`GET /api/invites/:token` validates it (public); `POST /api/invites/:token/accept` creates the account,
+signs it in, and adds the user to the `default` workspace (rate-limited). `DELETE /api/workspaces/:id/members/:userId`
+removes a member; viewers cannot write; only owners can rename the workspace or set a home page.
+`PATCH /api/workspaces/:id` accepts `{ name?, icon?, homePageId? }` — `homePageId` must be a live page
+in that workspace. The client surfaces this in `WorkspaceMenu.jsx` and `SettingsDialog.jsx`.
 
 ## Page hierarchy (`apps/server/src/db/pageTree.ts`)
 
@@ -242,6 +274,34 @@ cascade. `backfillSearch` indexes unindexed blocks on startup. User input goes t
 `toFtsQuery` (quoted prefix terms) — never pass raw input to `MATCH`. Results: one hit
 per page, best of the top `CANDIDATES` rows; snippets only for returned rows, marked
 with `HIT_START`/`HIT_END` from `@papier/core` (render via `snippetParts`, not HTML).
+
+## File uploads (`routes/files.ts`)
+
+`POST /api/files` — multipart, 20 MB limit; accepted types: JPEG, PNG, GIF, WEBP, AVIF, PDF.
+Returns `{ id, url: '/files/<uuid>.<ext>' }`. Uploads are stored beside the DB at
+`dirname(DATABASE_PATH)/uploads/` and served by a static handler — no auth on `/files/`.
+`POST /api/files/fetch` proxies Unsplash image URLs only (SSRF guard: hostname must be
+`images.unsplash.com`). File upload blocks (`image`) use these routes; page-cover image
+uploads go through the same endpoint.
+
+## AI (`routes/ai.ts`, `db/settings.ts`)
+
+Two providers, switchable per-workspace via `POST /api/ai/settings`: **Ollama** (default,
+needs a local Ollama server) or **Anthropic** (bring your own key). AI config keys
+(`ai_provider`, `ollama_url`, `ollama_model`, `anthropic_api_key`, `anthropic_model`,
+`giphy_api_key`, `unsplash_access_key`) are stored in the `settings` table via `getSetting`/
+`setSetting` in `db/settings.ts` — not environment variables. `OLLAMA_URL` and `OLLAMA_MODEL`
+env vars set the defaults only (overridden by the DB). On Windows, use `127.0.0.1` not
+`localhost` — Windows 11 resolves `localhost` to `::1` first, but Ollama only listens on IPv4.
+Client: `AiPanel.jsx` (asks questions about the open page), `OllamaSettings.jsx`, `SettingsDialog.jsx`.
+
+## Reminders (`db/reminders.ts`, `routes/reminders.ts`)
+
+`@remind` is an inline node type (ProseMirror). The blocks batch transaction calls
+`indexReminders` to keep the `reminders` table in sync: one row per `@remind` node with
+`{ id, pageId, blockId, date }`. `GET /api/reminders?date=YYYY-MM-DD` returns all reminders
+due on or before that date (with the page title and icon). The client polls this on load
+and shows due reminders in the Topbar / home widgets.
 
 ## Notion import (`apps/server/src/import/notion/`)
 

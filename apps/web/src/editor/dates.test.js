@@ -66,8 +66,8 @@ describe('formatDateMention', () => {
   });
 
   it('counts days, then weeks', () => {
-    expect(label('2026-09-28')).toBe('2 days ago');
-    expect(label('2026-10-06')).toBe('In 6 days');
+    expect(label('2026-09-28')).toBe('Last Monday');   // weekday name for 2-6 days
+    expect(label('2026-10-06')).toBe('Tuesday');
     expect(label('2026-09-23')).toBe('1 week ago');
     expect(label('2026-10-14')).toBe('In 2 weeks');
     expect(label('2026-09-03')).toBe('3 weeks ago'); // 27 days
@@ -91,7 +91,7 @@ describe('dateSuggestions', () => {
   });
 
   it('titles a parsed date with the label it will show', () => {
-    expect(dateSuggestions('two days ago', now)[0]).toMatchObject({ title: '2 days ago', date: '2026-09-28' });
+    expect(dateSuggestions('two days ago', now)[0]).toMatchObject({ title: 'Last Monday', date: '2026-09-28' });
   });
 
   it('offers nothing for an unparseable query', () => {

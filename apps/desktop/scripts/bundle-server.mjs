@@ -7,7 +7,7 @@
  */
 
 import { build } from 'esbuild';
-import { cpSync, mkdirSync } from 'fs';
+import { cpSync, mkdirSync, realpathSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
@@ -45,5 +45,12 @@ cpSync(
   join(outDir, 'web'),
   { recursive: true }
 );
+
+// 4. Copy better-sqlite3 alongside the bundle so `require('better-sqlite3')` resolves
+//    at runtime without relying on electron-builder to follow pnpm symlinks.
+//    realpathSync resolves the pnpm content-store symlink to actual files.
+console.log('Copying better-sqlite3…');
+const bsq3Src = realpathSync(join(repoRoot, 'apps', 'desktop', 'node_modules', 'better-sqlite3'));
+cpSync(bsq3Src, join(outDir, 'node_modules', 'better-sqlite3'), { recursive: true });
 
 console.log('Done — dist/ is ready for electron-builder.');

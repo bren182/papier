@@ -248,7 +248,11 @@ app.whenReady().then(async () => {
     createTray();
     setupAutoUpdater();
   } catch (err) {
-    dialog.showErrorBox('Papier failed to start', String(err));
+    const isPortBusy = err?.code === 'EADDRINUSE';
+    const msg = isPortBusy
+      ? `Port ${APP_PORT} is already in use.\n\nAnother Papier instance may be running. Close it (or check the system tray) and try again.`
+      : String(err);
+    dialog.showErrorBox('Papier failed to start', msg);
     app.quit();
   }
 });
