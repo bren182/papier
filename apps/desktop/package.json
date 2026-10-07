@@ -1,6 +1,6 @@
 {
   "name": "@papier/desktop",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "private": true,
   "description": "Papier — self-hosted block workspace, desktop app",
   "repository": "https://github.com/bren182/papier",

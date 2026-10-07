@@ -49,8 +49,8 @@ export function LandingPage({ onSignIn, onDemo }) {
       />
       <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" aria-hidden="true" />
 
-      {/* ── Top nav ───────────────────────────────────────────────── */}
-      <nav className="sticky top-0 z-10 border-b border-white/10 bg-black/40 backdrop-blur-md">
+      {/* ── Top nav — fixed so it spans 100vw regardless of the scrollbar ── */}
+      <nav className="fixed inset-x-0 top-0 z-10 border-b border-white/10 bg-black/40 backdrop-blur-md">
         <div className="flex items-center justify-between px-5 py-3">
           <div className="flex items-center gap-2.5">
             <img src="/pwa-192x192.png" alt="" className="size-8 rounded-lg shadow" />
@@ -76,6 +76,7 @@ export function LandingPage({ onSignIn, onDemo }) {
         </div>
       </nav>
 
+      <div className="h-14" aria-hidden="true" />
       <div className="relative mx-auto max-w-[860px] px-5 py-16 sm:py-24">
         {/* ── Hero ───────────────────────────────────────────────────── */}
         <header className="mb-14 flex flex-col items-center gap-5 text-center">
