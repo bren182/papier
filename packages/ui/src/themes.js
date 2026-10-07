@@ -18,6 +18,21 @@ export const THEMES = /** @type {const} */ ([
 export const DEFAULT_THEME = 'forest';
 
 /**
+ * UI font options: the id becomes `data-font` on `<html>`, overriding `--p-font-sans`.
+ * `css` is the full font-family string for inline style previews.
+ */
+export const FONTS = /** @type {const} */ ([
+  { id: 'geist',    name: 'Geist',    css: "'Geist', ui-sans-serif, system-ui, sans-serif" },
+  { id: 'inter',    name: 'Inter',    css: "'Inter', ui-sans-serif, system-ui, sans-serif" },
+  { id: 'dm-sans',  name: 'DM Sans',  css: "'DM Sans', ui-sans-serif, system-ui, sans-serif" },
+  { id: 'manrope',  name: 'Manrope',  css: "'Manrope', ui-sans-serif, system-ui, sans-serif" },
+  { id: 'nunito',   name: 'Nunito',   css: "'Nunito', ui-sans-serif, system-ui, sans-serif" },
+  { id: 'lato',     name: 'Lato',     css: "'Lato', ui-sans-serif, system-ui, sans-serif" },
+]);
+
+export const DEFAULT_FONT = 'geist';
+
+/**
  * Page covers without uploads: gradients drawn from the active palette, so a
  * cover follows the theme (and the page's mood). `clear` is the plain window
  * onto the backdrop. Image covers ('asset:…') come with uploads.

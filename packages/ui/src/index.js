@@ -1,2 +1,2 @@
 export { Backdrop } from './Backdrop.jsx';
-export { COVERS, coverCss, DEFAULT_THEME, THEMES } from './themes.js';
+export { COVERS, coverCss, DEFAULT_FONT, DEFAULT_THEME, FONTS, THEMES } from './themes.js';

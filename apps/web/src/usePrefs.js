@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
-import { DEFAULT_THEME } from '@papier/ui';
+import { DEFAULT_FONT, DEFAULT_THEME } from '@papier/ui';
 import { setAppTheme } from './theme.js';
 
 /**
- * @typedef {{ mode: 'ambient' | 'grayscale', glass: 'frosted' | 'clear', motion: boolean, sidebar: boolean, theme: string }} Prefs
- *   theme: a colour theme id (@papier/ui THEMES)
+ * @typedef {{ mode: 'ambient' | 'grayscale', glass: 'frosted' | 'clear', motion: boolean, sidebar: boolean, theme: string, font: string }} Prefs
+ *   theme: a colour theme id (@papier/ui THEMES); font: a font id (@papier/ui FONTS)
  */
 
 const KEY = 'papier.prefs';
 
 /** @type {Prefs} */
-const DEFAULTS = { mode: 'ambient', glass: 'frosted', motion: true, sidebar: true, theme: DEFAULT_THEME };
+const DEFAULTS = { mode: 'ambient', glass: 'frosted', motion: true, sidebar: true, theme: DEFAULT_THEME, font: DEFAULT_FONT };
 
 /** @returns {Prefs} */
 function load() {
@@ -35,6 +35,7 @@ export function usePrefs() {
     root.dataset.mode = prefs.mode;
     root.dataset.glass = prefs.glass;
     root.dataset.motion = prefs.motion ? 'on' : 'off';
+    root.dataset.font = prefs.font ?? DEFAULT_FONT;
     setAppTheme(prefs.theme);
     try {
       localStorage.setItem(KEY, JSON.stringify(prefs));

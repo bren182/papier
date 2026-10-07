@@ -20,9 +20,12 @@ directories:
 # asar: false — better-sqlite3's .node binary cannot live inside an asar archive.
 asar: false
 
-# better-sqlite3 ≥ 9 ships N-API prebuilts (ABI-stable) that work in Electron
-# without recompilation.  Skipping the rebuild step also avoids a failure on
-# pnpm workspaces where a broken @blocknote/core symlink causes ENOENT.
+# N-API prebuilts are not fully ABI-stable across major Node versions: CI installs
+# the Node 24 prebuild, which crashes in Electron 33's embedded Node 20.
+# bundle-server.mjs runs @electron/rebuild to write an Electron-compatible binary
+# into dist/node_modules/better-sqlite3/ before packaging.
+# Keep npmRebuild: false — electron-builder's own rebuild pass hits ENOENT on
+# pnpm symlinks in the workspace and would overwrite the correct binary anyway.
 npmRebuild: false
 
 files:
@@ -30,6 +33,19 @@ files:
   - dist/**
   - build/**
   - package.json
+
+# electron-builder's smart-excludes strip any nested node_modules/ from the
+# files: list above, so the rebuilt better-sqlite3 must be included here.
+# Source (deps/, src/) is omitted — only the runtime JS and compiled binary
+# are needed.
+extraFiles:
+  - from: dist/node_modules/better-sqlite3
+    to: resources/app/dist/node_modules/better-sqlite3
+    filter:
+      - "**"
+      - "!src/**"
+      - "!deps/**"
+      - "!prebuilds/**"
 
 win:
   target:

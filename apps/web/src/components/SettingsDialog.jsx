@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState, useEffect } from 'react';
-import { THEMES } from '@papier/ui';
+import { FONTS, THEMES } from '@papier/ui';
 import { MIN_PASSWORD } from '@papier/core/text';
 import { useAuthState, useChangePassword, useCreateInvite, useLogout, useUpdateProfile, useServerInfo } from '../api/auth.js';
 import { useUpdateWorkspace, useWorkspace } from '../api/workspaces.js';
@@ -215,6 +215,24 @@ function DisplayTab({ prefs, onChange }) {
           ))}
         </div>
         <p className="mt-1.5 text-[11px] text-faint">A page can override this with its own mood (Customise, above the title).</p>
+      </section>
+
+      <section>
+        <div className={sectionLabel}>Font</div>
+        <div className="flex flex-col gap-0.5 rounded-md border border-line bg-black/10 p-1.5">
+          {FONTS.map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              onClick={() => onChange({ font: f.id })}
+              className={`flex h-10 items-center gap-3 rounded px-3 text-[13px] transition-colors hover:bg-hover ${prefs.font === f.id ? 'bg-accent/10' : ''}`}
+            >
+              <span className={`size-2 shrink-0 rounded-full ${prefs.font === f.id ? 'bg-accent' : 'bg-line'}`} />
+              <span style={{ fontFamily: f.css }} className="flex-1 text-left text-fg-strong">{f.name}</span>
+              <span style={{ fontFamily: f.css }} className="text-[12px] text-muted">Aa 0123</span>
+            </button>
+          ))}
+        </div>
       </section>
 
       <section>

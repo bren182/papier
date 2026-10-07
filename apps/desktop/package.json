@@ -1,6 +1,6 @@
 {
   "name": "@papier/desktop",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "private": true,
   "description": "Papier — self-hosted block workspace, desktop app",
   "repository": "https://github.com/bren182/papier",
@@ -20,6 +20,7 @@
     "electron-updater": "^6.3.9"
   },
   "devDependencies": {
+    "@electron/rebuild": "^3.6.0",
     "electron": "^33.4.0",
     "electron-builder": "^25.1.8",
     "esbuild": "^0.25.5"

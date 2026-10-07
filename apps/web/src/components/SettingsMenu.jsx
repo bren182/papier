@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { THEMES } from '@papier/ui';
+import { FONTS, THEMES } from '@papier/ui';
 import { MIN_PASSWORD } from '@papier/core/text';
 import { useAuthState, useChangePassword, useLogout, useUpdateProfile } from '../api/auth.js';
 import { field, menuItem, menuLabel, Popover } from './database/Popover.jsx';
@@ -83,6 +83,22 @@ export function SettingsMenu({ anchor, onClose, prefs, onChange, onAi }) {
         ))}
       </div>
       <div className="px-2 pb-1 text-[11px] text-faint">A page can set its own mood (Customise, above its title).</div>
+      <div className="my-1 h-px bg-line" />
+      <div className={menuLabel}>Font</div>
+      <div className="flex flex-col gap-0.5 px-1 pb-1">
+        {FONTS.map((f) => (
+          <button
+            key={f.id}
+            type="button"
+            onClick={() => onChange({ font: f.id })}
+            className={`flex h-8 items-center gap-2.5 rounded px-2 text-[13px] hover:bg-hover ${prefs.font === f.id ? 'text-fg-strong' : 'text-muted'}`}
+          >
+            <span className={`size-1.5 shrink-0 rounded-full ${prefs.font === f.id ? 'bg-accent' : 'bg-line'}`} />
+            <span style={{ fontFamily: f.css }} className="flex-1 text-left">{f.name}</span>
+            {prefs.font === f.id && <span className="text-accent text-[10px]">✓</span>}
+          </button>
+        ))}
+      </div>
       <div className="my-1 h-px bg-line" />
       <div className={menuLabel}>Display</div>
       {toggle('Grayscale backdrop', prefs.mode === 'grayscale', () => onChange({ mode: prefs.mode === 'grayscale' ? 'ambient' : 'grayscale' }))}
