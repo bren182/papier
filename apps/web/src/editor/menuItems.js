@@ -243,7 +243,7 @@ export function dateItems(query, editor) {
   const remindPrefix = q.startsWith('remind ') ? 'remind ' : q.startsWith('r ') ? 'r ' : null;
   if (remindPrefix !== null || q === 'remind' || q === 'r') {
     const dateQuery = remindPrefix ? query.trim().slice(remindPrefix.length) : '';
-    return dateSuggestions(dateQuery).map(({ title, date, subtext }) => ({
+    const remindItems = dateSuggestions(dateQuery).map(({ title, date, subtext }) => ({
       title,
       subtext: subtext ? `Remind: ${subtext}` : 'Add a reminder',
       group: 'Reminder',
@@ -258,13 +258,33 @@ export function dateItems(query, editor) {
           ])
           .run(),
     }));
+    return [
+      ...remindItems,
+      {
+        title: 'Pick a date…',
+        group: 'Reminder',
+        icon: '🔔',
+        run: () => {},
+        calendarPick: (iso) => ({
+          run: (/** @type {Editor} */ editor, /** @type {import('@tiptap/core').Range} */ range) =>
+            editor
+              .chain()
+              .focus()
+              .insertContentAt(range, [
+                { type: 'remind', attrs: { date: iso } },
+                { type: 'text', text: ' ' },
+              ])
+              .run(),
+        }),
+      },
+    ];
   }
 
   const dynamic =
     editor && isTemplateEditor(editor) && (!q || 'today'.startsWith(q) || 'dynamic'.startsWith(q))
       ? [{ title: 'Today ↻', date: DYNAMIC_TODAY, subtext: 'The day a page is made from this template' }]
       : [];
-  return [...dynamic, ...dateSuggestions(query)].map(({ title, date, subtext }) => ({
+  const dateRows = [...dynamic, ...dateSuggestions(query)].map(({ title, date, subtext }) => ({
     title,
     subtext,
     group: 'Date',
@@ -279,6 +299,26 @@ export function dateItems(query, editor) {
         ])
         .run(),
   }));
+  return [
+    ...dateRows,
+    {
+      title: 'Pick a date…',
+      group: 'Date',
+      icon: '@',
+      run: () => {},
+      calendarPick: (iso) => ({
+        run: (/** @type {Editor} */ editor, /** @type {import('@tiptap/core').Range} */ range) =>
+          editor
+            .chain()
+            .focus()
+            .insertContentAt(range, [
+              { type: 'date', attrs: { date: iso } },
+              { type: 'text', text: ' ' },
+            ])
+            .run(),
+      }),
+    },
+  ];
 }
 
 /** A page as a menu item that inserts an inline link to it. @param {import('./PageMention.js').PageHit} hit @returns {MenuItem} */

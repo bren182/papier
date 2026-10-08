@@ -3,6 +3,7 @@ import { Extension } from '@tiptap/core';
 import { PluginKey } from '@tiptap/pm/state';
 import { ReactRenderer } from '@tiptap/react';
 import Suggestion, { exitSuggestion } from '@tiptap/suggestion';
+import { MiniCalendar } from '../components/database/MiniCalendar.jsx';
 
 /**
  * One popover for every "type a character, pick from a list" menu (`/` blocks,
@@ -14,6 +15,7 @@ import Suggestion, { exitSuggestion } from '@tiptap/suggestion';
  *   icon?: string,
  *   aliases?: string[],
  *   run: (editor: import('@tiptap/core').Editor, range: import('@tiptap/core').Range) => void,
+ *   calendarPick?: (iso: string) => { run: (editor: import('@tiptap/core').Editor, range: import('@tiptap/core').Range) => void },
  * }} MenuItem
  */
 
@@ -106,17 +108,29 @@ function Menu({ items, command, ref }) {
     },
   }));
 
+  const hasCalendar = items.some((item) => item.calendarPick);
   if (!items.length) return null;
 
   return (
     <div
       ref={list}
       role="listbox"
-      className="papier-popover max-h-[320px] w-[260px] overflow-y-auto p-1"
+      className={`papier-popover w-[260px] overflow-y-auto p-1 ${hasCalendar ? 'max-h-[520px]' : 'max-h-[320px]'}`}
       onMouseDown={(e) => e.preventDefault()} // keep focus in the editor
     >
       {items.map((item, i) => {
         const header = item.group && item.group !== items[i - 1]?.group;
+        if (item.calendarPick) {
+          const onPick = item.calendarPick;
+          return (
+            <div key={`${item.group}-calendar`}>
+              {header && <div className="px-2 pt-2 pb-1 text-[11px] font-medium tracking-wide text-faint uppercase">{item.group}</div>}
+              <div className="px-1 pb-1">
+                <MiniCalendar value={null} onPick={(iso) => command({ ...item, run: onPick(iso).run })} />
+              </div>
+            </div>
+          );
+        }
         return (
           <div key={`${item.group}-${item.title}-${i}`}>
             {header && <div className="px-2 pt-2 pb-1 text-[11px] font-medium tracking-wide text-faint uppercase">{item.group}</div>}
