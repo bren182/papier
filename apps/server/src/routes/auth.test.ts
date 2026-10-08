@@ -185,6 +185,7 @@ describe('guards', () => {
     expect(open.sort()).toEqual([
       'GET /api/auth/state → 200',
       'GET /api/invites/x → 410',
+      'GET /api/share/x → 404',
       'POST /api/auth/login → 400',
       'POST /api/auth/setup → 400',
       'POST /api/demo/start → 201',
