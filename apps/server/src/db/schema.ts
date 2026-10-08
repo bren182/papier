@@ -34,6 +34,8 @@ export const pages = sqliteTable(
      * non-null default, so the invariant is kept in code.
      */
     workspaceId: text('workspace_id').notNull().default(DEFAULT_WORKSPACE_ID),
+    /** A public share token; when set, the page is readable without auth via /api/share/:token. */
+    shareToken: text('share_token'),
     createdAt: integer('created_at').notNull(),
     updatedAt: integer('updated_at').notNull(),
   },

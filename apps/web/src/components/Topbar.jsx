@@ -4,6 +4,7 @@ import { useAuthState, useLogout } from '../api/auth.js';
 import { PageMenu } from './PageMenu.jsx';
 import { ServerStatus } from './ServerStatus.jsx';
 import { TitleText } from './TitleText.jsx';
+import { ShareButton } from './ShareButton.jsx';
 
 /** @typedef {import('../usePrefs.js').Prefs} Prefs */
 
@@ -93,6 +94,7 @@ export function Topbar({ selectedId, onSelect, prefs, onChange, onAi }) {
       {!prefs.sidebar && <ServerStatus />}
       <SaveStatus />
       {data && !data.page.isTemplate && !data.inTemplate && <FavoriteButton page={data.page} />}
+      {data && !data.page.isTemplate && !data.inTemplate && <ShareButton page={data.page} />}
       {onAi && (
         <button
           type="button"

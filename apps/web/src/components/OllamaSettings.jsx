@@ -7,7 +7,7 @@ const CLAUDE_MODELS = [
   { id: 'claude-sonnet-5-5', label: 'Sonnet 5.5', desc: 'Balanced · $2/$10 per M tokens', recommended: false },
 ];
 
-/** Bytes → human-readable string @param {number} bytes */
+/** @param {number} bytes */
 function fmtSize(bytes) {
   if (!bytes) return '';
   if (bytes >= 1e9) return `${(bytes / 1e9).toFixed(1)} GB`;
@@ -15,13 +15,41 @@ function fmtSize(bytes) {
   return `${(bytes / 1e3).toFixed(0)} KB`;
 }
 
-/**
- * Green / amber / red dot
- * @param {{ ok: boolean, warn: boolean }} props
- */
+/** @param {{ ok: boolean, warn: boolean }} props */
 function StatusDot({ ok, warn }) {
   const color = ok ? 'bg-green-500' : warn ? 'bg-amber-400' : 'bg-red-500/80';
   return <span className={`inline-block size-2 shrink-0 rounded-full ${color}`} aria-hidden="true" />;
+}
+
+/**
+ * @param {{ id?: string, title: string, badge?: import('react').ReactNode, defaultOpen?: boolean, children: import('react').ReactNode }} props
+ */
+function CollapsibleSection({ id, title, badge, defaultOpen = false, children }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div id={id} className="rounded-md border border-line">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left hover:bg-hover"
+      >
+        <svg
+          width="11" height="11" viewBox="0 0 11 11" fill="none"
+          className={`shrink-0 text-faint transition-transform duration-150 ${open ? 'rotate-90' : ''}`}
+          aria-hidden="true"
+        >
+          <path d="M3.5 2l4 3.5-4 3.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        <span className="flex-1 text-[13px] font-medium text-fg-strong">{title}</span>
+        {badge}
+      </button>
+      {open && (
+        <div className="border-t border-line/50 px-3 pb-4 pt-3">
+          {children}
+        </div>
+      )}
+    </div>
+  );
 }
 
 /**
@@ -57,10 +85,7 @@ function ModelRow({ m, current, onSelect }) {
   );
 }
 
-/**
- * Ollama-specific settings section.
- * @param {{ status: any, isLoading: boolean, refetch: ()=>void }} props
- */
+/** @param {{ status: any, isLoading: boolean, refetch: ()=>void }} props */
 function OllamaSection({ status, isLoading, refetch }) {
   const saveConfig = useSaveAiConfig();
   const pullModel = usePullModel();
@@ -247,10 +272,7 @@ function OllamaSection({ status, isLoading, refetch }) {
   );
 }
 
-/**
- * Claude API settings section.
- * @param {{ status: any }} props
- */
+/** @param {{ status: any }} props */
 function ClaudeSection({ status }) {
   const saveConfig = useSaveAiConfig();
   const anthropic = status?.anthropic ?? {};
@@ -343,7 +365,9 @@ function ClaudeSection({ status }) {
       </section>
 
       <section>
-        <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-faint">Workspace ID <span className="normal-case font-normal text-faint/60">(if required)</span></div>
+        <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-faint">
+          Workspace ID <span className="normal-case font-normal text-faint/60">(if required)</span>
+        </div>
         <input
           value={currentWsId}
           onChange={(e) => setWsDraft(e.target.value)}
@@ -390,10 +414,7 @@ function ClaudeSection({ status }) {
   );
 }
 
-/**
- * Giphy API key for GIF search in image blocks.
- * @param {{ status: any }} props
- */
+/** @param {{ status: any }} props */
 function GiphySection({ status }) {
   const saveConfig = useSaveAiConfig();
   const [keyDraft, setKeyDraft] = useState('');
@@ -409,10 +430,9 @@ function GiphySection({ status }) {
   }
 
   return (
-    <section>
-      <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-faint">Giphy — GIF search</div>
+    <div className="flex flex-col gap-3">
       {configured && !keyDraft && (
-        <div className="mb-2 flex items-center gap-2">
+        <div className="flex items-center gap-2">
           <StatusDot ok={true} warn={false} />
           <span className="text-[12px] text-fg">API key saved — GIF search enabled in image blocks</span>
         </div>
@@ -436,17 +456,14 @@ function GiphySection({ status }) {
           {saved ? 'Saved ✓' : 'Save'}
         </button>
       </div>
-      <p className="mt-1.5 text-[11px] text-faint">
+      <p className="text-[11px] text-faint">
         Free developer key at <span className="font-mono">developers.giphy.com</span>. Enables GIF search inside image blocks (type <span className="font-mono">/image</span> in the editor).
       </p>
-    </section>
+    </div>
   );
 }
 
-/**
- * Unsplash access key for photo search in page covers.
- * @param {{ status: any }} props
- */
+/** @param {{ status: any }} props */
 function UnsplashSection({ status }) {
   const saveConfig = useSaveAiConfig();
   const [keyDraft, setKeyDraft] = useState('');
@@ -462,10 +479,9 @@ function UnsplashSection({ status }) {
   }
 
   return (
-    <section>
-      <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-faint">Unsplash — photo covers</div>
+    <div className="flex flex-col gap-3">
       {configured && !keyDraft && (
-        <div className="mb-2 flex items-center gap-2">
+        <div className="flex items-center gap-2">
           <StatusDot ok={true} warn={false} />
           <span className="text-[12px] text-fg">Access key saved — photo search enabled in cover picker</span>
         </div>
@@ -489,15 +505,15 @@ function UnsplashSection({ status }) {
           {saved ? 'Saved ✓' : 'Save'}
         </button>
       </div>
-      <p className="mt-1.5 text-[11px] text-faint">
+      <p className="text-[11px] text-faint">
         Free access key at <span className="font-mono">unsplash.com/developers</span>. Adds a "Photos" tab to the page cover picker — photos download and store locally.
       </p>
-    </section>
+    </div>
   );
 }
 
 /**
- * AI settings panel — provider toggle (Ollama / Claude) with per-provider config.
+ * Integrations panel — AI providers + third-party services, each in a collapsible section.
  */
 export function AiPanel() {
   const { data: auth } = useAuthState();
@@ -513,48 +529,89 @@ export function AiPanel() {
   }
 
   const provider = status?.provider ?? 'ollama';
+  const ollama = status?.ollama ?? {};
+  const anthropic = status?.anthropic ?? {};
 
-  /** @param {string} p */
-  function setProvider(p) {
-    saveConfig.mutate({ provider: p });
-  }
+  /** @param {import('react').ReactNode} dot @param {string} label */
+  const badge = (dot, label) => (
+    <span className="flex items-center gap-1.5 text-[11px] text-fg">{dot}{label}</span>
+  );
+
+  const ollamaBadge = ollama.available
+    ? badge(<StatusDot ok={true} warn={false} />, 'Connected')
+    : null;
+
+  const claudeBadge = anthropic.configured
+    ? badge(<StatusDot ok={true} warn={false} />, 'Key saved')
+    : null;
+
+  const giphyBadge = status?.giphy?.configured
+    ? badge(<StatusDot ok={true} warn={false} />, 'Configured')
+    : null;
+
+  const unsplashBadge = status?.unsplash?.configured
+    ? badge(<StatusDot ok={true} warn={false} />, 'Configured')
+    : null;
 
   return (
-    <div className="flex flex-col gap-5">
-      {/* Provider toggle */}
-      <section>
-        <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-faint">Provider</div>
-        <div className="flex gap-1 rounded-md border border-line bg-black/10 p-1">
+    <div className="flex flex-col gap-3">
+      {/* Active AI provider selector */}
+      <div className="flex items-center gap-3">
+        <span className="shrink-0 text-[11px] font-medium uppercase tracking-wide text-faint">Active AI</span>
+        <div className="flex flex-1 gap-1 rounded-md border border-line bg-black/10 p-0.5">
           {[
             { id: 'ollama', label: 'Ollama (local)' },
-            { id: 'anthropic', label: 'Claude (cloud)' },
+            { id: 'anthropic', label: 'Claude API' },
           ].map((opt) => (
             <button
               key={opt.id}
               type="button"
-              onClick={() => setProvider(opt.id)}
-              className={`flex-1 rounded py-1.5 text-[13px] transition-colors ${
-                provider === opt.id
-                  ? 'bg-s-page text-fg-strong shadow-sm'
-                  : 'text-muted hover:text-fg'
+              onClick={() => saveConfig.mutate({ provider: opt.id })}
+              className={`flex-1 rounded py-1 text-[12px] transition-colors ${
+                provider === opt.id ? 'bg-s-page text-fg-strong shadow-sm' : 'text-muted hover:text-fg'
               }`}
             >
               {opt.label}
             </button>
           ))}
         </div>
-      </section>
-
-      {provider === 'ollama' ? (
-        <OllamaSection status={status} isLoading={isLoading} refetch={refetch} />
-      ) : (
-        <ClaudeSection status={status} />
-      )}
-
-      <div className="border-t border-line/50 pt-5 flex flex-col gap-5">
-        <GiphySection status={status} />
-        <UnsplashSection status={status} />
       </div>
+
+      <CollapsibleSection
+        id="section-ai-ollama"
+        title="Ollama"
+        badge={ollamaBadge}
+        defaultOpen={provider === 'ollama'}
+      >
+        <OllamaSection status={status} isLoading={isLoading} refetch={refetch} />
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        id="section-ai-claude"
+        title="Claude / Anthropic"
+        badge={claudeBadge}
+        defaultOpen={provider === 'anthropic'}
+      >
+        <ClaudeSection status={status} />
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        id="section-ai-giphy"
+        title="Giphy — GIF search"
+        badge={giphyBadge}
+        defaultOpen={false}
+      >
+        <GiphySection status={status} />
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        id="section-ai-unsplash"
+        title="Unsplash — Photos"
+        badge={unsplashBadge}
+        defaultOpen={false}
+      >
+        <UnsplashSection status={status} />
+      </CollapsibleSection>
     </div>
   );
 }

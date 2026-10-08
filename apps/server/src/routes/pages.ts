@@ -29,6 +29,7 @@ const pageFields = {
   hasChildren: sql<boolean>`pages.kind <> 'database' and exists (
     select 1 from pages c where c.parent_id = pages.id and c.archived_at is null and c.is_template = 0
   )`.mapWith(Boolean),
+  shareToken: pages.shareToken,
   createdAt: pages.createdAt,
   updatedAt: pages.updatedAt,
 };
@@ -320,6 +321,23 @@ export function pageRoutes(app: FastifyInstance, db: Db) {
     if (!page) return reply.code(404).send({ error: 'Page not found' });
     if (page.archivedAt === null) return reply.code(400).send({ error: 'Only pages in the trash can be deleted forever' });
     db.transaction((tx) => purgePages(tx, [req.params.id]));
+    return reply.code(204).send();
+  });
+
+  /** Enable public sharing: generate a share token and return it. */
+  app.post<{ Params: { id: string } }>('/api/pages/:id/share', async (req, reply) => {
+    const page = db.select({ id: pages.id, archivedAt: pages.archivedAt, shareToken: pages.shareToken }).from(pages).where(eq(pages.id, req.params.id)).get();
+    if (!page || page.archivedAt !== null) return reply.code(404).send({ error: 'Page not found' });
+    const token = page.shareToken ?? randomUUID().replace(/-/g, '');
+    if (!page.shareToken) {
+      db.update(pages).set({ shareToken: token }).where(eq(pages.id, req.params.id)).run();
+    }
+    return { shareToken: token };
+  });
+
+  /** Disable public sharing: revoke the share token. */
+  app.delete<{ Params: { id: string } }>('/api/pages/:id/share', async (req, reply) => {
+    db.update(pages).set({ shareToken: null }).where(eq(pages.id, req.params.id)).run();
     return reply.code(204).send();
   });
 

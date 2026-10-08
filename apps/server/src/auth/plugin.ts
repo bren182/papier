@@ -28,7 +28,7 @@ const INTERNAL_HEADER = 'x-papier-internal';
 /** Routes that work signed out. Everything else under /api needs a session. */
 const PUBLIC = new Set(['/api/health', '/api/auth/state', '/api/auth/setup', '/api/auth/login', '/api/demo/start']);
 /** Path prefixes that are also public (for routes with params, e.g. /api/invites/:token). */
-const PUBLIC_PREFIXES = ['/api/invites/'];
+const PUBLIC_PREFIXES = ['/api/invites/', '/api/share/'];
 
 export function readCookie(req: FastifyRequest, name: string) {
   const header = req.headers.cookie;

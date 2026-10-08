@@ -43,6 +43,8 @@ export const Page = z.object({
   /** Starred: listed under Favourites in the sidebar. */
   favorite: z.boolean(),
   hasChildren: z.boolean(),
+  /** Public share token; present only on GET /api/pages/:id (not lists). Null = not shared. */
+  shareToken: z.string().nullable().optional(),
   createdAt: z.number(),
   updatedAt: z.number(),
 });

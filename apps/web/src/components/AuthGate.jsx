@@ -5,6 +5,7 @@ import { SIGNED_IN_EVENT, UNAUTHORIZED_EVENT } from '../api/client.js';
 import { setRecentUser } from '../recentPages.js';
 import { AuthScreen, JoinScreen, SessionExpired } from './AuthScreen.jsx';
 import { LandingPage } from './LandingPage.jsx';
+import { SharePageView } from './SharePageView.jsx';
 
 /**
  * Shows the app only to a signed-in user; otherwise the sign-in (or, on a
@@ -41,6 +42,10 @@ export function AuthGate({ children }) {
     );
   }
   if (!data) return null;
+  const shareToken = new URLSearchParams(window.location.search).get('share');
+  if (shareToken && !data.user) {
+    return <SharePageView token={shareToken} onSignIn={() => setShowLogin(true)} />;
+  }
   if (!data.user) {
     const joinToken = new URLSearchParams(window.location.search).get('join');
     if (joinToken) return <JoinScreen token={joinToken} />;

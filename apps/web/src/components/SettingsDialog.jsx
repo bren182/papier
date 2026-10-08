@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, useEffect } from 'react';
+import { lazy, Suspense, useState, useEffect, useRef } from 'react';
 import { FONTS, THEMES } from '@papier/ui';
 import { MIN_PASSWORD } from '@papier/core/text';
 import { useAuthState, useChangePassword, useCreateInvite, useLogout, useUpdateProfile, useServerInfo } from '../api/auth.js';
@@ -16,13 +16,81 @@ const TABS = /** @type {const} */ ([
   { id: 'account', label: 'Account' },
   { id: 'workspace', label: 'Workspace' },
   { id: 'display', label: 'Display' },
-  { id: 'ai', label: 'AI' },
+  { id: 'ai', label: 'Integrations' },
   ...(isElectron ? [{ id: 'desktop', label: 'Desktop' }] : []),
   { id: 'about', label: 'About' },
 ]);
 
+/** Tab id → display label used in search results */
+const TAB_LABELS = /** @type {Record<string,string>} */ ({
+  account: 'Account',
+  workspace: 'Workspace',
+  display: 'Display',
+  ai: 'Integrations',
+  desktop: 'Desktop',
+  about: 'About',
+});
+
+/** @type {Array<{tab: Tab, label: string, desc: string, id: string}>} */
+const SEARCH_INDEX = [
+  { tab: 'account',   label: 'Profile',             desc: 'Change your display name',                                    id: 'section-account-profile' },
+  { tab: 'account',   label: 'Password',             desc: 'Change your account password',                               id: 'section-account-password' },
+  { tab: 'account',   label: 'Invite',               desc: 'Invite a new member to the workspace',                      id: 'section-account-invite' },
+  { tab: 'account',   label: 'Sign out',             desc: 'End your current session',                                   id: 'section-account-signout' },
+  { tab: 'workspace', label: 'Workspace',            desc: 'Name and icon for your workspace',                           id: 'section-workspace-identity' },
+  { tab: 'display',   label: 'Theme',                desc: 'Colour theme — Forest, Dusk, Ocean, Ember, Meadow, Frost',   id: 'section-display-theme' },
+  { tab: 'display',   label: 'Font',                 desc: 'UI font — Geist, Inter, DM Sans, Manrope, Nunito, Lato',    id: 'section-display-font' },
+  { tab: 'display',   label: 'Display options',      desc: 'Grayscale backdrop, clear glass, motion',                   id: 'section-display-options' },
+  { tab: 'ai',        label: 'Ollama',               desc: 'Local AI — server URL, installed models, pull new models',  id: 'section-ai-ollama' },
+  { tab: 'ai',        label: 'Claude / Anthropic',   desc: 'Cloud AI — API key, workspace ID, model selection',        id: 'section-ai-claude' },
+  { tab: 'ai',        label: 'Giphy',                desc: 'GIF search in image blocks',                                id: 'section-ai-giphy' },
+  { tab: 'ai',        label: 'Unsplash',             desc: 'Photo search for page covers',                              id: 'section-ai-unsplash' },
+  { tab: 'desktop',   label: 'Server connection',    desc: 'Connect desktop app to a remote Papier server',            id: 'section-desktop-server' },
+  { tab: 'about',     label: 'Version',              desc: 'App version and release info',                              id: 'section-about-version' },
+  { tab: 'about',     label: 'GitHub',               desc: 'Source code, issues, releases',                            id: 'section-about-github' },
+];
+
 const sectionLabel = 'mb-2 text-[11px] font-medium uppercase tracking-wide text-faint';
 const inputCls = 'h-8 w-full min-w-0 rounded-md border border-line bg-black/20 px-2.5 text-[13px] text-fg-strong placeholder:text-faint focus:border-accent focus:outline-none';
+
+/**
+ * Flat search results rendered in place of the tab content.
+ * @param {{ query: string, onNavigate: (tab: Tab, id: string) => void }} props
+ */
+function SearchResults({ query, onNavigate }) {
+  const q = query.toLowerCase().trim();
+  const results = SEARCH_INDEX.filter(({ label, desc }) => {
+    const hay = `${label} ${desc}`.toLowerCase();
+    return q.split(/\s+/).every((word) => hay.includes(word));
+  });
+
+  if (!q) return null;
+
+  return (
+    <div className="flex flex-col gap-0.5">
+      {results.length === 0 ? (
+        <div className="py-10 text-center text-[13px] text-muted">No settings match "{query}"</div>
+      ) : (
+        results.map((entry) => (
+          <button
+            key={entry.id}
+            type="button"
+            onClick={() => onNavigate(/** @type {Tab} */ (entry.tab), entry.id)}
+            className="flex items-start gap-3 rounded-md px-3 py-2.5 text-left hover:bg-hover"
+          >
+            <div className="min-w-0 flex-1">
+              <div className="text-[13px] text-fg-strong">{entry.label}</div>
+              <div className="mt-0.5 text-[12px] text-faint">{entry.desc}</div>
+            </div>
+            <span className="mt-0.5 shrink-0 rounded border border-line/60 px-1.5 py-0.5 text-[10px] font-medium text-faint">
+              {TAB_LABELS[entry.tab] ?? entry.tab}
+            </span>
+          </button>
+        ))
+      )}
+    </div>
+  );
+}
 
 function AccountTab() {
   const { data } = useAuthState();
@@ -37,7 +105,7 @@ function AccountTab() {
   const initials = user.name.trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase() || 'P';
   return (
     <div className="flex flex-col gap-5">
-      <section>
+      <section id="section-account-profile">
         <div className={sectionLabel}>Profile</div>
         <div className="flex items-center gap-3 rounded-md border border-line bg-black/10 p-3">
           <div className="flex size-9 shrink-0 items-center justify-center rounded-[6px] bg-accent/20 text-[13px] font-semibold text-accent">
@@ -60,7 +128,7 @@ function AccountTab() {
         </div>
       </section>
 
-      <section>
+      <section id="section-account-password">
         <div className={sectionLabel}>Password</div>
         {pw ? (
           <form
@@ -89,7 +157,7 @@ function AccountTab() {
         )}
       </section>
 
-      <section>
+      <section id="section-account-invite">
         <div className={sectionLabel}>Invite</div>
         {inviteUrl ? (
           <div className="flex flex-col gap-2">
@@ -120,7 +188,7 @@ function AccountTab() {
         )}
       </section>
 
-      <section>
+      <section id="section-account-signout">
         <div className={sectionLabel}>Session</div>
         <button
           type="button"
@@ -143,7 +211,7 @@ function WorkspaceTab() {
   const owner = workspace.role === 'owner';
   return (
     <div className="flex flex-col gap-5">
-      <section>
+      <section id="section-workspace-identity">
         <div className={sectionLabel}>Identity</div>
         <div className="flex items-center gap-3 rounded-md border border-line bg-black/10 p-3">
           <button
@@ -207,7 +275,7 @@ function DisplayTab({ prefs, onChange }) {
   );
   return (
     <div className="flex flex-col gap-5">
-      <section>
+      <section id="section-display-theme">
         <div className={sectionLabel}>Theme</div>
         <div className="flex flex-col gap-0.5 rounded-md border border-line bg-black/10 p-1.5" aria-label="Themes">
           {THEMES.map((t) => (
@@ -217,7 +285,7 @@ function DisplayTab({ prefs, onChange }) {
         <p className="mt-1.5 text-[11px] text-faint">A page can override this with its own mood (Customise, above the title).</p>
       </section>
 
-      <section>
+      <section id="section-display-font">
         <div className={sectionLabel}>Font</div>
         <div className="flex flex-col gap-0.5 rounded-md border border-line bg-black/10 p-1.5">
           {FONTS.map((f) => (
@@ -235,7 +303,7 @@ function DisplayTab({ prefs, onChange }) {
         </div>
       </section>
 
-      <section>
+      <section id="section-display-options">
         <div className={sectionLabel}>Options</div>
         <div className="flex flex-col rounded-md border border-line bg-black/10">
           {row('Grayscale backdrop', prefs.mode === 'grayscale', () => onChange({ mode: prefs.mode === 'grayscale' ? 'ambient' : 'grayscale' }))}
@@ -257,7 +325,7 @@ function AboutTab() {
   );
   return (
     <div className="flex flex-col gap-5">
-      <section>
+      <section id="section-about-version">
         <div className={sectionLabel}>Release</div>
         <div className="flex flex-col rounded-md border border-line bg-black/10 divide-y divide-line/50">
           {row('Version', data ? `${data.version}` : '—')}
@@ -265,7 +333,7 @@ function AboutTab() {
         </div>
       </section>
 
-      <section>
+      <section id="section-about-github">
         <div className={sectionLabel}>Resources</div>
         <div className="flex flex-col gap-1.5">
           <a
@@ -314,7 +382,7 @@ function DesktopTab() {
 
   return (
     <div className="flex flex-col gap-5">
-      <section>
+      <section id="section-desktop-server">
         <div className={sectionLabel}>Server connection</div>
         <p className="mb-3 text-[12px] text-muted leading-relaxed">
           Connect this desktop app to a remote Papier server (e.g. one running on a VPS or a Raspberry Pi)
@@ -383,13 +451,36 @@ function TagIcon() {
 }
 
 /**
- * Full settings modal: Account, Display, AI & About tabs.
+ * Full settings modal: Account, Workspace, Display, Integrations & About tabs with search.
  * @param {{ onClose: () => void, prefs: import('../usePrefs.js').Prefs,
  *   onChange: (patch: Partial<import('../usePrefs.js').Prefs>) => void,
  *   initialTab?: Tab }} props
  */
 export function SettingsDialog({ onClose, prefs, onChange, initialTab = 'account' }) {
   const [tab, setTab] = useState(/** @type {Tab} */ (initialTab));
+  const [searchQuery, setSearchQuery] = useState('');
+  const [pendingScrollId, setPendingScrollId] = useState(/** @type {string | null} */ (null));
+  const searchRef = useRef(/** @type {HTMLInputElement | null} */ (null));
+
+  // After switching tab, scroll to the requested section
+  useEffect(() => {
+    if (!pendingScrollId) return;
+    const el = document.getElementById(pendingScrollId);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      setPendingScrollId(null);
+    }
+  }, [tab, pendingScrollId]);
+
+  /** @param {Tab} targetTab @param {string} sectionId */
+  function navigateTo(targetTab, sectionId) {
+    setSearchQuery('');
+    setTab(targetTab);
+    setPendingScrollId(sectionId);
+  }
+
+  const searching = searchQuery.length > 0;
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
@@ -403,13 +494,43 @@ export function SettingsDialog({ onClose, prefs, onChange, initialTab = 'account
         style={{ maxHeight: 'min(680px, calc(100vh - 64px))' }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-line px-4 py-3">
-          <span className="text-[15px] font-medium text-fg-strong">Settings</span>
+        <div className="flex items-center gap-3 border-b border-line px-4 py-3">
+          <span className="shrink-0 text-[15px] font-medium text-fg-strong">Settings</span>
+          <div className="relative flex-1">
+            <svg
+              className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-faint"
+              width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"
+            >
+              <circle cx="5" cy="5" r="3.5" stroke="currentColor" strokeWidth="1.3" />
+              <path d="M8 8l2 2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+            </svg>
+            <input
+              ref={searchRef}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => e.key === 'Escape' && setSearchQuery('')}
+              placeholder="Search settings…"
+              className="h-7 w-full rounded-md border border-line/60 bg-black/20 pl-7 pr-7 text-[12px] text-fg placeholder:text-faint focus:border-accent/50 focus:outline-none"
+              aria-label="Search settings"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                aria-label="Clear search"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-faint hover:text-fg"
+              >
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+                  <path d="M2 2l6 6M8 2l-6 6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                </svg>
+              </button>
+            )}
+          </div>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="flex size-6 items-center justify-center rounded text-faint hover:bg-hover hover:text-fg"
+            className="flex size-6 shrink-0 items-center justify-center rounded text-faint hover:bg-hover hover:text-fg"
           >
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
               <path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
@@ -417,8 +538,8 @@ export function SettingsDialog({ onClose, prefs, onChange, initialTab = 'account
           </button>
         </div>
 
-        {/* Tab bar */}
-        <div className="flex border-b border-line px-2">
+        {/* Tab bar — dimmed while search is active */}
+        <div className={`flex border-b border-line px-2 transition-opacity duration-150 ${searching ? 'pointer-events-none opacity-30' : ''}`}>
           {TABS.map((t) => (
             <button
               key={t.id}
@@ -437,12 +558,18 @@ export function SettingsDialog({ onClose, prefs, onChange, initialTab = 'account
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-4">
-          {tab === 'account' && <AccountTab />}
-          {tab === 'workspace' && <WorkspaceTab />}
-          {tab === 'display' && <DisplayTab prefs={prefs} onChange={onChange} />}
-          {tab === 'ai' && <AiPanel />}
-          {tab === 'desktop' && <DesktopTab />}
-          {tab === 'about' && <AboutTab />}
+          {searching ? (
+            <SearchResults query={searchQuery} onNavigate={navigateTo} />
+          ) : (
+            <>
+              {tab === 'account' && <AccountTab />}
+              {tab === 'workspace' && <WorkspaceTab />}
+              {tab === 'display' && <DisplayTab prefs={prefs} onChange={onChange} />}
+              {tab === 'ai' && <AiPanel />}
+              {tab === 'desktop' && <DesktopTab />}
+              {tab === 'about' && <AboutTab />}
+            </>
+          )}
         </div>
       </div>
     </div>
