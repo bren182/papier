@@ -7,7 +7,8 @@
  */
 
 import { build } from 'esbuild';
-import { cpSync, existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'fs';
+import { createRequire } from 'node:module';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { rebuild } from '@electron/rebuild';
@@ -55,16 +56,31 @@ const bsq3Src = realpathSync(join(repoRoot, 'apps', 'desktop', 'node_modules', '
 cpSync(bsq3Src, join(outDir, 'node_modules', 'better-sqlite3'), { recursive: true });
 
 // 5. Rebuild better-sqlite3 from source for Electron's embedded Node version.
-//    better-sqlite3 v13 ships prebuildify prebuilds at prebuilds/<platform>-<arch>.node.
-//    @electron/rebuild detects these via findPrebuildifyModule() and skips compilation,
-//    but electron-builder's extraFiles excludes prebuilds/** from the packaged app.
-//    Deleting the prebuilds/ copy forces @electron/rebuild to compile from source,
-//    putting the binary at build/Release/better_sqlite3.node which IS packaged.
 //
-//    @electron/rebuild needs a package.json at buildPath and requires the target
-//    module to appear in its dependencies to be included in prodDeps.
-import { rmSync } from 'node:fs';
+//    Why not use the prebuild? better-sqlite3 v13 ships prebuildify prebuilds at
+//    prebuilds/<platform>-<arch>.node, but electron-builder's extraFiles excludes
+//    prebuilds/** from the packaged app. We delete the prebuilds copy so
+//    @electron/rebuild is forced to compile from source, writing the binary to
+//    build/Release/better_sqlite3.node which IS packaged.
+//
+//    Why copy node-addon-api? binding.gyp runs:
+//      node -p "require('node-addon-api').include"
+//    from within the better-sqlite3 directory. Node resolves this by walking up
+//    from outDir/node_modules/better-sqlite3, so node-addon-api must be present
+//    at outDir/node_modules/node-addon-api. We locate it from better-sqlite3's
+//    own dependency tree, copy it in as a build-time dep, and remove it after.
+//
+//    @electron/rebuild also needs a package.json at buildPath listing the target
+//    module as a dependency.
+
+// Remove prebuildify prebuilds so @electron/rebuild doesn't treat them as "done".
 rmSync(join(outDir, 'node_modules', 'better-sqlite3', 'prebuilds'), { recursive: true, force: true });
+
+// Locate node-addon-api from better-sqlite3's own dependency tree and copy it in.
+const bsq3Require = createRequire(join(bsq3Src, 'package.json'));
+const naapiSrc = dirname(bsq3Require.resolve('node-addon-api/package.json'));
+console.log(`Copying node-addon-api from ${naapiSrc}…`);
+cpSync(naapiSrc, join(outDir, 'node_modules', 'node-addon-api'), { recursive: true });
 
 writeFileSync(
   join(outDir, 'package.json'),
@@ -87,6 +103,9 @@ await rebuild({
   force: true,
   debug: false,
 });
+
+// Remove node-addon-api — build-time only, not needed at runtime.
+rmSync(join(outDir, 'node_modules', 'node-addon-api'), { recursive: true, force: true });
 
 // Verify that compilation produced an Electron-compatible binary.
 // prebuilds/ are excluded from extraFiles, so getBinding() falls through to
