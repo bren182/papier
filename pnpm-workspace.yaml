@@ -5,6 +5,7 @@ packages:
 allowBuilds:
   esbuild: true
   electron: true
+  better-sqlite3: true
 
 minimumReleaseAgeExclude:
   - '@anthropic-ai/sdk@0.131.0'

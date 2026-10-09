@@ -16,7 +16,7 @@
     "build:prep": "pnpm --filter @papier/web build && node scripts/bundle-server.mjs"
   },
   "dependencies": {
-    "better-sqlite3": "^13.0.3",
+    "better-sqlite3": "^12.11.1",
     "electron-updater": "^6.3.9"
   },
   "devDependencies": {
