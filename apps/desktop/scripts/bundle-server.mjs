@@ -79,9 +79,10 @@ console.log(`Rebuilding better-sqlite3 for Electron ${electronVersion}…`);
 await rebuild({
   buildPath: outDir,
   electronVersion,
+  arch: process.arch === 'x64' ? 'x64' : process.arch,
   onlyModules: ['better-sqlite3'],
   force: true,
-  debug: false,
+  debug: true,
 });
 
 // Verify that compilation produced an Electron-compatible binary.
