@@ -55,13 +55,17 @@ const bsq3Src = realpathSync(join(repoRoot, 'apps', 'desktop', 'node_modules', '
 cpSync(bsq3Src, join(outDir, 'node_modules', 'better-sqlite3'), { recursive: true });
 
 // 5. Rebuild better-sqlite3 from source for Electron's embedded Node version.
-//    better-sqlite3 v13 requires NAPI_VERSION=10; the Node 24 prebuild bundled
-//    with the npm package was compiled with Node 24 headers and crashes in
-//    Electron 33 (Node 20.18.3) despite both supporting N-API v10.
-//    Compiling from source with Electron's own headers produces a compatible binary.
+//    better-sqlite3 v13 ships prebuildify prebuilds at prebuilds/<platform>-<arch>.node.
+//    @electron/rebuild detects these via findPrebuildifyModule() and skips compilation,
+//    but electron-builder's extraFiles excludes prebuilds/** from the packaged app.
+//    Deleting the prebuilds/ copy forces @electron/rebuild to compile from source,
+//    putting the binary at build/Release/better_sqlite3.node which IS packaged.
 //
 //    @electron/rebuild needs a package.json at buildPath and requires the target
 //    module to appear in its dependencies to be included in prodDeps.
+import { rmSync } from 'node:fs';
+rmSync(join(outDir, 'node_modules', 'better-sqlite3', 'prebuilds'), { recursive: true, force: true });
+
 writeFileSync(
   join(outDir, 'package.json'),
   JSON.stringify({
@@ -79,10 +83,9 @@ console.log(`Rebuilding better-sqlite3 for Electron ${electronVersion}…`);
 await rebuild({
   buildPath: outDir,
   electronVersion,
-  arch: process.arch === 'x64' ? 'x64' : process.arch,
   onlyModules: ['better-sqlite3'],
   force: true,
-  debug: true,
+  debug: false,
 });
 
 // Verify that compilation produced an Electron-compatible binary.
