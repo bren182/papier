@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { Popover } from './database/Popover.jsx';
 import { useCreateShare, useDeleteShare } from '../api/share.js';
 
 /**
@@ -27,7 +28,7 @@ export function ShareButton({ page }) {
   }
 
   return (
-    <div className="relative">
+    <>
       <button
         ref={ref}
         type="button"
@@ -42,54 +43,47 @@ export function ShareButton({ page }) {
       </button>
 
       {open && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div
-            className="absolute right-0 top-9 z-50 w-72 rounded-xl border border-line bg-s-panel shadow-lg shadow-black/20"
-            role="dialog"
-            aria-label="Sharing settings"
-          >
-            <div className="p-4">
-              <div className="mb-3 flex items-center justify-between">
-                <span className="text-[13px] font-medium text-fg">Share this page</span>
+        <Popover anchor={ref.current} onClose={() => setOpen(false)} width={288} align="end" className="!p-0">
+          <div className="p-4" role="dialog" aria-label="Sharing settings">
+            <div className="mb-3 flex items-center justify-between">
+              <span className="text-[13px] font-medium text-fg">Share this page</span>
+              <button
+                type="button"
+                onClick={toggle}
+                aria-pressed={shared}
+                disabled={create.isPending || revoke.isPending}
+                className={`relative inline-flex h-5 w-9 cursor-pointer items-center rounded-full transition-colors focus-visible:outline-none disabled:opacity-50 ${shared ? 'bg-accent' : 'bg-line'}`}
+              >
+                <span
+                  className={`inline-block size-3.5 rounded-full bg-white shadow transition-transform ${shared ? 'translate-x-4' : 'translate-x-0.5'}`}
+                />
+              </button>
+            </div>
+
+            <p className="mb-3 text-[12px] text-faint">
+              {shared
+                ? 'Anyone with the link can view this page.'
+                : 'Generate a public link anyone can view — no sign-in required.'}
+            </p>
+
+            {shared && shareUrl && (
+              <div className="flex items-center gap-2 rounded-lg bg-s-hover px-3 py-2">
+                <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted" title={shareUrl}>
+                  {shareUrl}
+                </span>
                 <button
                   type="button"
-                  onClick={toggle}
-                  aria-pressed={shared}
-                  disabled={create.isPending || revoke.isPending}
-                  className={`relative inline-flex h-5 w-9 cursor-pointer items-center rounded-full transition-colors focus-visible:outline-none disabled:opacity-50 ${shared ? 'bg-accent' : 'bg-line'}`}
+                  onClick={copy}
+                  className="shrink-0 rounded px-2 py-0.5 text-[11px] text-accent hover:bg-s-active"
                 >
-                  <span
-                    className={`inline-block size-3.5 rounded-full bg-white shadow transition-transform ${shared ? 'translate-x-4' : 'translate-x-0.5'}`}
-                  />
+                  Copy
                 </button>
               </div>
-
-              <p className="mb-3 text-[12px] text-faint">
-                {shared
-                  ? 'Anyone with the link can view this page.'
-                  : 'Generate a public link anyone can view — no sign-in required.'}
-              </p>
-
-              {shared && shareUrl && (
-                <div className="flex items-center gap-2 rounded-lg bg-s-hover px-3 py-2">
-                  <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted" title={shareUrl}>
-                    {shareUrl}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={copy}
-                    className="shrink-0 rounded px-2 py-0.5 text-[11px] text-accent hover:bg-s-active"
-                  >
-                    Copy
-                  </button>
-                </div>
-              )}
-            </div>
+            )}
           </div>
-        </>
+        </Popover>
       )}
-    </div>
+    </>
   );
 }
 
