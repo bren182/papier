@@ -6,6 +6,21 @@ import { setRecentUser } from '../recentPages.js';
 import { AuthScreen, JoinScreen, SessionExpired } from './AuthScreen.jsx';
 import { LandingPage } from './LandingPage.jsx';
 import { SharePageView } from './SharePageView.jsx';
+import { SettingsDialog } from './SettingsDialog.jsx';
+import { usePrefs } from '../usePrefs.js';
+
+const isElectron = typeof window !== 'undefined' && 'papierElectron' in window;
+
+/** Shown on desktop when the local server has no accounts yet. */
+function DesktopOnboarding() {
+  const [prefs, onChange] = usePrefs();
+  return (
+    <>
+      <div className="fixed inset-0 bg-s-page" />
+      <SettingsDialog setupNeeded initialTab="setup" prefs={prefs} onChange={onChange} />
+    </>
+  );
+}
 
 /**
  * Shows the app only to a signed-in user; otherwise the sign-in (or, on a
@@ -49,6 +64,8 @@ export function AuthGate({ children }) {
   if (!data.user) {
     const joinToken = new URLSearchParams(window.location.search).get('join');
     if (joinToken) return <JoinScreen token={joinToken} />;
+    // Desktop first-run: use the settings dialog so onboarding feels native.
+    if (data.setupNeeded && isElectron) return <DesktopOnboarding />;
     // First-run setup goes straight to the setup form; existing-server visitors see the landing page first.
     if (data.setupNeeded || showLogin) return <AuthScreen setup={data.setupNeeded} onBack={data.setupNeeded ? undefined : () => setShowLogin(false)} />;
     return <LandingPage onSignIn={() => setShowLogin(true)} onDemo={() => demo.mutate()} />;

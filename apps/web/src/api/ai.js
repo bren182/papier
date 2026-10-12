@@ -71,12 +71,50 @@ export function useDeleteModel() {
   });
 }
 
-/** Ask a question answered from workspace content. */
-export function useAskAi() {
-  return useMutation({
-    mutationFn: (/** @type {{ query: string }} */ input) =>
-      api('/ai/ask', { method: 'POST', body: input }),
-  });
+/**
+ * Stream an agentic AI ask over SSE.
+ * @param {{ query: string }} input
+ * @param {(event: { type: string, [k: string]: unknown }) => void} onEvent
+ * @returns {() => void} cancel function
+ */
+export function streamAiAsk({ query }, onEvent) {
+  const controller = new AbortController();
+  (async () => {
+    try {
+      const res = await fetch('/api/ai/ask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Papier': '1' },
+        body: JSON.stringify({ query }),
+        signal: controller.signal,
+      });
+      if (!res.ok || !res.body) {
+        onEvent({ type: 'error', error: `Server returned ${res.status}` });
+        return;
+      }
+      const reader = res.body.getReader();
+      const dec = new TextDecoder();
+      let buf = '';
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        const blocks = buf.split('\n\n');
+        buf = blocks.pop() ?? '';
+        for (const block of blocks) {
+          const line = block.replace(/^data: /, '').trim();
+          if (line) {
+            try { onEvent(JSON.parse(line)); }
+            catch { /* ignore */ }
+          }
+        }
+      }
+    } catch (err) {
+      if (err instanceof Error && err.name !== 'AbortError') {
+        onEvent({ type: 'error', error: err.message });
+      }
+    }
+  })();
+  return () => controller.abort();
 }
 
 /** Summarize a page. */

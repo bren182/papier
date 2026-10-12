@@ -4,6 +4,7 @@ const { app, BrowserWindow, Tray, Menu, dialog, shell, nativeImage, ipcMain } = 
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const os = require('os');
 
 // electron-updater is only meaningful in a packaged build.
 let autoUpdater = null;
@@ -217,6 +218,10 @@ function createTray() {
 
 ipcMain.handle('papier:get-settings', () => readSettings());
 
+ipcMain.handle('papier:get-system-info', () => {
+  try { return { username: os.userInfo().username }; } catch { return { username: '' }; }
+});
+
 ipcMain.handle('papier:set-settings', (_e, patch) => {
   writeSettings({ ...readSettings(), ...patch });
   // Relaunch so the new server URL takes effect.
@@ -236,13 +241,13 @@ app.whenReady().then(async () => {
       win = createWindow(serverUrl);
     } else {
       // Local mode: start the bundled Fastify server, then open it.
+      // On first run pass the setup token in the URL so the web UI can pre-fill
+      // it and skip the "copy this token" step — the server is local-only anyway.
       const { isFirstRun, setupToken } = await startServer();
-      win = createWindow(`http://127.0.0.1:${APP_PORT}`);
-      if (isFirstRun) {
-        win.webContents.once('did-finish-load', () => {
-          setTimeout(() => showSetupDialog(win, setupToken), 600);
-        });
-      }
+      const url = isFirstRun
+        ? `http://127.0.0.1:${APP_PORT}/?setup=${encodeURIComponent(setupToken)}`
+        : `http://127.0.0.1:${APP_PORT}`;
+      win = createWindow(url);
     }
 
     createTray();

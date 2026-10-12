@@ -7,7 +7,7 @@ import { plainText } from '@papier/core';
 import type { FastifyInstance } from 'fastify';
 import type { Db } from '../db/index.ts';
 import { getSetting, setSetting } from '../db/settings.ts';
-import { searchPages, type SearchHit } from '../db/search.ts';
+import { searchPages } from '../db/search.ts';
 
 // --- Provider config ---
 
@@ -20,7 +20,7 @@ function getAnthropicKey(db: Db): string {
   return getSetting(db, 'anthropic_api_key') ?? '';
 }
 function getAnthropicModel(db: Db): string {
-  return getSetting(db, 'anthropic_model') ?? 'claude-haiku-4-5';
+  return getSetting(db, 'anthropic_model') ?? 'claude-sonnet-4-5';
 }
 function getAnthropicWorkspaceId(db: Db): string {
   return getSetting(db, 'anthropic_workspace_id') ?? '';
@@ -176,15 +176,191 @@ function pageContext(db: Db, pageId: string, anchorBlockId: string | null, limit
   return rows.map(toText).filter(Boolean).join('\n');
 }
 
-const STOP_WORDS = new Set([
-  'a', 'an', 'the', 'and', 'or', 'not', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'from',
-  'is', 'are', 'was', 'were', 'be', 'been', 'am', 'have', 'has', 'had', 'do', 'does', 'did',
-  'will', 'would', 'could', 'should', 'can', 'may', 'might',
-  'i', 'me', 'my', 'we', 'us', 'our', 'you', 'your', 'he', 'she', 'it', 'they', 'them', 'their',
-  'this', 'that', 'these', 'those', 'there', 'here', 'now',
-  'what', 'who', 'how', 'why', 'when', 'where', 'which',
-  'some', 'any', 'all', 'about',
-]);
+// --- Agentic ask: tool definitions ---
+
+const TOOLS_ANTHROPIC: Anthropic.Tool[] = [
+  {
+    name: 'search_workspace',
+    description: 'Search the workspace for pages matching a query. Returns page IDs, titles and snippets. Always start here to find relevant pages.',
+    input_schema: {
+      type: 'object' as const,
+      properties: { query: { type: 'string', description: 'Search keywords, e.g. "birthday party 2026"' } },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'read_page',
+    description: 'Read the full content of a specific page or database by its page_id. Use after search_workspace to get the full text.',
+    input_schema: {
+      type: 'object' as const,
+      properties: { page_id: { type: 'string', description: 'The page ID from search_workspace or list_children' } },
+      required: ['page_id'],
+    },
+  },
+  {
+    name: 'list_children',
+    description: 'List the direct child pages of a given page. Use to navigate the workspace hierarchy.',
+    input_schema: {
+      type: 'object' as const,
+      properties: { page_id: { type: 'string', description: 'The parent page ID' } },
+      required: ['page_id'],
+    },
+  },
+];
+
+const TOOLS_OLLAMA = [
+  { type: 'function', function: { name: 'search_workspace', description: 'Search the workspace for pages.', parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } } },
+  { type: 'function', function: { name: 'read_page', description: 'Read a page by its ID.', parameters: { type: 'object', properties: { page_id: { type: 'string' } }, required: ['page_id'] } } },
+  { type: 'function', function: { name: 'list_children', description: 'List child pages of a page.', parameters: { type: 'object', properties: { page_id: { type: 'string' } }, required: ['page_id'] } } },
+];
+
+function executeTool(db: Db, name: string, input: unknown): unknown {
+  if (name === 'search_workspace') {
+    const { query } = input as { query: string };
+    if (!query?.trim()) return { error: 'query required' };
+    const results = searchPages(db, query.trim(), { limit: 8, offset: 0 });
+    return { pages: results.items.map((h) => ({ id: h.pageId, title: h.title || 'Untitled', snippet: h.snippet })) };
+  }
+  if (name === 'read_page') {
+    const { page_id } = input as { page_id: string };
+    if (!page_id) return { error: 'page_id required' };
+    const meta = db.get<{ title: string; kind: string }>(sql`select title, kind from pages where id = ${page_id} and archived_at is null limit 1`);
+    if (!meta) return { error: 'Page not found or trashed' };
+    const content = pageContext(db, page_id, null, 80);
+    return { title: meta.title || 'Untitled', kind: meta.kind, content };
+  }
+  if (name === 'list_children') {
+    const { page_id } = input as { page_id: string };
+    if (!page_id) return { error: 'page_id required' };
+    const children = db.all<{ id: string; title: string; kind: string }>(
+      sql`select id, title, kind from pages where parent_id = ${page_id} and archived_at is null and is_template = 0 order by order_key limit 40`,
+    );
+    return { pages: children.map((c) => ({ id: c.id, title: c.title || 'Untitled', kind: c.kind })) };
+  }
+  return { error: `Unknown tool: ${name}` };
+}
+
+function toolLabel(db: Db, name: string, input: unknown): string {
+  if (name === 'search_workspace') return `Searching for "${(input as { query?: string }).query ?? ''}"`;
+  if (name === 'read_page') {
+    const id = (input as { page_id?: string }).page_id ?? '';
+    const row = id ? db.get<{ title: string }>(sql`select title from pages where id = ${id} limit 1`) : null;
+    return `Reading "${row?.title || 'page'}"`;
+  }
+  if (name === 'list_children') return 'Listing pages…';
+  return name;
+}
+
+type AskSSEEvent =
+  | { type: 'tool'; name: string; label: string }
+  | { type: 'text'; delta: string }
+  | { type: 'done'; sources: { id: string; title: string }[] }
+  | { type: 'error'; error: string };
+
+const AGENT_SYSTEM = (today: string) =>
+  `You are a helpful assistant for a personal notes workspace called Papier. Today is ${today}.\n\n` +
+  'Use the provided tools to find information before answering. Search first, then read the most relevant pages. ' +
+  'Answer using ONLY information found in the workspace. ' +
+  'Be concise: 1–3 paragraphs or a brief bullet list. ' +
+  'If you cannot find enough information, say so explicitly.';
+
+const MAX_TOOL_ITERS = 6;
+
+async function agentAsk(
+  db: Db,
+  provider: Provider,
+  config: { key: string; model: string; workspaceId: string; ollamaUrl: string; ollamaModel: string },
+  query: string,
+  today: string,
+  emit: (e: AskSSEEvent) => void,
+) {
+  const tracked = new Map<string, string>();
+
+  if (provider === 'anthropic') {
+    if (!config.key) { emit({ type: 'error', error: 'Anthropic API key not configured.' }); return; }
+    const client = new Anthropic({
+      apiKey: config.key,
+      ...(config.workspaceId ? { defaultHeaders: { 'anthropic-workspace-id': config.workspaceId } } : {}),
+    });
+    const messages: Anthropic.MessageParam[] = [{ role: 'user', content: query }];
+    for (let i = 0; i < MAX_TOOL_ITERS; i++) {
+      const res = await client.messages.create({
+        model: config.model,
+        max_tokens: 4096,
+        system: AGENT_SYSTEM(today),
+        tools: TOOLS_ANTHROPIC,
+        messages,
+      });
+      if (res.stop_reason === 'end_turn') {
+        const text = res.content.find((b) => b.type === 'text');
+        emit({ type: 'text', delta: text?.type === 'text' ? text.text : '' });
+        emit({ type: 'done', sources: [...tracked.entries()].map(([id, title]) => ({ id, title })) });
+        return;
+      }
+      if (res.stop_reason === 'tool_use') {
+        const toolBlocks = res.content.filter((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use');
+        const results: Anthropic.ToolResultBlockParam[] = [];
+        for (const block of toolBlocks) {
+          emit({ type: 'tool', name: block.name, label: toolLabel(db, block.name, block.input) });
+          const result = executeTool(db, block.name, block.input);
+          if (block.name === 'search_workspace') {
+            (result as { pages?: { id: string; title: string }[] }).pages?.forEach((p) => tracked.set(p.id, p.title));
+          } else if (block.name === 'read_page') {
+            const id = (block.input as { page_id?: string }).page_id ?? '';
+            const title = (result as { title?: string }).title;
+            if (id && title) tracked.set(id, title);
+          }
+          results.push({ type: 'tool_result', tool_use_id: block.id, content: JSON.stringify(result) });
+        }
+        messages.push({ role: 'assistant', content: res.content });
+        messages.push({ role: 'user', content: results });
+        continue;
+      }
+      break;
+    }
+    emit({ type: 'error', error: 'Reached tool iteration limit without a final answer.' });
+    return;
+  }
+
+  // Ollama path
+  const ollamaMessages: { role: string; content: string; tool_calls?: unknown[] }[] = [
+    { role: 'system', content: AGENT_SYSTEM(today) },
+    { role: 'user', content: query },
+  ];
+  for (let i = 0; i < MAX_TOOL_ITERS; i++) {
+    const res = await fetch(`${config.ollamaUrl}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: config.ollamaModel, messages: ollamaMessages, tools: TOOLS_OLLAMA, stream: false }),
+      signal: AbortSignal.timeout(120_000),
+    });
+    if (!res.ok) { emit({ type: 'error', error: `Ollama responded ${res.status}` }); return; }
+    const data = (await res.json()) as { message?: { role: string; content: string; tool_calls?: { function: { name: string; arguments: unknown } }[] } };
+    const msg = data.message;
+    if (!msg) break;
+    if (msg.tool_calls?.length) {
+      ollamaMessages.push({ role: 'assistant', content: msg.content ?? '', tool_calls: msg.tool_calls });
+      for (const call of msg.tool_calls) {
+        const { name, arguments: args } = call.function;
+        emit({ type: 'tool', name, label: toolLabel(db, name, args) });
+        const result = executeTool(db, name, args);
+        if (name === 'search_workspace') {
+          (result as { pages?: { id: string; title: string }[] }).pages?.forEach((p) => tracked.set(p.id, p.title));
+        } else if (name === 'read_page') {
+          const id = (args as { page_id?: string }).page_id ?? '';
+          const title = (result as { title?: string }).title;
+          if (id && title) tracked.set(id, title);
+        }
+        ollamaMessages.push({ role: 'tool', content: JSON.stringify(result) });
+      }
+      continue;
+    }
+    emit({ type: 'text', delta: msg.content ?? '' });
+    emit({ type: 'done', sources: [...tracked.entries()].map(([id, title]) => ({ id, title })) });
+    return;
+  }
+  emit({ type: 'error', error: 'Reached tool iteration limit without a final answer.' });
+}
 
 function isoDate(offsetDays = 0): string {
   return new Date(Date.now() + offsetDays * 86_400_000).toISOString().slice(0, 10);
@@ -370,69 +546,43 @@ export function aiRoutes(app: FastifyInstance, db: Db) {
     }
   });
 
-  /** Ask a question answered from workspace content. */
+  /** Ask a question using the agentic tool-calling loop; streams SSE events. */
   app.post('/api/ai/ask', async (req, reply) => {
     const { query } = z.object({ query: z.string().trim().min(1).max(500) }).parse(req.body);
     const today = isoDate();
 
-    const expanded = query
-      .replace(/\btoday\b/gi, `today ${today}`)
-      .replace(/\byesterday\b/gi, `yesterday ${isoDate(-1)}`);
-
-    const terms = expanded
-      .toLowerCase()
-      .replace(/[^\w\s-]/g, ' ')
-      .split(/\s+/)
-      .filter((t) => t.length > 2 && !STOP_WORDS.has(t));
-
-    const sortedTerms = [...terms].sort((a, b) => {
-      const aDate = a === 'today' || a === 'yesterday' || /^\d{4}-\d{2}-\d{2}$/.test(a);
-      const bDate = b === 'today' || b === 'yesterday' || /^\d{4}-\d{2}-\d{2}$/.test(b);
-      if (aDate !== bDate) return aDate ? -1 : 1;
-      return b.length - a.length;
+    reply.raw.writeHead(200, {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no',
     });
 
-    const scores = new Map<string, { score: number; hit: SearchHit }>();
-    for (const term of sortedTerms.slice(0, 8)) {
-      for (const h of searchPages(db, term, { limit: 5, offset: 0 }).items) {
-        const e = scores.get(h.pageId);
-        if (e) e.score++;
-        else scores.set(h.pageId, { score: 1, hit: h });
-      }
-    }
-    const hits = [...scores.values()]
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 3)
-      .map(({ hit }) => hit);
-
-    if (!hits.length) {
-      return { answer: "I couldn't find any relevant pages in your workspace for that question.", sources: [] };
-    }
-
-    const sources = hits.map((h) => ({ id: h.pageId, title: h.title || 'Untitled' }));
-    const context = hits
-      .map((h) => `## ${h.title || 'Untitled'}\n${pageContext(db, h.pageId, h.blockId)}`)
-      .join('\n\n---\n\n');
-
-    const messages = [
-      {
-        role: 'system',
-        content:
-          `You are a helpful assistant for a personal notes workspace called Papier. Today is ${today}. ` +
-          'Answer the question using ONLY the provided notes — do not add any information not explicitly stated in the notes. ' +
-          'Be concise: 1–3 short paragraphs or a brief bullet list. ' +
-          'If the notes do not contain enough information to fully answer, say so explicitly.',
-      },
-      { role: 'user', content: `Relevant pages from the workspace:\n\n${context}\n\n---\n\nQuestion: ${query}` },
-    ];
+    const emit = (e: AskSSEEvent) => {
+      reply.raw.write(`data: ${JSON.stringify(e)}\n\n`);
+    };
 
     try {
-      const answer = await aiChat(db, messages);
-      return { answer, sources };
+      const provider = getProvider(db);
+      await agentAsk(
+        db,
+        provider,
+        {
+          key: getAnthropicKey(db),
+          model: getAnthropicModel(db),
+          workspaceId: getAnthropicWorkspaceId(db),
+          ollamaUrl: getOllamaUrl(db),
+          ollamaModel: getOllamaModel(db),
+        },
+        query,
+        today,
+        emit,
+      );
     } catch (err) {
-      reply.code(503);
-      return { error: err instanceof Error ? err.message : String(err) };
+      emit({ type: 'error', error: err instanceof Error ? err.message : String(err) });
     }
+
+    reply.raw.end();
   });
 
   /** Summarize a page. */

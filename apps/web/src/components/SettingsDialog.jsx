@@ -1,25 +1,29 @@
 import { lazy, Suspense, useState, useEffect, useRef } from 'react';
 import { FONTS, THEMES } from '@papier/ui';
 import { MIN_PASSWORD } from '@papier/core/text';
-import { useAuthState, useChangePassword, useCreateInvite, useLogout, useUpdateProfile, useServerInfo } from '../api/auth.js';
+import { useAuthState, useChangePassword, useCreateInvite, useLogout, useSetup, useUpdateProfile, useServerInfo } from '../api/auth.js';
 import { useUpdateWorkspace, useWorkspace } from '../api/workspaces.js';
 import { MoodOption } from './PageHeader.jsx';
 import { AiPanel } from './OllamaSettings.jsx';
 
 const EmojiPicker = lazy(() => import('./EmojiPicker.jsx').then((m) => ({ default: m.EmojiPicker })));
 
-/** @typedef {'account' | 'workspace' | 'display' | 'ai' | 'desktop' | 'about'} Tab */
+/** @typedef {'setup' | 'account' | 'workspace' | 'display' | 'ai' | 'desktop' | 'about'} Tab */
 
 const isElectron = typeof window !== 'undefined' && 'papierElectron' in window;
 
-const TABS = /** @type {const} */ ([
-  { id: 'account', label: 'Account' },
-  { id: 'workspace', label: 'Workspace' },
-  { id: 'display', label: 'Display' },
-  { id: 'ai', label: 'Integrations' },
-  ...(isElectron ? [{ id: 'desktop', label: 'Desktop' }] : []),
-  { id: 'about', label: 'About' },
-]);
+/** @param {boolean} [setupNeeded] */
+function buildTabs(setupNeeded) {
+  return /** @type {const} */ ([
+    ...(setupNeeded ? [{ id: 'setup', label: 'Welcome' }] : []),
+    { id: 'account', label: 'Account' },
+    { id: 'workspace', label: 'Workspace' },
+    { id: 'display', label: 'Display' },
+    { id: 'ai', label: 'Integrations' },
+    ...(isElectron ? [{ id: 'desktop', label: 'Desktop' }] : []),
+    { id: 'about', label: 'About' },
+  ]);
+}
 
 /** Tab id → display label used in search results */
 const TAB_LABELS = /** @type {Record<string,string>} */ ({
@@ -364,6 +368,100 @@ function AboutTab() {
   );
 }
 
+function SetupTab() {
+  const setup = useSetup();
+  const urlToken = new URLSearchParams(window.location.search).get('setup') ?? '';
+  const [form, setForm] = useState({ name: '', email: '', password: '', workspaceName: '' });
+  const [serverUrl, setServerUrl] = useState('');
+  const [showRemote, setShowRemote] = useState(false);
+  const [savingRemote, setSavingRemote] = useState(false);
+
+  // Pre-fill name from the OS username (desktop only).
+  useEffect(() => {
+    /** @type {any} */ (window).papierElectron?.getSystemInfo?.().then((/** @type {{ username?: string }} */ info) => {
+      const raw = info?.username ?? '';
+      const pretty = raw.replace(/[_.-]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()).trim();
+      if (pretty) setForm((f) => ({ ...f, name: pretty }));
+    });
+  }, []);
+
+  /** @param {keyof typeof form} key */
+  const bind = (key) => ({
+    value: form[key],
+    onChange: (/** @type {import('react').ChangeEvent<HTMLInputElement>} */ e) => setForm({ ...form, [key]: e.target.value }),
+  });
+
+  return (
+    <div className="flex flex-col gap-5">
+      <section>
+        <div className={sectionLabel}>Create your account</div>
+        <p className="mb-3 text-[12px] text-muted leading-relaxed">
+          Your data is stored locally in <span className="font-mono text-[11px]">%APPDATA%\Papier</span> on this machine.
+        </p>
+        <form
+          className="flex flex-col gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            setup.mutate(
+              { setupToken: urlToken, ...form, workspaceName: form.workspaceName.trim() || undefined },
+              {
+                onSuccess: () => {
+                  const u = new URL(window.location.href);
+                  u.searchParams.delete('setup');
+                  window.history.replaceState(null, '', u.toString());
+                },
+              },
+            );
+          }}
+        >
+          <input className={inputCls} placeholder="Your name" autoFocus required {...bind('name')} />
+          <input className={inputCls} type="email" autoComplete="username" placeholder="Email" required {...bind('email')} />
+          <input className={inputCls} type="password" autoComplete="new-password" placeholder={`Password (${MIN_PASSWORD}+ characters)`} minLength={MIN_PASSWORD} required {...bind('password')} />
+          <input className={inputCls} placeholder="Workspace name (default: Papier)" {...bind('workspaceName')} />
+          {setup.isError && <p className="text-[12px] text-fg">{setup.error.message}</p>}
+          <button type="submit" className="mt-1 h-9 w-full rounded-md bg-accent text-[13px] font-medium text-root hover:brightness-110 disabled:opacity-50" disabled={setup.isPending}>
+            {setup.isPending ? 'Creating…' : 'Get started'}
+          </button>
+        </form>
+      </section>
+
+      <div className="border-t border-line/50 pt-3">
+        <button
+          type="button"
+          className="flex items-center gap-1.5 text-[12px] text-muted hover:text-fg"
+          onClick={() => setShowRemote((v) => !v)}
+        >
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true" className={`transition-transform ${showRemote ? 'rotate-90' : ''}`}>
+            <path d="M3 2l4 3-4 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          Already have a remote Papier server? Connect instead
+        </button>
+        {showRemote && (
+          <div className="mt-3 flex flex-col gap-2">
+            <input
+              className={inputCls}
+              type="url"
+              placeholder="https://papier.example.com"
+              value={serverUrl}
+              onChange={(e) => setServerUrl(e.target.value)}
+              spellCheck={false}
+            />
+            <button
+              type="button"
+              disabled={savingRemote || !serverUrl.trim()}
+              onClick={() => { setSavingRemote(true); /** @type {any} */ (window).papierElectron.setSettings({ serverUrl: serverUrl.trim() }); }}
+              className="h-8 w-full rounded-md bg-accent text-[13px] font-medium text-root hover:brightness-110 disabled:opacity-50"
+            >
+              {savingRemote ? 'Connecting…' : 'Connect & restart'}
+            </button>
+            <p className="text-[11px] text-faint">The app will restart and connect to that server. Sign in with your existing account.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function DesktopTab() {
   const [url, setUrl] = useState('');
   const [loaded, setLoaded] = useState(false);
@@ -452,12 +550,14 @@ function TagIcon() {
 
 /**
  * Full settings modal: Account, Workspace, Display, Integrations & About tabs with search.
- * @param {{ onClose: () => void, prefs: import('../usePrefs.js').Prefs,
+ * @param {{ onClose?: () => void, prefs: import('../usePrefs.js').Prefs,
  *   onChange: (patch: Partial<import('../usePrefs.js').Prefs>) => void,
- *   initialTab?: Tab }} props
+ *   initialTab?: Tab, setupNeeded?: boolean }} props
  */
-export function SettingsDialog({ onClose, prefs, onChange, initialTab = 'account' }) {
-  const [tab, setTab] = useState(/** @type {Tab} */ (initialTab));
+export function SettingsDialog({ onClose, prefs, onChange, initialTab, setupNeeded }) {
+  const TABS = buildTabs(setupNeeded);
+  const defaultTab = initialTab ?? (setupNeeded ? 'setup' : 'account');
+  const [tab, setTab] = useState(/** @type {Tab} */ (defaultTab));
   const [searchQuery, setSearchQuery] = useState('');
   const [pendingScrollId, setPendingScrollId] = useState(/** @type {string | null} */ (null));
   const searchRef = useRef(/** @type {HTMLInputElement | null} */ (null));
@@ -484,7 +584,7 @@ export function SettingsDialog({ onClose, prefs, onChange, initialTab = 'account
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
-      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+      onMouseDown={(e) => e.target === e.currentTarget && onClose?.()}
     >
       <div
         role="dialog"
@@ -526,16 +626,18 @@ export function SettingsDialog({ onClose, prefs, onChange, initialTab = 'account
               </button>
             )}
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="flex size-6 shrink-0 items-center justify-center rounded text-faint hover:bg-hover hover:text-fg"
-          >
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-              <path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
-          </button>
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              className="flex size-6 shrink-0 items-center justify-center rounded text-faint hover:bg-hover hover:text-fg"
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                <path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+            </button>
+          )}
         </div>
 
         {/* Tab bar — dimmed while search is active */}
@@ -562,6 +664,7 @@ export function SettingsDialog({ onClose, prefs, onChange, initialTab = 'account
             <SearchResults query={searchQuery} onNavigate={navigateTo} />
           ) : (
             <>
+              {tab === 'setup' && <SetupTab />}
               {tab === 'account' && <AccountTab />}
               {tab === 'workspace' && <WorkspaceTab />}
               {tab === 'display' && <DisplayTab prefs={prefs} onChange={onChange} />}

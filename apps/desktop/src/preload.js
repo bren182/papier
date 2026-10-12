@@ -7,6 +7,8 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('papierElectron', {
   /** @returns {Promise<{ serverUrl?: string }>} */
   getSettings: () => ipcRenderer.invoke('papier:get-settings'),
+  /** @returns {Promise<{ username: string }>} */
+  getSystemInfo: () => ipcRenderer.invoke('papier:get-system-info'),
   /** @param {{ serverUrl?: string | null }} patch */
   setSettings: (patch) => ipcRenderer.invoke('papier:set-settings', patch),
 });
