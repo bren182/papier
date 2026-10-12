@@ -58,6 +58,7 @@ export function PageCover({ page }) {
   const patch = usePatch(page?.id ?? '');
   const [choosing, setChoosing] = useState(false);
   const [repositioning, setRepositioning] = useState(false);
+  const [dragging, setDragging] = useState(false);
   const [livePosY, setLivePosY] = useState(/** @type {number | null} */ (null));
   const [livePosX, setLivePosX] = useState(/** @type {number | null} */ (null));
   const [liveZoom, setLiveZoom] = useState(/** @type {number | null} */ (null));
@@ -70,19 +71,32 @@ export function PageCover({ page }) {
   const zoom = liveZoom ?? (page?.appearance?.coverZoom ?? 1);
 
   /** @param {import('react').PointerEvent<HTMLDivElement>} e */
-  const onPointerMove = (e) => {
-    if (!repositioning || !isImage) return;
+  const onPointerDown = (e) => {
+    if (!repositioning || !isImage || e.button !== 0) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setDragging(true);
     const rect = e.currentTarget.getBoundingClientRect();
-    setLivePosY(Math.round(Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100))));
     setLivePosX(Math.round(Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100))));
+    setLivePosY(Math.round(Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100))));
+  };
+
+  /** @param {import('react').PointerEvent<HTMLDivElement>} e */
+  const onPointerMove = (e) => {
+    if (!dragging || !isImage) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    setLivePosX(Math.round(Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100))));
+    setLivePosY(Math.round(Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100))));
+  };
+
+  /** @param {import('react').PointerEvent<HTMLDivElement>} e */
+  const onPointerUp = (e) => {
+    if (!dragging) return;
+    e.currentTarget.releasePointerCapture(e.pointerId);
+    setDragging(false);
   };
 
   const commitReposition = () => {
-    patch.look({
-      coverPosition: posY,
-      coverPositionX: posX,
-      coverZoom: zoom === 1 ? null : zoom,
-    });
+    patch.look({ coverPosition: posY, coverPositionX: posX, coverZoom: zoom === 1 ? null : zoom });
     setRepositioning(false);
     setLivePosY(null);
     setLivePosX(null);
@@ -91,6 +105,7 @@ export function PageCover({ page }) {
 
   const cancelReposition = () => {
     setRepositioning(false);
+    setDragging(false);
     setLivePosY(null);
     setLivePosX(null);
     setLiveZoom(null);
@@ -98,9 +113,12 @@ export function PageCover({ page }) {
 
   return (
     <div
-      className={`group/cover relative h-[170px] overflow-hidden ${clear ? 'p-glass' : ''}${repositioning ? ' cursor-move select-none' : ''}`}
+      className={`group/cover relative h-[170px] overflow-hidden ${clear ? 'p-glass' : ''}${repositioning && isImage ? (dragging ? ' cursor-grabbing select-none' : ' cursor-grab select-none') : ''}`}
       data-cover={cover}
+      onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
     >
       {!clear && (
         <div
@@ -114,10 +132,18 @@ export function PageCover({ page }) {
           }}
         />
       )}
+      {/* Focal point indicator — visible while repositioning */}
+      {repositioning && isImage && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute z-10 size-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.4)] transition-[left,top] duration-75"
+          style={{ left: `${posX}%`, top: `${posY}%` }}
+        />
+      )}
       {page && (
         <div
           className={`absolute right-4 bottom-3 flex items-center gap-2 transition-opacity focus-within:opacity-100 ${repositioning ? 'opacity-100' : 'opacity-0 group-hover/cover:opacity-100'}`}
-          onPointerMove={repositioning ? (e) => e.stopPropagation() : undefined}
+          onPointerDown={repositioning ? (e) => e.stopPropagation() : undefined}
         >
           {repositioning ? (
             <>
@@ -135,8 +161,8 @@ export function PageCover({ page }) {
                 />
                 <span className="w-6 text-right text-[11px] tabular-nums text-fg/70">{zoom.toFixed(1)}×</span>
               </label>
-              <button type="button" onClick={commitReposition} className={coverButton}>
-                Done
+              <button type="button" onClick={commitReposition} className={`${coverButton} bg-white/25 font-medium`}>
+                Save
               </button>
               <button type="button" onClick={cancelReposition} className={coverButton}>
                 Cancel
