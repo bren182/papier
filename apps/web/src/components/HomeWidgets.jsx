@@ -3,6 +3,7 @@ import { useAuthState } from '../api/auth.js';
 import { useFavorites } from '../api/pages.js';
 import { useWorkspace } from '../api/workspaces.js';
 import { useReminders } from '../api/reminders.js';
+import { ensurePushSubscription, removePushSubscription } from '../api/push.js';
 import { formatDateLong, formatDateMention, toISODate } from '../editor/dates.js';
 import { useRecentPages } from '../recentPages.js';
 import { TitleText } from './TitleText.jsx';
@@ -68,23 +69,15 @@ function RecentCards({ onOpenPage }) {
 
 // ── Reminders widget ──────────────────────────────────────────────────────────
 
-/** Request browser notification permission once, stored in localStorage to avoid re-asking. */
-function requestNotifPermission() {
-  if (typeof Notification === 'undefined' || Notification.permission !== 'default') return;
-  try {
-    if (localStorage.getItem('notif-asked')) return;
-    localStorage.setItem('notif-asked', '1');
-  } catch { /* private mode */ }
-  Notification.requestPermission().catch(() => {});
-}
-
 /**
- * Fire a native notification for each reminder due today (once per session per id).
+ * Fire an in-app Notification for each reminder due today (once per session).
+ * This is the fallback for when the app is open; push covers the closed case.
  * @param {import('../api/reminders.js').Reminder[]} due
+ * @param {string} today
  */
-function fireBrowserNotifications(due) {
+function fireBrowserNotifications(due, today) {
   if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
-  const key = `notif-fired-${toISODate(new Date())}`;
+  const key = `notif-fired-${today}`;
   let fired = /** @type {string[]} */ ([]);
   try { fired = JSON.parse(localStorage.getItem(key) ?? '[]'); } catch { /* */ }
   for (const r of due) {
@@ -99,45 +92,98 @@ function fireBrowserNotifications(due) {
   try { localStorage.setItem(key, JSON.stringify(fired)); } catch { /* */ }
 }
 
+/**
+ * Ask for notification permission (once per device). On grant, also subscribes
+ * to Web Push so notifications fire even when the app is closed.
+ */
+async function requestAndSubscribe() {
+  if (typeof Notification === 'undefined') return;
+  if (Notification.permission === 'granted') {
+    await ensurePushSubscription();
+    return;
+  }
+  if (Notification.permission !== 'default') return;
+  try {
+    if (localStorage.getItem('notif-asked')) return;
+    localStorage.setItem('notif-asked', '1');
+  } catch { /* private mode */ }
+  const perm = await Notification.requestPermission().catch(() => 'denied');
+  if (perm === 'granted') await ensurePushSubscription();
+}
+
 /** @param {{ onOpenPage: (id: string) => void }} props */
 function RemindersWidget({ onOpenPage }) {
   const today = toISODate(new Date());
   const { data: due, isPending } = useReminders(today);
+  const [notifState, setNotifState] = useState(
+    () => (typeof Notification === 'undefined' ? 'unsupported' : Notification.permission),
+  );
 
+  // On first load with data: ask for permission + subscribe to push, fire in-app notifs
   useEffect(() => {
     if (!due) return;
-    requestNotifPermission();
-    fireBrowserNotifications(due.filter((r) => r.date === today));
+    requestAndSubscribe().then(() => {
+      if (typeof Notification !== 'undefined') setNotifState(Notification.permission);
+    });
+    fireBrowserNotifications(due.filter((r) => r.date === today), today);
   }, [due, today]);
 
   if (isPending) return <div className="h-12" />;
-  if (!due || due.length === 0) {
-    return <p className="py-2 text-[14px] text-faint">No reminders due. Add @remind dates in pages.</p>;
-  }
 
   return (
-    <ul className="flex flex-col gap-1 py-1">
-      {due.map((r) => {
-        const overdue = r.date < today;
-        return (
-          <li key={r.id}>
-            <button
-              type="button"
-              onClick={() => onOpenPage(r.pageId)}
-              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-hover"
-            >
-              <span className="text-[16px] leading-none">{r.pageIcon ?? '🔔'}</span>
-              <span className="flex-1 min-w-0">
-                <span className="block truncate text-[14px] font-medium text-fg">{r.pageTitle || 'Untitled'}</span>
-                <span className={`text-[12px] ${overdue ? 'text-red-400' : 'text-muted'}`}>
-                  {overdue ? 'Overdue · ' : ''}{formatDateMention(r.date)}
-                </span>
-              </span>
-            </button>
-          </li>
-        );
-      })}
-    </ul>
+    <div className="flex flex-col gap-2">
+      {/* Prompt to enable if not yet granted */}
+      {notifState === 'default' && (
+        <button
+          type="button"
+          onClick={() => requestAndSubscribe().then(() => {
+            if (typeof Notification !== 'undefined') setNotifState(Notification.permission);
+          })}
+          className="flex items-center gap-2 rounded-md border border-line px-3 py-2 text-[13px] text-muted hover:bg-s-active hover:text-fg"
+        >
+          <span aria-hidden="true">🔔</span>
+          Enable notifications to get reminders when the app is closed
+        </button>
+      )}
+      {notifState === 'granted' && (
+        <div className="flex items-center justify-between">
+          <span className="text-[12px] text-faint">Push notifications on</span>
+          <button
+            type="button"
+            onClick={() => removePushSubscription().then(() => setNotifState('denied'))}
+            className="text-[12px] text-faint hover:text-muted"
+          >
+            Turn off
+          </button>
+        </div>
+      )}
+      {(!due || due.length === 0) ? (
+        <p className="py-1 text-[14px] text-faint">No reminders due. Add @remind dates in pages.</p>
+      ) : (
+        <ul className="flex flex-col gap-1">
+          {due.map((r) => {
+            const overdue = r.date < today;
+            return (
+              <li key={r.id}>
+                <button
+                  type="button"
+                  onClick={() => onOpenPage(r.pageId)}
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-hover"
+                >
+                  <span className="text-[16px] leading-none">{r.pageIcon ?? '🔔'}</span>
+                  <span className="flex-1 min-w-0">
+                    <span className="block truncate text-[14px] font-medium text-fg">{r.pageTitle || 'Untitled'}</span>
+                    <span className={`text-[12px] ${overdue ? 'text-red-400' : 'text-muted'}`}>
+                      {overdue ? 'Overdue · ' : ''}{formatDateMention(r.date)}
+                    </span>
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
   );
 }
 

@@ -610,6 +610,7 @@ export function SettingsDialog({ onClose, prefs, onChange, initialTab, setupNeed
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => e.key === 'Escape' && setSearchQuery('')}
               placeholder="Search settings…"
+              autoComplete="off"
               className="h-7 w-full rounded-md border border-line/60 bg-black/20 pl-7 pr-7 text-[12px] text-fg placeholder:text-faint focus:border-accent/50 focus:outline-none"
               aria-label="Search settings"
             />

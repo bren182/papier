@@ -9,20 +9,12 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      // Generate a full Workbox SW instead of shipping our own sw.js
-      strategies: 'generateSW',
-      workbox: {
-        // Cache the app shell and assets; pass API/file requests through
-        navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/api\//, /^\/files\//],
-        runtimeCaching: [
-          {
-            // Fonts from Google — cache-first, 1 year
-            urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\//,
-            handler: 'CacheFirst',
-            options: { cacheName: 'google-fonts', expiration: { maxAgeSeconds: 365 * 24 * 60 * 60 } },
-          },
-        ],
+      // Use our own sw.js so we can add a push event handler
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.js',
+      injectManifest: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
       },
       manifest: {
         name: 'Papier',

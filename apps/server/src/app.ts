@@ -25,6 +25,7 @@ import { aiRoutes } from './routes/ai.ts';
 import { inviteRoutes } from './routes/invites.ts';
 import { reminderRoutes } from './routes/reminders.ts';
 import { shareRoutes } from './routes/share.ts';
+import { pushRoutes } from './routes/push.ts';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -122,6 +123,7 @@ export function buildApp({
   inviteRoutes(app, db, cookie);
   reminderRoutes(app, db);
   shareRoutes(app, db);
+  pushRoutes(app, db);
 
   return app;
 }

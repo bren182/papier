@@ -286,6 +286,23 @@ export const reminders = sqliteTable(
 );
 
 /**
+ * Browser Web Push subscriptions per user, stored so the server can send
+ * notifications when the app is closed. One row per endpoint (browser/device).
+ */
+export const pushSubscriptions = sqliteTable(
+  'push_subscriptions',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    endpoint: text('endpoint').notNull().unique(),
+    keysP256dh: text('keys_p256dh').notNull(),
+    keysAuth: text('keys_auth').notNull(),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [index('push_subs_user').on(t.userId)],
+);
+
+/**
  * Single-use invite links: an authenticated user creates one; the recipient
  * visits `/join?token=<id>` and sets up their account. Expires after 7 days.
  */

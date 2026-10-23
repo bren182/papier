@@ -3,6 +3,7 @@ import { tick } from '../db/automations.ts';
 import { purgeExpired } from '../db/trash.ts';
 import { purgeExpiredSessions } from '../auth/sessions.ts';
 import { purgeExpiredDemos } from '../db/demo.ts';
+import { sendDueReminderPush } from '../db/push.ts';
 import type { Db } from '../db/index.ts';
 
 /** How often the scheduler looks for due schedules. Schedules are minute-precise at best. */
@@ -36,9 +37,16 @@ export function startScheduler(db: Db, log: FastifyBaseLogger) {
       log.error({ err }, 'Trash purge failed');
     }
   };
+  const pushReminders = () => {
+    const today = new Date().toISOString().slice(0, 10);
+    sendDueReminderPush(db, today, log).catch((err) => {
+      log.error({ err }, 'Push reminder batch failed');
+    });
+  };
   run();
   purge();
-  const timers = [setInterval(run, TICK_MS), setInterval(purge, PURGE_MS)];
+  pushReminders();
+  const timers = [setInterval(run, TICK_MS), setInterval(purge, PURGE_MS), setInterval(pushReminders, PURGE_MS)];
   for (const t of timers) t.unref();
   return () => timers.forEach(clearInterval);
 }
